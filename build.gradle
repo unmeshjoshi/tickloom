@@ -1,0 +1,247 @@
+plugins {
+    id 'java'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'maven-publish'
+    id 'signing'
+}
+
+group = 'com.github.tickstep'
+version = '0.1.0-alpha.1'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Add your dependencies here
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.17.0'
+    
+    // Production-ready storage
+    implementation 'org.rocksdb:rocksdbjni:9.7.3'
+    
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testImplementation 'org.mockito:mockito-core:5.11.0'
+}
+
+// Configure the shadow plugin to create a fat JAR
+shadowJar {
+    archiveBaseName.set('tickstep-server')
+    archiveClassifier.set('all')
+    archiveVersion.set('')
+    
+    // Merge service files (important for RocksDB)
+    mergeServiceFiles()
+    
+    // Exclude development dependencies
+    exclude 'META-INF/*.DSA'
+    exclude 'META-INF/*.RSA'
+    exclude 'META-INF/*.SF'
+    
+    // Set the main class for the JAR
+    manifest {
+        attributes 'Main-Class': 'tickstep.cmd.ServerApplication'
+    }
+}
+
+// Create a separate client JAR
+task shadowClientJar(type: com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+    group = 'build'
+    description = 'Creates a fat JAR for the client application'
+    
+    from sourceSets.main.output
+    configurations = [project.configurations.runtimeClasspath]
+    
+    archiveBaseName.set('tickstep-client')
+    archiveClassifier.set('all')
+    archiveVersion.set('')
+    
+    // Merge service files
+    mergeServiceFiles()
+    
+    // Exclude development dependencies
+    exclude 'META-INF/*.DSA'
+    exclude 'META-INF/*.RSA'
+    exclude 'META-INF/*.SF'
+    
+    // Set the main class for the client JAR
+    manifest {
+        attributes 'Main-Class': 'tickstep.cmd.ClientApplication'
+    }
+}
+
+// Make the shadowJar task depend on the jar task
+jar.dependsOn shadowJar
+
+test {
+    useJUnitPlatform()
+    
+    // Show test output including System.out.println
+    testLogging {
+        events "passed", "skipped", "failed", "standardOut", "standardError"
+        outputs.upToDateWhen {false}
+        showStandardStreams = true
+    }
+}
+
+// Task to run the distributed cluster test
+task runCluster(type: Exec) {
+    group = 'application'
+    description = 'Runs a 3-node distributed cluster test with client operations'
+    
+    // Ensure JARs are built first
+    dependsOn shadowJar, shadowClientJar
+    
+    // Make executable
+    doFirst {
+        exec {
+            commandLine 'chmod', '+x', 'scripts/run-cluster.sh'
+        }
+    }
+    
+    commandLine './scripts/run-cluster.sh'
+    
+    // Handle cleanup on failure
+    doLast {
+        if (executionResult.get().exitValue != 0) {
+            println "Cluster test failed, ensuring cleanup..."
+            try {
+                exec {
+                    commandLine './scripts/kill-servers.sh'
+                    ignoreExitValue = true
+                }
+            } catch (Exception e) {
+                println "Cleanup script failed: ${e.message}"
+            }
+        }
+    }
+}
+
+// Task to test individual servers
+task testIndividualServers(type: Exec) {
+    group = 'verification'
+    description = 'Tests each server individually to verify data replication'
+    
+    // Ensure JARs are built first
+    dependsOn shadowJar, shadowClientJar
+    
+    // Make executable
+    doFirst {
+        exec {
+            commandLine 'chmod', '+x', 'scripts/test-individual-servers.sh'
+        }
+    }
+    
+    commandLine './scripts/test-individual-servers.sh'
+}
+
+// Task to inspect data directory
+task inspectData {
+    group = 'verification'
+    description = 'Inspect the data directory to verify stored values'
+    
+    doLast {
+        def dataDir = file('build/demo-data')
+        if (!dataDir.exists()) {
+            println "❌ Data directory does not exist: ${dataDir.absolutePath}"
+            println "   Run './gradlew runCluster' first to generate data"
+            return
+        }
+        
+        println "📁 Data directory: ${dataDir.absolutePath}"
+        println "🔍 Inspecting RocksDB files..."
+        
+        dataDir.eachDir { replicaDir ->
+            println "\n📂 Replica: ${replicaDir.name}"
+            if (replicaDir.exists()) {
+                def files = replicaDir.listFiles()
+                if (files) {
+                    files.each { file ->
+                        println "   📄 ${file.name} (${file.length()} bytes)"
+                    }
+                } else {
+                    println "   ⚠️  No files found"
+                }
+            } else {
+                println "   ❌ Directory not found"
+            }
+        }
+        
+        println "\n💡 To inspect RocksDB contents, you can use:"
+        println "   - RocksDB CLI tools (if installed)"
+        println "   - Or run individual server tests: './gradlew testIndividualServers'"
+    }
+}
+
+// --- Publishing -------------------------------------------------------------
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            groupId = project.group
+            artifactId = 'tickstep-core'
+            version = project.version
+            
+            pom {
+                name = 'TickStep'
+                description = 'a deterministic single‑thread tick engine for distributed systems.'
+                url = 'https://github.com/unmeshjoshi/tickstep'
+                
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+                
+                developers {
+                    developer {
+                        id = 'unmeshjoshi'
+                        name = 'Unmesh Joshi'
+                        email = 'unmeshjoshi@gmail.com'
+                    }
+                }
+                
+                scm {
+                    connection = 'scm:git:git://github.com/unmeshjoshi/tickstep.git'
+                    developerConnection = 'scm:git:ssh://github.com:unmeshjoshi/tickstep.git'
+                    url = 'https://github.com/unmeshjoshi/tickstep'
+                }
+            }
+        }
+    }
+    repositories {
+        mavenLocal()
+        
+        // Maven Central (requires signing and proper credentials)
+        maven {
+            name = 'OSSRH'
+            url = 'https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/'
+            credentials {
+                username = findProperty('ossrhUsername') ?: System.getenv('OSSRH_USERNAME')
+                password = findProperty('ossrhPassword') ?: System.getenv('OSSRH_PASSWORD')
+            }
+        }
+        
+        // Snapshot repository
+        maven {
+            name = 'OSSRH-Snapshots'
+            url = 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
+            credentials {
+                username = findProperty('ossrhUsername') ?: System.getenv('OSSRH_USERNAME')
+                password = findProperty('ossrhPassword') ?: System.getenv('OSSRH_PASSWORD')
+            }
+        }
+    }
+}
+
+// Signing configuration for Maven Central
+signing {
+    def signingKey = findProperty('signingKey') ?: System.getenv('SIGNING_KEY')
+    def signingPassword = findProperty('signingPassword') ?: System.getenv('SIGNING_PASSWORD')
+    
+    if (signingKey && signingPassword) {
+        useInMemoryPgpKeys(signingKey, signingPassword)
+        sign publishing.publications.mavenJava
+    }
+}
