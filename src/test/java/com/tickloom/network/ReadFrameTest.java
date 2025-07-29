@@ -4,6 +4,7 @@ import com.tickloom.ProcessId;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,7 +18,7 @@ class ReadFrameTest {
 
         // Create a frame with test data
         byte[] payload = ("{\"pid\":\"" + ProcessId.of("client").name() + "\",\"role\":\"client\",\"version\":1}").getBytes();
-        Frame frame = new Frame(1, (byte) 1, payload);
+        Frame frame = new Frame(1, (byte) 1, ByteBuffer.wrap(payload));
         
         // Create the complete frame data (header + payload)
         byte[] frameData = new byte[frame.getTotalSize()];

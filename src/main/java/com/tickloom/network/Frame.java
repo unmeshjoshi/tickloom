@@ -15,17 +15,29 @@ public class Frame {
     private final byte frameType;
     private final byte[] payload;
 
-    public Frame(int streamId, byte frameType, byte[] payload) {
-        this.streamId = streamId;
-        this.frameType = frameType;
-        this.payload = payload;
-    }
-
     public Frame(int streamId, byte frameType, ByteBuffer payloadBuffer) {
         this.streamId = streamId;
         this.frameType = frameType;
         this.payload = new byte[payloadBuffer.remaining()];
         payloadBuffer.get(this.payload);
+    }
+
+    static ByteBuffer toByteBuffer(Frame frame) {
+        // Allocate buffer with header + payload
+        ByteBuffer buffer = ByteBuffer.allocate(frame.getTotalSize());
+
+        // Write header: streamId (4 bytes) + frameType (1 byte) + length (4 bytes)
+        buffer.putInt(frame.getStreamId());
+        buffer.put(frame.getFrameType());
+        buffer.putInt(frame.getPayloadLength());
+
+        // Write payload
+        buffer.put(frame.getPayload());
+
+        // Prepare for writing
+        buffer.flip();
+
+        return buffer;
     }
 
     public int getStreamId() {

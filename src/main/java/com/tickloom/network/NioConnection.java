@@ -191,23 +191,8 @@ public class NioConnection {
      */
     private ByteBuffer createFrameBuffer(Message message) {
         byte[] messageData = codec.encode(message);
-        Frame frame = new Frame(0, (byte) 0, messageData);
-
-        // Allocate buffer with header + payload
-        ByteBuffer buffer = ByteBuffer.allocate(frame.getTotalSize());
-
-        // Write header: streamId (4 bytes) + frameType (1 byte) + length (4 bytes)
-        buffer.putInt(frame.getStreamId());
-        buffer.put(frame.getFrameType());
-        buffer.putInt(frame.getPayloadLength());
-
-        // Write payload
-        buffer.put(frame.getPayload());
-
-        // Prepare for writing
-        buffer.flip();
-
-        return buffer;
+        Frame frame = new Frame(0, (byte) 0, ByteBuffer.wrap(messageData));
+        return Frame.toByteBuffer(frame);
     }
 
     public boolean hasPendingWrites() {

@@ -5,6 +5,12 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 
+/**
+ * Accepts connections from a server socket channel and registers them with the selector
+ * We can have multiple server sockets listening on different ports.e.g.
+ * one for clients and one for servers. Having separate acceptors for each server socket
+ * makes it easier to manage and maintain.
+ */
 public class Acceptor {
     private final NioNetwork network;
     private final ServerSocketChannel serverChannel;
