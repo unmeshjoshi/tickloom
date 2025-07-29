@@ -28,7 +28,7 @@ public class NioNetwork implements Network {
         this.selector = selector;
     }
 
-    private List<Acceptor> acceptors = new ArrayList<>();
+    private final List<Acceptor> acceptors = new ArrayList<>();
 
     public void bind(InetAddressAndPort address) throws IOException {
         ServerSocketChannel serverChannel = ServerSocketChannel.open();

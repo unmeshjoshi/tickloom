@@ -601,7 +601,7 @@ class NioNetworkIntegrationTest {
         assertEquals(0, serverNetwork.getConnectionCount());
     }
 
-    private int noOfTicks = 1000; // Shorter timeout to see what's happening
+    private final int noOfTicks = 1000; // Shorter timeout to see what's happening
     private void runUntil(Supplier<Boolean> condition) {
         long startTime = System.currentTimeMillis();
         int tickCount = 0;

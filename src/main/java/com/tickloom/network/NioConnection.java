@@ -24,7 +24,7 @@ public class NioConnection {
     private final SelectionKey channelKey;
     private final FrameReader frameReader;
     private final Queue<ByteBuffer> pendingWrites;
-    private MessageCodec codec;
+    private final MessageCodec codec;
 
 
     public NioConnection(NioNetwork nioNetwork, SocketChannel acceptedChannel, SelectionKey channelKey, MessageCodec codec) {
@@ -121,10 +121,7 @@ public class NioConnection {
     }
 
 
-    private void handleFramingError(SocketChannel channel, Throwable error, FrameReader frameReader) {
-        System.out.println("[NIO][framing] Invalid frame from " + getRemoteAddress() + ": " + error.getMessage() + " (resetting FrameReader)");
-        frameReader.reset();
-    }
+
 
     public void write() throws IOException {
         System.out.println("NIO: write() called, pending writes: " + pendingWrites.size());

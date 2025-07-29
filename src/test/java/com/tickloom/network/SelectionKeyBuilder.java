@@ -8,7 +8,7 @@ public class SelectionKeyBuilder {
 
     private boolean isReadable = false;
     private boolean isWritable = false;
-    private boolean isAcceptable = false;
+    private final boolean isAcceptable = false;
     private NioConnection attachment;
 
     public SelectionKeyBuilder() {

@@ -134,55 +134,6 @@ public class FrameReader {
     }
 
     /**
-     * Gets the current reading state.
-     */
-    public ReadState getState() {
-        return state;
-    }
-
-    /**
-     * Checks if we're currently reading a header.
-     */
-    public boolean isReadingHeader() {
-        return state == ReadState.READING_HEADER;
-    }
-
-    /**
-     * Checks if we're currently reading payload.
-     */
-    public boolean isReadingPayload() {
-        return state == ReadState.READING_PAYLOAD;
-    }
-
-    /**
-     * Checks if the frame is complete and ready to be consumed.
-     */
-    public boolean isComplete() {
-        return state == ReadState.COMPLETE;
-    }
-
-    /**
-     * Gets the current payload length being read.
-     */
-    public int getPayloadLength() {
-        return payloadLength;
-    }
-
-    /**
-     * Gets the current stream ID being read.
-     */
-    public int getStreamId() {
-        return streamId;
-    }
-
-    /**
-     * Gets the current frame type being read.
-     */
-    public byte getFrameType() {
-        return frameType;
-    }
-
-    /**
      * Resets the frame reader for reuse.
      */
     public void reset() {
