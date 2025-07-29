@@ -4,15 +4,9 @@ A fabric of ticking processes.
 
 ## Overview
 
-TickLoom is a distributed system framework that provides a fabric of ticking processes for building scalable, fault-tolerant applications.
+TickLoom is a distributed system framework that helps building a cluster of ticking processes with common patterns for building 
+various replication algorithms
 
-## Features
-
-- Distributed process management
-- Network communication layer
-- Message passing between processes
-- Cluster topology configuration
-- Replica management
 
 ## Getting Started
 

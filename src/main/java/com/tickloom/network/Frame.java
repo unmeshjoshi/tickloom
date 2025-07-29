@@ -7,6 +7,10 @@ import java.nio.ByteBuffer;
  * Used by FrameReader and NioConnection for consistency.
  */
 public class Frame {
+    // Frame format constants
+    public static final int HEADER_SIZE = 9; // streamId (4) + frameType (1) + payloadLength (4)
+    public static final int MAX_PAYLOAD_SIZE = 10_000_000; // 10MB max
+    
     private final int streamId;
     private final byte frameType;
     private final byte[] payload;
@@ -41,7 +45,7 @@ public class Frame {
     }
 
     public int getTotalSize() {
-        return FrameConstants.HEADER_SIZE + payload.length;
+        return HEADER_SIZE + payload.length;
     }
 
     @Override

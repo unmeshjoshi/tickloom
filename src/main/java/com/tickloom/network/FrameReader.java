@@ -28,7 +28,7 @@ public class FrameReader {
     private ReadState state = ReadState.READING_HEADER;
 
     public FrameReader() {
-        this.headerBuffer = ByteBuffer.allocate(FrameConstants.HEADER_SIZE);
+        this.headerBuffer = ByteBuffer.allocate(Frame.HEADER_SIZE);
     }
 
     /**
@@ -86,7 +86,7 @@ public class FrameReader {
         System.out.println("NIO: Parsed payload length: " + payloadLength);
 
         // Validate payload length - throw exception on error
-        if (payloadLength < 0 || payloadLength > FrameConstants.MAX_PAYLOAD_SIZE) {
+        if (payloadLength < 0 || payloadLength > Frame.MAX_PAYLOAD_SIZE) {
             throw new IOException("Invalid payload length: " + payloadLength);
         }
 
