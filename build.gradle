@@ -5,7 +5,7 @@ plugins {
     id 'signing'
 }
 
-group = 'com.github.tickstep'
+group = 'com.github.tickloom'
 version = '0.1.0-alpha.1'
 
 repositories {
@@ -26,7 +26,7 @@ dependencies {
 
 // Configure the shadow plugin to create a fat JAR
 shadowJar {
-    archiveBaseName.set('tickstep-server')
+    archiveBaseName.set('tickloom-server')
     archiveClassifier.set('all')
     archiveVersion.set('')
     
@@ -40,7 +40,7 @@ shadowJar {
     
     // Set the main class for the JAR
     manifest {
-        attributes 'Main-Class': 'tickstep.cmd.ServerApplication'
+        attributes 'Main-Class': 'tickloom.cmd.ServerApplication'
     }
 }
 
@@ -52,7 +52,7 @@ task shadowClientJar(type: com.github.jengelman.gradle.plugins.shadow.tasks.Shad
     from sourceSets.main.output
     configurations = [project.configurations.runtimeClasspath]
     
-    archiveBaseName.set('tickstep-client')
+    archiveBaseName.set('tickloom-client')
     archiveClassifier.set('all')
     archiveVersion.set('')
     
@@ -66,7 +66,7 @@ task shadowClientJar(type: com.github.jengelman.gradle.plugins.shadow.tasks.Shad
     
     // Set the main class for the client JAR
     manifest {
-        attributes 'Main-Class': 'tickstep.cmd.ClientApplication'
+        attributes 'Main-Class': 'tickloom.cmd.ClientApplication'
     }
 }
 
@@ -179,13 +179,13 @@ publishing {
         mavenJava(MavenPublication) {
             from components.java
             groupId = project.group
-            artifactId = 'tickstep-core'
+            artifactId = 'tickloom-core'
             version = project.version
             
             pom {
-                name = 'TickStep'
+                name = 'tickloom'
                 description = 'a deterministic single‑thread tick engine for distributed systems.'
-                url = 'https://github.com/unmeshjoshi/tickstep'
+                url = 'https://github.com/unmeshjoshi/tickloom'
                 
                 licenses {
                     license {
@@ -203,9 +203,9 @@ publishing {
                 }
                 
                 scm {
-                    connection = 'scm:git:git://github.com/unmeshjoshi/tickstep.git'
-                    developerConnection = 'scm:git:ssh://github.com:unmeshjoshi/tickstep.git'
-                    url = 'https://github.com/unmeshjoshi/tickstep'
+                    connection = 'scm:git:git://github.com/unmeshjoshi/tickloom.git'
+                    developerConnection = 'scm:git:ssh://github.com:unmeshjoshi/tickloom.git'
+                    url = 'https://github.com/unmeshjoshi/tickloom'
                 }
             }
         }
