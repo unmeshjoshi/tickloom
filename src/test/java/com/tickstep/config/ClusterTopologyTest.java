@@ -4,12 +4,9 @@ import com.tickstep.ProcessId;
 import com.tickstep.network.InetAddressAndPort;
 import org.junit.jupiter.api.Test;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-
 import static org.junit.jupiter.api.Assertions.*;
 
-class NodeRegistryTest {
+class ClusterTopologyTest {
 
     @Test
     public void getAddressByProcessId() {
@@ -26,7 +23,7 @@ class NodeRegistryTest {
                 "    port: 8080";
 
         Config config = Config.load(yaml);
-        NodeRegistry registry = new NodeRegistry(config);
+        ClusterTopology registry = new ClusterTopology(config);
 
         assertEquals(InetAddressAndPort.from("10.12.0.10", 8080)
                 , registry.getInetAddress(pid1));

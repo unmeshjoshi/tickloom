@@ -5,6 +5,7 @@ import com.tickstep.messaging.Message;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.*;
@@ -15,14 +16,14 @@ public class NioConnection {
 
 
     private final PeerType peerType;
-    private ProcessId sourceId            ;
+    private ProcessId sourceId;
     private ProcessId destinationId;
 
     private final NioNetwork nioNetwork;
     private final SocketChannel channel;
     private final SelectionKey channelKey;
-    private final ReadFrame readFrame;
-    private final Queue<WriteFrame> pendingWrites;
+    private final FrameReader frameReader;
+    private final Queue<ByteBuffer> pendingWrites;
     private MessageCodec codec;
 
 
@@ -32,71 +33,62 @@ public class NioConnection {
         this.channelKey = channelKey;
         this.codec = codec;
         this.peerType = PeerType.UNKNOWN;
-        this.readFrame = new ReadFrame();
+        this.frameReader = new FrameReader();
         this.pendingWrites = new ArrayDeque<>(MAX_PENDING_WRITES);
         //TODO: Beyond MAX_PENDING_WRITES, start dropping writes
     }
 
-    public InetAddressAndPort getRemoteAddress()  {
+    public InetAddressAndPort getRemoteAddress() {
         try {
             return InetAddressAndPort.from((InetSocketAddress) channel.getRemoteAddress());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
-    public SocketChannel getChannel() { return channel; }
-    public boolean isConnected() { return channel != null && channel.isOpen() && channel.isConnected(); }
 
-    private void addPendingWrite(WriteFrame writeFrame) {
-        pendingWrites.add(writeFrame);
+    public SocketChannel getChannel() {
+        return channel;
+    }
+
+    public boolean isConnected() {
+        return channel != null && channel.isOpen() && channel.isConnected();
+    }
+
+    private void addPendingWrite(ByteBuffer buffer) {
+        pendingWrites.add(buffer);
         toggleWriteInterest();
     }
 
 
-    public void read() {
+    public void read() throws IOException {
         System.out.println("NIO: read() called on channel: " + channel);
         int framesProcessed = 0;
         int messagesDecoded = 0;
 
-        try {
-            while (framesProcessed < MAX_FRAMES_PER_READ) {
-                ReadResult result = readFrame.readFrom(channel);
-                System.out.println("NIO: ReadResult: " + result.status());
+        while (framesProcessed < MAX_FRAMES_PER_READ) {
+            ReadResult result = frameReader.readFrom(channel);
+            System.out.println("NIO: ReadResult: " + result.status());
 
-                if (result.isConnectionClosed()) {
-                    handleConnectionClosed();
-                    return;
-                }
-
-                if (result.hasFramingError()) {
-                    handleFramingError(channel, result.error(), readFrame);
-                    return; //  Do not continue on framing errors
-                }
-
-                if (!result.isFrameComplete()) {
-                    System.out.println("NIO: Frame not complete, waiting for more data");
-                    break; // wait for more data
-                }
-
-                ReadFrame.Frame frame = readFrame.complete();
-                System.out.println("NIO: Frame complete: " + frame);
-                routeMessage(frame);
-
-                framesProcessed++;
-                messagesDecoded++;
+            if (!result.isFrameComplete()) {
+                System.out.println("NIO: Frame not complete, waiting for more data");
+                break; // wait for more data
             }
-        } catch (Exception e) {
-            handleUnexpectedReadError(e);
-        }
 
+            Frame frame = frameReader.complete();
+            System.out.println("NIO: Frame complete: " + frame);
+            routeMessage(frame);
+
+            framesProcessed++;
+            messagesDecoded++;
+        }
         // Update metrics
         if (messagesDecoded > 0) {
             System.out.println("[NIO][handleRead] Decoded " + messagesDecoded + " messages, processed " + framesProcessed + " frames");
         }
     }
 
-    private void routeMessage(ReadFrame.Frame frame) {
-        Message message = codec.decode(frame.getPayload().array(), Message.class);
+    private void routeMessage(Frame frame) {
+        Message message = codec.decode(frame.getPayload(), Message.class);
         if (peerType != PeerType.UNKNOWN) {
             this.sourceId = message.source();
             this.destinationId = message.destination();
@@ -107,17 +99,11 @@ public class NioConnection {
 
     }
 
-
-    private void handleConnectionClosed() {
-        System.out.println("[NIO][handleRead] Channel closed by peer: " + channel);
-        cleanupConnection();
-    }
-
     /**
      * Comprehensive connection cleanup to prevent resource leaks.
      * This follows production patterns for proper connection lifecycle management.
      */
-    private void cleanupConnection() {
+    public void cleanupConnection() {
         try {
             // Cancel any selection key (this will also detach the ChannelState)
             if (channelKey != null) {
@@ -135,47 +121,35 @@ public class NioConnection {
     }
 
 
-    private void handleFramingError(SocketChannel channel, Throwable error, ReadFrame frame) {
-        System.out.println("[NIO][framing] Invalid frame from " + getRemoteAddress() + ": " + error.getMessage() + " (resetting ReadFrame)");
-        frame.reset();
+    private void handleFramingError(SocketChannel channel, Throwable error, FrameReader frameReader) {
+        System.out.println("[NIO][framing] Invalid frame from " + getRemoteAddress() + ": " + error.getMessage() + " (resetting FrameReader)");
+        frameReader.reset();
     }
 
-    private void handleUnexpectedReadError(Exception e) {
-        System.err.println("[NIO][handleRead] Unexpected error on " + getRemoteAddress() + ": " + e.getMessage());
-        e.printStackTrace();
-    }
-
-    public void write() {
+    public void write() throws IOException {
         System.out.println("NIO: write() called, pending writes: " + pendingWrites.size());
         writePendingMessages();
     }
 
-    private void writePendingMessages() {
+    private void writePendingMessages() throws IOException {
         if (pendingWrites.isEmpty()) {
             return;
         }
-        
-        try {
-            WriteFrame currentFrame = pendingWrites.peek();
-            if (currentFrame == null) {
-                return;
-            }
-            
-            int bytesWritten = currentFrame.write(channel);
-            System.out.println("NIO: Wrote " + bytesWritten + " bytes, remaining=" + currentFrame.remaining());
-            
-            if (!currentFrame.hasRemaining()) {
-                // Frame completely written, remove from queue
-                pendingWrites.poll();
-                System.out.println("NIO: Completed writing frame, remaining in queue: " + pendingWrites.size());
-            }
 
-            toggleWriteInterest();
+        // Convert queue to array for bulk write
+        ByteBuffer[] buffers = pendingWrites.toArray(new ByteBuffer[0]);
+        // Write all buffers in a single call
+        long bytesWritten = channel.write(buffers);
+        System.out.println("NIO: Wrote " + bytesWritten + " bytes in bulk write");
 
-        } catch (IOException e) {
-            System.err.println("NIO: Error writing to channel: " + e.getMessage());
-            cleanupConnection();
-        }
+        // Remove completely written buffers
+        pendingWrites.removeIf(buffer -> !buffer.hasRemaining());
+
+        System.out.println("NIO: Remaining buffers in queue: " + pendingWrites.size());
+
+        toggleWriteInterest();
+
+
     }
 
     private void toggleWriteInterest() {
@@ -198,10 +172,42 @@ public class NioConnection {
         return destinationId;
     }
 
+    public void setDestinationId(ProcessId destinationId) {
+        this.destinationId = destinationId;
+    }
+
     public void send(Message message) {
         System.out.println("NIO: Adding message to pending writes: " + message);
-        addPendingWrite(new WriteFrame(codec.encode(message)));
+        ByteBuffer buffer = createFrameBuffer(message);
+        addPendingWrite(buffer);
         toggleWriteInterest();
+    }
+
+    /**
+     * Creates a ByteBuffer containing the framed message data.
+     *
+     * @param message The message to frame
+     * @return ByteBuffer ready for writing to channel
+     */
+    private ByteBuffer createFrameBuffer(Message message) {
+        byte[] messageData = codec.encode(message);
+        Frame frame = new Frame(0, (byte) 0, messageData);
+
+        // Allocate buffer with header + payload
+        ByteBuffer buffer = ByteBuffer.allocate(frame.getTotalSize());
+
+        // Write header: streamId (4 bytes) + frameType (1 byte) + length (4 bytes)
+        buffer.putInt(frame.getStreamId());
+        buffer.put(frame.getFrameType());
+        buffer.putInt(frame.getPayloadLength());
+
+        // Write payload
+        buffer.put(frame.getPayload());
+
+        // Prepare for writing
+        buffer.flip();
+
+        return buffer;
     }
 
     public boolean hasPendingWrites() {
@@ -215,21 +221,16 @@ public class NioConnection {
         }
     }
 
-    public void handleConnect() {
+    public void handleConnect() throws IOException {
         System.out.println("NIO: handleConnect called for channel: " + channel);
-        try {
-            if (!channel.finishConnect()) {
-                System.out.println("NIO: Connection still pending, will retry later");
-                return;
-            }
 
-            System.out.println("NIO: Connection established successfully");
-            // Connection established, switch to read/write mode
-            channelKey.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
-
-        } catch (IOException e) {
-            System.err.println("NIO: Connection failed: " + e.getMessage());
-            cleanupConnection();
+        if (!channel.finishConnect()) {
+            System.out.println("NIO: Connection still pending, will retry later");
+            return;
         }
+
+        System.out.println("NIO: Connection established successfully");
+        // Connection established, switch to read/write mode
+        channelKey.interestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
     }
 }

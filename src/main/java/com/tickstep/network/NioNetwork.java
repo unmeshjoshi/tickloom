@@ -1,7 +1,7 @@
 package com.tickstep.network;
 
 import com.tickstep.ProcessId;
-import com.tickstep.config.NodeRegistry;
+import com.tickstep.config.ClusterTopology;
 import com.tickstep.messaging.Message;
 
 import java.io.IOException;
@@ -17,12 +17,12 @@ import java.util.List;
 public class NioNetwork implements Network {
 
     private final MessageCodec codec;
-    private final NodeRegistry registry;
+    private final ClusterTopology registry;
     private final Selector selector;
     final HashMap<ProcessId, NioConnection> connections = new HashMap<>();
-    private NodeRegistry nodeRegistry;
+    private ClusterTopology clusterTopology;
 
-    public NioNetwork(MessageCodec codec, NodeRegistry registry, Selector selector) {
+    public NioNetwork(MessageCodec codec, ClusterTopology registry, Selector selector) {
         this.codec = codec;
         this.registry = registry;
         this.selector = selector;
@@ -54,34 +54,40 @@ public class NioNetwork implements Network {
             }
 
             selector.selectedKeys().forEach(key -> {
-                System.out.println("NIO: Processing key - acceptable: " + key.isAcceptable() + 
-                                 ", connectable: " + key.isConnectable() + 
-                                 ", readable: " + key.isReadable() + 
-                                 ", writable: " + key.isWritable());
-                
-                if (key.isAcceptable()) {
-                    Acceptor acceptor = (Acceptor) key.attachment();
-                    try {
-                        acceptor.accept();
-                    } catch (IOException e) {
-                        System.err.println(e.getMessage());
+                try {
+                    System.out.println("NIO: Processing key - acceptable: " + key.isAcceptable() + 
+                                     ", connectable: " + key.isConnectable() + 
+                                     ", readable: " + key.isReadable() + 
+                                     ", writable: " + key.isWritable());
+                    
+                    if (key.isAcceptable()) {
+                        Acceptor acceptor = (Acceptor) key.attachment();
+                        try {
+                            acceptor.accept();
+                        } catch (IOException e) {
+                            System.err.println(e.getMessage());
+                        }
+                    } else if (key.isConnectable()) {
+                        NioConnection connection = (NioConnection) key.attachment();
+                        connection.handleConnect();
                     }
-                } else if (key.isConnectable()) {
+                    
+                    // Handle read/write events (can happen on same key as connectable)
+                    if (key.isReadable()) {
+                        NioConnection connection = (NioConnection) key.attachment();
+                        connection.read();
+                    }
+                    
+                    if (key.isWritable()) {
+                        NioConnection connection = (NioConnection) key.attachment();
+                        connection.write();
+                    }
+                } catch (IOException e) {
+                    // Handle cancelled keys and other exceptions gracefully
+                    System.err.println("NIO: Error processing key: " + e.getMessage());
                     NioConnection connection = (NioConnection) key.attachment();
-                    connection.handleConnect();
+                    connection.cleanupConnection();
                 }
-                
-                // Handle read/write events (can happen on same key as connectable)
-                if (key.isReadable()) {
-                    NioConnection connection = (NioConnection) key.attachment();
-                    connection.read();
-                }
-                
-                if (key.isWritable()) {
-                    NioConnection connection = (NioConnection) key.attachment();
-                    connection.write();
-                }
-
             });
             
             // Clear the selected keys set so they can be selected again
@@ -93,13 +99,29 @@ public class NioNetwork implements Network {
 
 
     public void removeConnection(NioConnection nioConnection) {
-        connections.remove(nioConnection.getSourceId());
+        // Remove by destination ID for outbound connections, or by source ID for inbound connections
+        ProcessId destinationId = nioConnection.getDestinationId();
+        ProcessId sourceId = nioConnection.getSourceId();
+        
+        if (destinationId != null && connections.containsKey(destinationId)) {
+            connections.remove(destinationId);
+            System.out.println("NIO: Removed outbound connection for destination: " + destinationId);
+        } else if (sourceId != null && connections.containsKey(sourceId)) {
+            connections.remove(sourceId);
+            System.out.println("NIO: Removed inbound connection for source: " + sourceId);
+        } else {
+            // Fallback: remove by value (less efficient but handles edge cases)
+            connections.entrySet().removeIf(entry -> entry.getValue() == nioConnection);
+            System.out.println("NIO: Removed connection by value comparison");
+        }
     }
 
     public void handleMessage(Message message, NioConnection nioConnection) {
         NioConnection existingConnection = connections.get(message.source());
         if (existingConnection == null || !existingConnection.isConnected()) {
             System.out.println("Received a new message from unknown source: " + message.source() + " Adding to connections map ");
+            System.out.println("Connection being added: " + nioConnection + ", channel: " + nioConnection.getChannel() + 
+                              ", isOpen: " + nioConnection.getChannel().isOpen() + ", isConnected: " + nioConnection.getChannel().isConnected());
             connections.put(message.source(), nioConnection);
         }
         System.out.println("message = " + message);
@@ -117,16 +139,36 @@ public class NioNetwork implements Network {
      */
     private NioConnection getOrCreateOutboundChannel(ProcessId peerId, boolean waitTillConnected) throws IOException {
         NioConnection connection = connections.get(peerId);
+        System.out.println("NIO: getOrCreateOutboundChannel for " + peerId + ", connection: " + connection + 
+                          ", isChannelUsable: " + isChannelUsable(connection));
         if (!isChannelUsable(connection)) {
-            logCreatingNewChannel(connection);
-            SocketChannel channel = createAndConfigureChannel(waitTillConnected);
-            InetAddressAndPort address = registry.getInetAddress(peerId);
-            SelectionKey key = establishConnection(selector, channel, address);
-            NioConnection nioConnection = new NioConnection(this, channel, key, codec);
-            System.out.println("NIO: Stored new channel in outboundConnections map");
-            key.attach(nioConnection);
-            connections.put(peerId, nioConnection);
-            return nioConnection;
+            // Check if this peer is in the registry (i.e., it's a server)
+            try {
+                InetAddressAndPort address = registry.getInetAddress(peerId);
+                // Peer is in registry, create outbound connection
+                logCreatingNewChannel(connection);
+                SocketChannel channel = createAndConfigureChannel(waitTillConnected);
+                SelectionKey key = establishConnection(selector, channel, address);
+                NioConnection nioConnection = new NioConnection(this, channel, key, codec);
+                nioConnection.setDestinationId(peerId); // Set destination for outbound connections
+                System.out.println("NIO: Stored new channel in outboundConnections map");
+                key.attach(nioConnection);
+
+                NioConnection existingConnection = connections.put(peerId, nioConnection);
+                if (existingConnection != null) {
+                    System.out.println("NIO: Replaced existing connection for destination: " + peerId);
+                    existingConnection.cleanupConnection();
+                }
+                return nioConnection;
+            } catch (Exception e) {
+                // Peer is not in registry (i.e., it's a client), can only use existing connection
+                System.out.println("NIO: Peer " + peerId + " not in registry, cannot create outbound connection");
+                if (connection == null) {
+                    throw new IOException("No existing connection to client " + peerId + " and cannot create new one");
+                }
+                // Connection exists but is not usable, throw exception
+                throw new IOException("Existing connection to client " + peerId + " is not usable");
+            }
         }
 
         logChannelStatus(peerId, connection.getChannel());
@@ -149,13 +191,13 @@ public class NioNetwork implements Network {
     }
 
     private static SelectionKey establishConnection(Selector selector, SocketChannel channel, InetAddressAndPort address) throws IOException {
+        channel.configureBlocking(false);
         boolean connected = channel.connect(address.toInetSocketAddress());
         if (!connected) {
             logConnectionInProgress();
             return channel.register(selector, SelectionKey.OP_CONNECT);
         } else {
             logImmediateConnection();
-            channel.configureBlocking(false); //TODO: For tests only
             return channel.register(selector, SelectionKey.OP_READ);
         }
     }
@@ -195,15 +237,16 @@ public class NioNetwork implements Network {
         return codec;
     }
 
+    public int getConnectionCount() {
+        return connections.size();
+    }
+
     public void close() throws IOException {
         // Close all connections
         for (NioConnection connection : connections.values()) {
-            try {
-                connection.getChannel().close();
-            } catch (IOException e) {
-                System.err.println("Error closing connection: " + e.getMessage());
-            }
+                connection.cleanupConnection();
         }
+
         connections.clear();
         
         // Close all acceptors

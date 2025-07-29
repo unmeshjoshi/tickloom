@@ -3,9 +3,7 @@ package com.tickstep.network;
 public final class ReadResult {
     public enum Status {
         FRAME_COMPLETE,
-        INCOMPLETE,
-        CONNECTION_CLOSED,
-        FRAMING_ERROR
+        INCOMPLETE
     }
 
     private final Status status;
@@ -24,24 +22,8 @@ public final class ReadResult {
         return new ReadResult(Status.INCOMPLETE, null);
     }
 
-    public static ReadResult connectionClosed() {
-        return new ReadResult(Status.CONNECTION_CLOSED, null);
-    }
-
-    public static ReadResult framingError(Throwable error) {
-        return new ReadResult(Status.FRAMING_ERROR, error);
-    }
-
     public boolean isFrameComplete() {
         return status == Status.FRAME_COMPLETE;
-    }
-
-    public boolean isConnectionClosed() {
-        return status == Status.CONNECTION_CLOSED;
-    }
-
-    public boolean hasFramingError() {
-        return status == Status.FRAMING_ERROR;
     }
 
     public Throwable error() {

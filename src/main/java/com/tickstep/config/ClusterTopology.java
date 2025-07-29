@@ -7,10 +7,16 @@ import com.tickstep.network.InetAddressAndPort;
 import java.util.HashMap;
 import java.util.Map;
 
-public class NodeRegistry {
+/**
+ * A class that represents the cluster layout of processes in a distributed system.
+ * @ProcessConfig provides the configuration for each process. As of now
+ * this is only the IP and port, but in future it can also include stuff like
+ * rack, datacenter, region
+ */
+public class ClusterTopology {
     Map<ProcessId, ProcessConfig> processConfigs = new HashMap<>();
 
-    public NodeRegistry(Config config) {
+    public ClusterTopology(Config config) {
         for (ProcessConfig processConfig : config.processConfigs()) {
             processConfigs.put(processConfig.processId(), processConfig);
         }

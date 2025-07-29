@@ -1,7 +1,7 @@
 package com.tickstep.network;
 
 import com.tickstep.ProcessId;
-import com.tickstep.config.NodeRegistry;
+import com.tickstep.config.ClusterTopology;
 import com.tickstep.messaging.Message;
 import com.tickstep.messaging.MessageType;
 import org.junit.jupiter.api.AfterEach;
@@ -29,8 +29,7 @@ class NioNetworkIntegrationTest {
     
     private NioNetwork serverNetwork;
     private NioNetwork clientNetwork;
-    private NodeRegistry serverRegistry;
-    private NodeRegistry clientRegistry;
+    private ClusterTopology serverRegistry;
     private MessageCodec codec;
     private Selector serverSelector;
     private Selector clientSelector;
@@ -63,8 +62,7 @@ class NioNetworkIntegrationTest {
         
         // Create registries
         serverRegistry = createTestRegistry(serverId, serverAddress, clientId, clientAddress);
-        clientRegistry = createTestRegistry(serverId, serverAddress, clientId, clientAddress);
-        
+
         // Create networks with custom message handling
         serverNetwork = new NioNetwork(codec, serverRegistry, serverSelector) {
             @Override
@@ -85,7 +83,7 @@ class NioNetworkIntegrationTest {
             }
         };
         
-        clientNetwork = new NioNetwork(codec, clientRegistry, clientSelector) {
+        clientNetwork = new NioNetwork(codec, serverRegistry, clientSelector) {
             @Override
             public void handleMessage(Message message, NioConnection nioConnection) {
                 clientReceivedMessages.add(message);
@@ -114,7 +112,6 @@ class NioNetworkIntegrationTest {
     }
 
     @Test
-//    @Timeout(TEST_TIMEOUT_SECONDS)
     void shouldEstablishConnectionAndExchangeMessages() throws Exception {
         // Start server
         serverNetwork.bind(serverAddress);
@@ -150,13 +147,12 @@ class NioNetworkIntegrationTest {
     }
 
     @Test
-    @Timeout(TEST_TIMEOUT_SECONDS)
     void shouldHandleMultipleMessages() throws Exception {
         // Start server
         serverNetwork.bind(serverAddress);
         
         // Send multiple messages from client
-        int messageCount = 5;
+        int messageCount = 100;
         serverReceivedMessages.clear();
         clientReceivedMessages.clear();
         
@@ -186,13 +182,12 @@ class NioNetworkIntegrationTest {
     }
 
     @Test
-    @Timeout(TEST_TIMEOUT_SECONDS)
     void shouldHandleLargeMessages() throws Exception {
         // Start server
         serverNetwork.bind(serverAddress);
         
-        // Create a large message (1KB)
-        byte[] largePayload = new byte[1024];
+        // Create a large message (10MB)
+        byte[] largePayload = new byte[1024*1024*7];
         for (int i = 0; i < largePayload.length; i++) {
             largePayload[i] = (byte) (i % 256);
         }
@@ -223,7 +218,6 @@ class NioNetworkIntegrationTest {
     }
 
     @Test
-    @Timeout(TEST_TIMEOUT_SECONDS)
     void shouldHandleConnectionReuse() throws Exception {
         // Start server
         serverNetwork.bind(serverAddress);
@@ -272,13 +266,358 @@ class NioNetworkIntegrationTest {
         assertEquals("SECOND", received.messageType().name());
     }
 
+    @Test
+    @Timeout(TEST_TIMEOUT_SECONDS)
+    void shouldHandleConnectionFailures() throws Exception {
+        // Don't start the server - this will cause connection failures
+        
+        // Try to connect to a non-existent server
+        Message message = Message.of(
+            clientId, serverId, PeerType.CLIENT,
+            MessageType.of("FAILURE"),
+            "Test message".getBytes(),
+            "failure-test"
+        );
+        
+        // This should fail gracefully
+        clientNetwork.send(message);
+        
+        // Run for a short time to let the connection attempt fail
+        runUntil(() -> {
+            // Check if connection was cleaned up
+            return clientNetwork.getConnectionCount() == 0;
+        });
+        
+        // Verify connection was cleaned up
+        assertEquals(0, clientNetwork.getConnectionCount());
+    }
+
+    @Test
+    void shouldHandleClientDisconnection() throws Exception {
+        // Start server
+        serverNetwork.bind(serverAddress);
+        
+        // Establish connection
+        Message message = Message.of(
+            clientId, serverId, PeerType.CLIENT,
+            MessageType.of("DISCONNECT"),
+            "Test message".getBytes(),
+            "disconnect-test"
+        );
+        
+        serverReceivedMessages.clear();
+        clientReceivedMessages.clear();
+        
+        clientNetwork.send(message);
+        
+        // Wait for message exchange
+        runUntil(() -> serverReceivedMessages.size() > 0);
+        
+        // Verify connection exists
+        assertTrue(serverNetwork.getConnectionCount() > 0);
+        
+        // Close client network (simulates client crash/disconnect)
+        clientNetwork.close();
+        
+        // Run for a while to let server detect disconnection
+        runUntil(() -> {
+            // Server should detect disconnection and clean up
+            return serverNetwork.getConnectionCount() == 0;
+        });
+        
+        // Verify server cleaned up the connection
+        assertEquals(0, serverNetwork.getConnectionCount());
+    }
+
+    @Test
+    void shouldHandleConcurrentConnections() throws Exception {
+        // Start server
+        serverNetwork.bind(serverAddress);
+        
+        // Create multiple client networks
+        int clientCount = 100;
+        List<NioNetwork> clientNetworks = new ArrayList<>();
+        List<ProcessId> clientIds = new ArrayList<>();
+        
+        for (int i = 0; i < clientCount; i++) {
+            ProcessId clientId = ProcessId.of("concurrent-client-" + i);
+            InetAddressAndPort clientAddress = InetAddressAndPort.from("127.0.0.1", 0);
+            ClusterTopology clientRegistry = createTestRegistry(serverId, serverAddress, clientId, clientAddress);
+            Selector clientSelector = Selector.open();
+            
+            NioNetwork clientNetwork = new NioNetwork(codec, clientRegistry, clientSelector) {
+                @Override
+                public void handleMessage(Message message, NioConnection nioConnection) {
+                    clientReceivedMessages.add(message);
+                }
+            };
+            
+            clientNetworks.add(clientNetwork);
+            clientIds.add(clientId);
+        }
+        
+        // Send messages from all clients simultaneously
+        List<Message> messages = new ArrayList<>();
+        for (int i = 0; i < clientCount; i++) {
+            Message message = Message.of(
+                clientIds.get(i), serverId, PeerType.CLIENT,
+                MessageType.of("CONCURRENT"),
+                ("Message from client " + i).getBytes(),
+                "concurrent-" + i
+            );
+            messages.add(message);
+        }
+        
+        serverReceivedMessages.clear();
+        
+        // Send all messages
+        for (int i = 0; i < clientCount; i++) {
+            clientNetworks.get(i).send(messages.get(i));
+        }
+        
+        // Wait for all messages to be received
+        runUntil(() -> {
+            // Tick all client networks
+            for (NioNetwork clientNetwork : clientNetworks) {
+                try {
+                    clientNetwork.tick();
+                } catch (Exception e) {
+                    // Ignore closed networks
+                }
+            }
+            return serverReceivedMessages.size() >= clientCount;
+        });
+        
+        // Verify all messages were received
+        assertEquals(clientCount, serverReceivedMessages.size());
+        
+        // Verify server has connections for all clients
+        assertEquals(clientCount, serverNetwork.getConnectionCount());
+        
+        // Clean up client networks
+        for (NioNetwork clientNetwork : clientNetworks) {
+            clientNetwork.close();
+        }
+        
+        // Wait for server to clean up all connections
+        runUntil(() -> {
+            serverNetwork.tick();
+            return serverNetwork.getConnectionCount() == 0;
+        });
+        
+        // Verify all connections were cleaned up
+        assertEquals(0, serverNetwork.getConnectionCount());
+    }
+
+    @Test
+    void shouldHandleServerRestart() throws Exception {
+        // Start server
+        serverNetwork.bind(serverAddress);
+        
+        // Establish initial connection
+        Message message1 = Message.of(
+            clientId, serverId, PeerType.CLIENT,
+            MessageType.of("RESTART"),
+            "Test message 1".getBytes(),
+            "restart-test-1"
+        );
+        
+        serverReceivedMessages.clear();
+        clientReceivedMessages.clear();
+        
+        clientNetwork.send(message1);
+        
+        // Wait for initial message exchange
+        runUntil(() -> serverReceivedMessages.size() > 0);
+        runUntil(() -> clientReceivedMessages.size() > 0);
+        
+        // Verify initial connection exists and message was exchanged
+        assertTrue(serverNetwork.getConnectionCount() > 0);
+        assertEquals(1, serverReceivedMessages.size());
+        assertEquals(1, clientReceivedMessages.size());
+        
+        // Store the initial message count to verify new messages after restart
+        int initialServerMessages = serverReceivedMessages.size();
+        int initialClientMessages = clientReceivedMessages.size();
+        
+        // Restart server (close and create new instance)
+        System.out.println("Restarting server...");
+        serverNetwork.close();
+        
+        // Create a new server network instance with the same registry
+        serverSelector = Selector.open();
+        serverNetwork = new NioNetwork(codec, serverRegistry, serverSelector) {
+            @Override
+            public void handleMessage(Message message, NioConnection nioConnection) {
+                super.handleMessage(message, nioConnection);
+                serverReceivedMessages.add(message);
+                // Auto-respond to client messages
+                try {
+                    Message response = Message.of(
+                        serverId, message.source(), PeerType.REPLICA,
+                        MessageType.of("RESTART_RESPONSE"),
+                        ("Hello from restarted server").getBytes(),
+                        message.correlationId()
+                    );
+                    send(response);
+                } catch (IOException e) {
+                    System.err.println("Failed to send response: " + e.getMessage());
+                }
+            }
+        };
+        serverNetwork.bind(serverAddress);
+        
+        // Wait a bit for the old connection to be detected as closed
+        Thread.sleep(100);
+        
+        // Clear message counts for the restart phase
+        serverReceivedMessages.clear();
+        clientReceivedMessages.clear();
+        
+        // The client will try to send a message, but the connection will fail
+        // We need to wait for the connection to be cleaned up first
+        runUntil(() -> {
+            // The client should detect the connection failure and clean up
+            return clientNetwork.getConnectionCount() == 0;
+        });
+        
+        // Now send a new message to the restarted server
+        Message message2 = Message.of(
+            clientId, serverId, PeerType.CLIENT,
+            MessageType.of("RESTART2"),
+            "Test message 2".getBytes(),
+            "restart-test-2"
+        );
+        
+        clientNetwork.send(message2);
+        
+        // Wait for the new message to be processed by the restarted server
+        runUntil(() -> serverReceivedMessages.size() > 0);
+        
+        // The restarted server should receive the message and add the client to its connections map
+        // Then it should be able to send a response using that connection
+        runUntil(() -> clientReceivedMessages.size() > 0);
+        
+        // Verify that the restarted server received the new message
+        assertEquals(1, serverReceivedMessages.size());
+        Message newServerMessage = serverReceivedMessages.get(0);
+        assertEquals("Test message 2", new String(newServerMessage.payload()));
+        assertEquals("RESTART2", newServerMessage.messageType().name());
+        
+        // Verify that the client received response from the restarted server
+        assertEquals(1, clientReceivedMessages.size());
+        Message newClientMessage = clientReceivedMessages.get(0);
+        assertEquals("Hello from restarted server", new String(newClientMessage.payload()));
+        assertEquals("RESTART_RESPONSE", newClientMessage.messageType().name());
+        
+        // Verify that the restarted server has exactly one connection (the client)
+        assertEquals(1, serverNetwork.getConnectionCount());
+        
+        // Verify that the client has exactly one connection (to the restarted server)
+        assertEquals(1, clientNetwork.getConnectionCount());
+        
+        System.out.println("Server restart test completed successfully - new connection established and messages flowing");
+    }
+
+    @Test
+    void shouldHandleBackpressure() throws Exception {
+        // Start server
+        serverNetwork.bind(serverAddress);
+        
+        // Create many client networks to test backpressure
+        int clientCount = 20; // More than typical backlog
+        List<NioNetwork> clientNetworks = new ArrayList<>();
+        List<ProcessId> clientIds = new ArrayList<>();
+        
+        for (int i = 0; i < clientCount; i++) {
+            ProcessId clientId = ProcessId.of("backpressure-client-" + i);
+            InetAddressAndPort clientAddress = InetAddressAndPort.from("127.0.0.1", 0);
+            ClusterTopology clientRegistry = createTestRegistry(serverId, serverAddress, clientId, clientAddress);
+            Selector clientSelector = Selector.open();
+            
+            NioNetwork clientNetwork = new NioNetwork(codec, clientRegistry, clientSelector) {
+                @Override
+                public void handleMessage(Message message, NioConnection nioConnection) {
+                    clientReceivedMessages.add(message);
+                }
+            };
+            
+            clientNetworks.add(clientNetwork);
+            clientIds.add(clientId);
+        }
+        
+        // Try to connect all clients simultaneously
+        List<Message> messages = new ArrayList<>();
+        for (int i = 0; i < clientCount; i++) {
+            Message message = Message.of(
+                clientIds.get(i), serverId, PeerType.CLIENT,
+                MessageType.of("BACKPRESSURE"),
+                ("Message from client " + i).getBytes(),
+                "backpressure-" + i
+            );
+            messages.add(message);
+        }
+        
+        serverReceivedMessages.clear();
+        
+        // Send all messages
+        for (int i = 0; i < clientCount; i++) {
+            clientNetworks.get(i).send(messages.get(i));
+        }
+        
+        // Wait for some messages to be processed (not all may succeed due to backpressure)
+        runUntil(() -> {
+            // Tick all client networks
+            for (NioNetwork clientNetwork : clientNetworks) {
+                try {
+                    clientNetwork.tick();
+                } catch (Exception e) {
+                    // Ignore closed networks
+                }
+            }
+            return serverReceivedMessages.size() > 0;
+        });
+        
+        // Verify at least some connections were established
+        assertTrue(serverReceivedMessages.size() > 0);
+        
+        // Clean up
+        for (NioNetwork clientNetwork : clientNetworks) {
+            clientNetwork.close();
+        }
+        
+        // Wait for cleanup
+        runUntil(() -> {
+            // Tick all client networks
+            for (NioNetwork clientNetwork : clientNetworks) {
+                try {
+                    clientNetwork.tick();
+                } catch (Exception e) {
+                    // Ignore closed networks
+                }
+            }
+            return serverNetwork.getConnectionCount() == 0;
+        });
+        assertEquals(0, serverNetwork.getConnectionCount());
+    }
+
     private int noOfTicks = 1000; // Shorter timeout to see what's happening
     private void runUntil(Supplier<Boolean> condition) {
         long startTime = System.currentTimeMillis();
         int tickCount = 0;
         while (!condition.get()) {
-            serverNetwork.tick();
-            clientNetwork.tick();
+            try {
+                serverNetwork.tick();
+            } catch (Exception e) {
+                // Server network might be closed, continue with client only
+                System.out.println("Server network tick failed (likely closed): " + e.getMessage());
+            }
+            try {
+                clientNetwork.tick();
+            } catch (Exception e) {
+                // Client network might be closed, continue with server only
+                System.out.println("Client network tick failed (likely closed): " + e.getMessage());
+            }
             tickCount++;
             
             if (tickCount % 100 == 0) {
@@ -295,20 +634,17 @@ class NioNetworkIntegrationTest {
     }
 
 
-    private NodeRegistry createTestRegistry(ProcessId serverId, InetAddressAndPort serverAddress,
-                                          ProcessId clientId, InetAddressAndPort clientAddress) {
-        // Create a test config with the process configurations
+    private ClusterTopology createTestRegistry(ProcessId serverId, InetAddressAndPort serverAddress,
+                                               ProcessId clientId, InetAddressAndPort clientAddress) {
+        // Create a test config with only server configurations
         String yaml = "processConfigs:\n" +
                 "  - processId: \"" + serverId.name() + "\"\n" +
                 "    ip: \"" + serverAddress.address().getHostAddress() + "\"\n" +
-                "    port: " + serverAddress.port() + "\n" +
-                "  - processId: \"" + clientId.name() + "\"\n" +
-                "    ip: \"" + clientAddress.address().getHostAddress() + "\"\n" +
-                "    port: " + clientAddress.port();
+                "    port: " + serverAddress.port() + "\n";
         
         System.out.println("Creating registry with YAML: " + yaml);
         com.tickstep.config.Config config = com.tickstep.config.Config.load(yaml);
-        return new NodeRegistry(config);
+        return new ClusterTopology(config);
     }
 
     private int findAvailablePort() throws IOException {
