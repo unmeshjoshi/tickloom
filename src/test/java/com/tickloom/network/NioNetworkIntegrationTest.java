@@ -7,13 +7,14 @@ import com.tickloom.messaging.MessageType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.channels.Selector;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -73,7 +74,7 @@ class NioNetworkIntegrationTest {
                     Message serverResponse = Message.of(
                             serverId, message.source(), PeerType.REPLICA,
                             MessageType.of("TEST"),
-                            "Hello from server".getBytes(),
+                            ("Hello from server to peer: " + message.source()).getBytes() ,
                             message.correlationId()
                     );
                     send(serverResponse);
@@ -143,7 +144,7 @@ class NioNetworkIntegrationTest {
         Message receivedResponse = clientReceivedMessages.get(0);
         assertEquals(serverId, receivedResponse.source());
         assertEquals(clientId, receivedResponse.destination());
-        assertEquals("Hello from server", new String(receivedResponse.payload()));
+        assertEquals("Hello from server to peer: " + clientId, new String(receivedResponse.payload()));
     }
 
     @Test
@@ -239,10 +240,7 @@ class NioNetworkIntegrationTest {
         runUntil(() -> serverReceivedMessages.size() == 1);
         runUntil(() -> clientReceivedMessages.size() == 1);
         
-        // Reset for second message
-        serverReceivedMessages.clear();
-        clientReceivedMessages.clear();
-        
+
         // Send second message (should reuse connection)
         Message message2 = Message.of(
             clientId, serverId, PeerType.CLIENT,
@@ -254,20 +252,19 @@ class NioNetworkIntegrationTest {
         clientNetwork.send(message2);
         
         // Wait for second message exchange
-        runUntil(() -> serverReceivedMessages.size() == 1);
-        runUntil(() -> clientReceivedMessages.size() == 1);
+        runUntil(() -> serverReceivedMessages.size() == 2);
+        runUntil(() -> clientReceivedMessages.size() == 2);
         
-        // Verify both messages were received
-        assertEquals(1, serverReceivedMessages.size());
-        assertEquals(1, clientReceivedMessages.size());
+        // Verify both client and server have only one connection
+        assertEquals(1, serverNetwork.connections.size());
+        assertEquals(1, clientNetwork.connections.size());
         
-        Message received = serverReceivedMessages.get(0);
+        Message received = serverReceivedMessages.get(1);
         assertEquals("Second message", new String(received.payload()));
         assertEquals("SECOND", received.messageType().name());
     }
 
     @Test
-    @Timeout(TEST_TIMEOUT_SECONDS)
     void shouldHandleConnectionFailures() throws Exception {
         // Don't start the server - this will cause connection failures
         
@@ -338,7 +335,8 @@ class NioNetworkIntegrationTest {
         int clientCount = 100;
         List<NioNetwork> clientNetworks = new ArrayList<>();
         List<ProcessId> clientIds = new ArrayList<>();
-        
+
+        Map<ProcessId, List<Message>> perClientMessages = new HashMap<>();
         for (int i = 0; i < clientCount; i++) {
             ProcessId clientId = ProcessId.of("concurrent-client-" + i);
             InetAddressAndPort clientAddress = InetAddressAndPort.from("127.0.0.1", 0);
@@ -348,7 +346,9 @@ class NioNetworkIntegrationTest {
             NioNetwork clientNetwork = new NioNetwork(codec, clientRegistry, clientSelector) {
                 @Override
                 public void handleMessage(Message message, NioConnection nioConnection) {
-                    clientReceivedMessages.add(message);
+                    perClientMessages
+                            .computeIfAbsent(clientId, k -> new ArrayList<>())
+                            .add(message);
                 }
             };
             
@@ -357,6 +357,74 @@ class NioNetworkIntegrationTest {
         }
         
         // Send messages from all clients simultaneously
+        List<Message> messages = constructMessages(clientCount, clientIds);
+
+        serverReceivedMessages.clear();
+
+        sendMessageFromEachClient(clientCount, clientNetworks, messages);
+
+        // Wait for all messages to be received
+        //runRuntil ticks server network
+        runUntilEveryClientGetsResponse(clientNetworks, clientCount, perClientMessages);
+
+        // Verify all messages were received
+        assertEquals(clientCount, serverReceivedMessages.size());
+        
+        // Verify server has connections for all clients
+        assertEquals(clientCount, serverNetwork.getConnectionCount());
+
+        assertThatEachClientGotOnlyOneResponse(perClientMessages);
+
+
+        cleanupClientNetwork(clientNetworks);
+
+        // Verify all connections were cleaned up
+        assertEquals(0, serverNetwork.getConnectionCount());
+    }
+
+    private void cleanupClientNetwork(List<NioNetwork> clientNetworks) throws IOException {
+        // Clean up client networks
+        for (NioNetwork clientNetwork : clientNetworks) {
+            clientNetwork.close();
+        }
+
+        // Wait for server to clean up all connections
+        runUntil(() -> {
+            serverNetwork.tick();
+            return serverNetwork.getConnectionCount() == 0;
+        });
+    }
+
+    private static void assertThatEachClientGotOnlyOneResponse(Map<ProcessId, List<Message>> perClientMessages) {
+        for (ProcessId clientId : perClientMessages.keySet()) {
+            List<Message> clientMessages = perClientMessages.get(clientId);
+            assertEquals(1, clientMessages.size());
+            assertTrue(new String(clientMessages.get(0).payload()).contains(clientId.toString())); //clientMessages.get(0).payload//each client should receive only one response.
+        }
+    }
+
+    private void runUntilEveryClientGetsResponse(List<NioNetwork> clientNetworks, int clientCount, Map<ProcessId, List<Message>> perClientMessages) {
+        runUntil(() -> {
+            // Tick all client networks
+            for (NioNetwork clientNetwork : clientNetworks) {
+                try {
+                    clientNetwork.tick();
+                } catch (Exception e) {
+                    // Ignore closed networks
+                }
+            }
+            return serverReceivedMessages.size() == clientCount && perClientMessages.size() == clientCount;
+        });
+    }
+
+    private static void sendMessageFromEachClient(int clientCount, List<NioNetwork> clientNetworks, List<Message> messages) throws IOException {
+        // Send all messages
+        for (int i = 0; i < clientCount; i++) {
+            clientNetworks.get(i).send(messages.get(i));
+        }
+    }
+
+    private List<Message> constructMessages(int clientCount, List<ProcessId> clientIds) {
         List<Message> messages = new ArrayList<>();
         for (int i = 0; i < clientCount; i++) {
             Message message = Message.of(
@@ -367,46 +435,7 @@ class NioNetworkIntegrationTest {
             );
             messages.add(message);
         }
-        
-        serverReceivedMessages.clear();
-        
-        // Send all messages
-        for (int i = 0; i < clientCount; i++) {
-            clientNetworks.get(i).send(messages.get(i));
-        }
-        
-        // Wait for all messages to be received
-        runUntil(() -> {
-            // Tick all client networks
-            for (NioNetwork clientNetwork : clientNetworks) {
-                try {
-                    clientNetwork.tick();
-                } catch (Exception e) {
-                    // Ignore closed networks
-                }
-            }
-            return serverReceivedMessages.size() >= clientCount;
-        });
-        
-        // Verify all messages were received
-        assertEquals(clientCount, serverReceivedMessages.size());
-        
-        // Verify server has connections for all clients
-        assertEquals(clientCount, serverNetwork.getConnectionCount());
-        
-        // Clean up client networks
-        for (NioNetwork clientNetwork : clientNetworks) {
-            clientNetwork.close();
-        }
-        
-        // Wait for server to clean up all connections
-        runUntil(() -> {
-            serverNetwork.tick();
-            return serverNetwork.getConnectionCount() == 0;
-        });
-        
-        // Verify all connections were cleaned up
-        assertEquals(0, serverNetwork.getConnectionCount());
+        return messages;
     }
 
     @Test
@@ -435,11 +464,7 @@ class NioNetworkIntegrationTest {
         assertTrue(serverNetwork.getConnectionCount() > 0);
         assertEquals(1, serverReceivedMessages.size());
         assertEquals(1, clientReceivedMessages.size());
-        
-        // Store the initial message count to verify new messages after restart
-        int initialServerMessages = serverReceivedMessages.size();
-        int initialClientMessages = clientReceivedMessages.size();
-        
+
         // Restart server (close and create new instance)
         System.out.println("Restarting server...");
         serverNetwork.close();
@@ -466,15 +491,13 @@ class NioNetworkIntegrationTest {
             }
         };
         serverNetwork.bind(serverAddress);
-        
-        // Wait a bit for the old connection to be detected as closed
-        Thread.sleep(100);
+
         
         // Clear message counts for the restart phase
         serverReceivedMessages.clear();
         clientReceivedMessages.clear();
         
-        // The client will try to send a message, but the connection will fail
+        // The client will detect the failed connection
         // We need to wait for the connection to be cleaned up first
         runUntil(() -> {
             // The client should detect the connection failure and clean up
@@ -561,10 +584,8 @@ class NioNetworkIntegrationTest {
         serverReceivedMessages.clear();
         
         // Send all messages
-        for (int i = 0; i < clientCount; i++) {
-            clientNetworks.get(i).send(messages.get(i));
-        }
-        
+        sendMessageFromEachClient(clientCount, clientNetworks, messages);
+
         // Wait for some messages to be processed (not all may succeed due to backpressure)
         runUntil(() -> {
             // Tick all client networks
@@ -601,9 +622,8 @@ class NioNetworkIntegrationTest {
         assertEquals(0, serverNetwork.getConnectionCount());
     }
 
-    private final int noOfTicks = 10000; // Shorter timeout to see what's happening
+    private final int noOfTicks = 1000; // Shorter timeout to see what's happening
     private void runUntil(Supplier<Boolean> condition) {
-        long startTime = System.currentTimeMillis();
         int tickCount = 0;
         while (!condition.get()) {
             try {

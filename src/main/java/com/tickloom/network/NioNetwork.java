@@ -85,7 +85,6 @@ public class NioNetwork implements Network {
         serverChannel.bind(address.toInetSocketAddress(), listenBacklog);
 
         SelectionKey serverKey = serverChannel.register(selector, SelectionKey.OP_ACCEPT);
-
         Acceptor acceptor = new Acceptor(this, serverChannel, serverKey);
         serverKey.attach(acceptor);
 
@@ -192,32 +191,27 @@ public class NioNetwork implements Network {
         System.out.println("NIO: getOrCreateOutboundChannel for " + peerId + ", connection: " + connection + 
                           ", isChannelUsable: " + isChannelUsable(connection));
         if (!isChannelUsable(connection)) {
-            // Check if this peer is in the registry (i.e., it's a server)
+            // Check if this peer is in the registry (i.e., it's a server that is a part of the cluster topology)
             try {
                 InetAddressAndPort address = registry.getInetAddress(peerId);
                 // Peer is in registry, create outbound connection
-                logCreatingNewChannel(connection);
-                SocketChannel channel = createAndConfigureChannel(waitTillConnected);
-                SelectionKey key = establishConnection(selector, channel, address);
-                NioConnection nioConnection = new NioConnection(this, channel, key, codec);
-                nioConnection.setDestinationId(peerId); // Set destination for outbound connections
-                System.out.println("NIO: Stored new channel in outboundConnections map");
-                key.attach(nioConnection);
-
+                NioConnection nioConnection = createNewConnection(peerId, waitTillConnected, connection, address);
                 NioConnection existingConnection = connections.put(peerId, nioConnection);
+
                 if (existingConnection != null) {
                     System.out.println("NIO: Replaced existing connection for destination: " + peerId);
                     existingConnection.cleanupConnection();
                 }
+
                 return nioConnection;
             } catch (Exception e) {
-                // Peer is not in registry (i.e., it's a client), can only use existing connection
-                System.out.println("NIO: Peer " + peerId + " not in registry, cannot create outbound connection");
+                System.out.println("NIO: Cannot create outbound connection to Peer" + peerId );
                 if (connection == null) {
-                    throw new IOException("No existing connection to client " + peerId + " and cannot create new one");
+                    // Peer is not in registry (i.e., it's a client), can only use existing connection
+                    throw new IOException("No existing connection to client " + peerId);
                 }
                 // Connection exists but is not usable, throw exception
-                throw new IOException("Existing connection to client " + peerId + " is not usable");
+                throw new IOException(" Cannot create outbound connection to Peer " + peerId);
             }
         }
 
@@ -231,6 +225,17 @@ public class NioNetwork implements Network {
         
         return connection;
 
+    }
+
+    private NioConnection createNewConnection(ProcessId peerId, boolean waitTillConnected, NioConnection connection, InetAddressAndPort address) throws IOException {
+        logCreatingNewChannel(connection);
+        SocketChannel channel = createAndConfigureChannel(waitTillConnected);
+        SelectionKey key = establishConnection(selector, channel, address);
+        NioConnection nioConnection = new NioConnection(this, channel, key, codec);
+        nioConnection.setDestinationId(peerId); // Set destination for outbound connections
+        System.out.println("NIO: Stored new channel in outboundConnections map");
+        key.attach(nioConnection);
+        return nioConnection;
     }
 
     private static SocketChannel createAndConfigureChannel(boolean waitTillConnected) throws IOException {
@@ -292,13 +297,19 @@ public class NioNetwork implements Network {
     }
 
     public void close() throws IOException {
-        // Close all connections
-        for (NioConnection connection : connections.values()) {
-                connection.cleanupConnection();
-        }
+        closeAndClearConnections();
+        closeAllAcceptors();
+        closeSelector();
+    }
 
-        connections.clear();
-        
+    private void closeSelector() throws IOException {
+        // Close selector
+        if (selector != null && selector.isOpen()) {
+            selector.close();
+        }
+    }
+
+    private void closeAllAcceptors() {
         // Close all acceptors
         for (Acceptor acceptor : acceptors) {
             try {
@@ -308,10 +319,14 @@ public class NioNetwork implements Network {
             }
         }
         acceptors.clear();
-        
-        // Close selector
-        if (selector != null && selector.isOpen()) {
-            selector.close();
+    }
+
+    private void closeAndClearConnections() {
+        // Close all connections
+        for (NioConnection connection : connections.values()) {
+                connection.cleanupConnection();
         }
+
+        connections.clear();
     }
 }
