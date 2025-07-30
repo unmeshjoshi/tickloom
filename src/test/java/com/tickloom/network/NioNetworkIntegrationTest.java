@@ -72,7 +72,7 @@ class NioNetworkIntegrationTest {
                 serverReceivedMessages.add(message);
                 try {
                     Message serverResponse = Message.of(
-                            serverId, message.source(), PeerType.REPLICA,
+                            serverId, message.source(), PeerType.SERVER,
                             MessageType.of("TEST"),
                             ("Hello from server to peer: " + message.source()).getBytes() ,
                             message.correlationId()
@@ -98,17 +98,19 @@ class NioNetworkIntegrationTest {
 
     @AfterEach
     void tearDown() throws IOException {
-        if (serverNetwork != null) {
-            serverNetwork.close();
+        closeNetworks(clientNetwork, serverNetwork);
+        closeSelectors(clientSelector, serverSelector);
+    }
+
+    private void closeSelectors(Selector ... selectors) throws IOException {
+        for (Selector selector : selectors) {
+            selector.close();
         }
-        if (clientNetwork != null) {
-            clientNetwork.close();
-        }
-        if (serverSelector != null && serverSelector.isOpen()) {
-            serverSelector.close();
-        }
-        if (clientSelector != null && clientSelector.isOpen()) {
-            clientSelector.close();
+    }
+
+    private void closeNetworks(NioNetwork... networks) throws IOException {
+        for (NioNetwork network : networks) {
+            network.close();
         }
     }
 
@@ -479,7 +481,7 @@ class NioNetworkIntegrationTest {
                 // Auto-respond to client messages
                 try {
                     Message response = Message.of(
-                        serverId, message.source(), PeerType.REPLICA,
+                        serverId, message.source(), PeerType.SERVER,
                         MessageType.of("RESTART_RESPONSE"),
                         ("Hello from restarted server").getBytes(),
                         message.correlationId()

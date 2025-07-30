@@ -33,7 +33,7 @@ public class HandshakeMessageTest {
         
         // Welcome message with server acceptance and info
         String welcomeData = "{\"pid\":\"" + serverId.name() + "\",\"role\":\"replica\",\"version\":1,\"accepted\":true}";
-        Message welcome = Message.of(serverId, clientId, PeerType.REPLICA, MessageType.WELCOME, welcomeData.getBytes(), null);
+        Message welcome = Message.of(serverId, clientId, PeerType.SERVER, MessageType.WELCOME, welcomeData.getBytes(), null);
         
         assertEquals(MessageType.WELCOME, welcome.messageType());
         assertEquals(serverId, welcome.source());
@@ -48,7 +48,7 @@ public class HandshakeMessageTest {
         
         // Reject message with reason for rejection
         String rejectData = "{\"reason\":\"unsupported_version\",\"supported_versions\":[1,2]}";
-        Message reject = Message.of(serverId, clientId, PeerType.REPLICA, MessageType.REJECT, rejectData.getBytes(), null);
+        Message reject = Message.of(serverId, clientId, PeerType.SERVER, MessageType.REJECT, rejectData.getBytes(), null);
         
         assertEquals(MessageType.REJECT, reject.messageType());
         assertEquals(serverId, reject.source());
@@ -79,11 +79,11 @@ public class HandshakeMessageTest {
         
         // Replica to replica handshake
         String replicaData = "{\"pid\":\"" + replicaId.name() + "\",\"role\":\"replica\",\"version\":1}";
-        Message replicaHello = Message.of(replicaId, ProcessId.of("replica-2"), PeerType.REPLICA, MessageType.HELLO, replicaData.getBytes(), null);
+        Message replicaHello = Message.of(replicaId, ProcessId.of("replica-2"), PeerType.SERVER, MessageType.HELLO, replicaData.getBytes(), null);
         
         // Worker to replica handshake
         String workerData = "{\"pid\":\"" + workerId.name() + "\",\"role\":\"worker\",\"version\":1}";
-        Message workerHello = Message.of(workerId, replicaId, PeerType.REPLICA, MessageType.HELLO, workerData.getBytes(), null);
+        Message workerHello = Message.of(workerId, replicaId, PeerType.SERVER, MessageType.HELLO, workerData.getBytes(), null);
         
         // Client to replica handshake
         String clientData = "{\"pid\":\"" + clientId.name() + "\",\"role\":\"client\",\"version\":1}";
@@ -105,7 +105,7 @@ public class HandshakeMessageTest {
         
         // Step 2: Server responds with Welcome (acceptance)
         String welcomeData = "{\"pid\":\"" + serverId.name() + "\",\"role\":\"replica\",\"version\":1,\"accepted\":true}";
-        Message welcome = Message.of(serverId, clientId, PeerType.REPLICA, MessageType.WELCOME, welcomeData.getBytes(), null);
+        Message welcome = Message.of(serverId, clientId, PeerType.SERVER, MessageType.WELCOME, welcomeData.getBytes(), null);
         
         // Connection is now established - ready for data exchange
         assertEquals(MessageType.HELLO, hello.messageType());
