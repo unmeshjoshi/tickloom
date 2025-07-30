@@ -74,12 +74,14 @@ public class NioConnection {
                 break; // wait for more data
             }
 
-            Frame frame = frameReader.complete();
-            System.out.println("NIO: Frame complete: " + frame);
-            routeMessage(frame);
-
-            framesProcessed++;
-            messagesDecoded++;
+            Frame frame = frameReader.pollFrame();
+            while(frame != null) {
+                System.out.println("NIO: Frame complete: " + frame);
+                routeMessage(frame);
+                framesProcessed++;
+                messagesDecoded++;
+                frame = frameReader.pollFrame();
+            }
         }
         // Update metrics
         if (messagesDecoded > 0) {
@@ -89,7 +91,7 @@ public class NioConnection {
 
     private void routeMessage(Frame frame) {
         Message message = codec.decode(frame.getPayload(), Message.class);
-        if (peerType != PeerType.UNKNOWN) {
+        if (peerType == PeerType.UNKNOWN) {
             this.sourceId = message.source();
             this.destinationId = message.destination();
 
