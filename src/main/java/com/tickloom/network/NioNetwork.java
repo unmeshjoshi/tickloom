@@ -14,6 +14,53 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+/**
+ * ──────────────────────────────────────────────────────────────────────────────
+ *  NioConnection – transport policy notes
+ * ──────────────────────────────────────────────────────────────────────────────
+ *
+ *  CURRENT (v1)
+ *  ----------------------------------------------------------------------------
+ *  • One TCP socket per peer, bidirectional.
+ *  • Both client requests/responses and replica‐to‐replica messages share the
+ *    same queue, buffer sizes, and back‑pressure thresholds.
+ *  • Framing is a simple 9‑byte header (4+1+4) + payload.
+ *
+ *  WHY IT’S OK FOR NOW
+ *  • Simpler state machine → faster to reason about and debug.
+ *  • Fewer sockets → easier on ephemeral‑port exhaustion in small clusters.
+ *  • Unit + integration tests exercise the full path without role branches.
+ *
+ *  ROADMAP (v2+)
+ *  ----------------------------------------------------------------------------
+ *  1. **Role‑specific pools**
+ *     – `ClientConnection` vs `ReplicaConnection`.
+ *     – Different queue limits (latency vs throughput).
+ *
+ *  2. **Directional replica links**
+ *     – One outbound + one inbound socket per server pair to
+ *       isolate send‐buffer stalls.
+ *
+ *  3. **QoS / priority lanes**
+ *     – Stream‑id bucket 0‑99 reserved for control/heartbeats (handled first).
+ *     – Bulk blobs (>1MB) on dedicated stream range or separate socket.
+ *
+ *  4. **Security profiles**
+ *     – mTLS for clients; lighter shared‑secret TLS for intra‑cluster.
+ *     – Optional compression on replica channels only.
+ *
+ *  5. **Selector sharding**
+ *     – clientSelector (latency‑optimised)
+ *     – clusterSelector (throughput‑optimised)
+ *
+ *  Migration path: handshake frame (type INIT) advertises `peerType`.  The
+ *  acceptor promotes the provisional connection to the right subclass/pool
+ *  without disrupting existing message flow.
+ *
+ *  Keep this comment up‑to‑date when transport policy evolves.
+ * ──────────────────────────────────────────────────────────────────────────────
+ */
+
 public class NioNetwork implements Network {
 
     private final MessageCodec codec;
@@ -65,7 +112,10 @@ public class NioNetwork implements Network {
                         try {
                             acceptor.accept();
                         } catch (IOException e) {
-                            System.err.println(e.getMessage());
+                            // No additional cleanup needed here—the acceptor already closed any
+                            // half‑initialized SocketChannel.  Log and keep the loop running.
+                            System.err.printf("[ACCEPTOR] %s%n", e.getMessage());
+
                         }
                     } else if (key.isConnectable()) {
                         NioConnection connection = (NioConnection) key.attachment();

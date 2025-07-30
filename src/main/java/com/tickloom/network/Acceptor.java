@@ -1,6 +1,7 @@
 package com.tickloom.network;
 
 import java.io.IOException;
+import java.net.StandardSocketOptions;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
@@ -24,14 +25,28 @@ public class Acceptor {
     }
 
     public void accept() throws IOException {
-        SocketChannel acceptedChannel = serverChannel.accept();
-        if (acceptedChannel == null) {
-            // No pending connections to accept
-            return;
+        SocketChannel sc = serverChannel.accept();
+        if (sc == null) return;                       // nothing to clean
+
+        try {
+            sc.configureBlocking(false);
+            //The protocol sends lots of latency‑sensitive, small frames (heartbeats, RPC replies).
+            //Waiting an extra RTT for coalescing adds 1–20ms latency—visible in request/response benchmarks.
+            // Non‑blocking code already batches larger writes (gathering write), so we don’t need Nagle for throughput.
+            sc.setOption(StandardSocketOptions.TCP_NODELAY, true);
+
+            //Lets the OS send an idle‑time probe (zero‑byte segment) after the socket has been silent for a long period
+            // (default 2h on Linux). If the probe isn’t ACKed, the connection is declared dead;
+            //the next read/write throws IOException.
+            sc.setOption(StandardSocketOptions.SO_KEEPALIVE, true);
+
+            SelectionKey key = sc.register(selectionKey.selector(), SelectionKey.OP_READ);
+            key.attach(new NioConnection(network, sc, key, network.getCodec()));
+        } catch (IOException | RuntimeException e) {  // any failure after accept()
+            // ensure fd is closed before propagating
+            try { sc.close(); } catch (IOException ignored) { }
+            throw e;                                  // bubble up to selector loop
         }
-        acceptedChannel.configureBlocking(false);
-        SelectionKey channelKey = acceptedChannel.register(selectionKey.selector(), SelectionKey.OP_READ);
-        channelKey.attach(new NioConnection(network, acceptedChannel, channelKey, network.getCodec()));
     }
     
     public ServerSocketChannel getServerChannel() {
