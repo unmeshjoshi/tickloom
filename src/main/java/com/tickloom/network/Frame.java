@@ -8,12 +8,13 @@ import java.nio.ByteBuffer;
  */
 public class Frame {
     // Frame format constants
-    public static final int HEADER_SIZE = 9; // streamId (4) + frameType (1) + payloadLength (4)
     public static final int MAX_PAYLOAD_SIZE = 10_000_000; // 10MB max
     
     private final int streamId;
     private final byte frameType;
     private final byte[] payload;
+    //Header size = streamId (4 bytes) + frameType (1 byte) + length (4 bytes)
+    public static final int HEADER_SIZE = Integer.BYTES + Byte.BYTES + Integer.BYTES;
 
     public Frame(int streamId, byte frameType, ByteBuffer payloadBuffer) {
         this.streamId = streamId;

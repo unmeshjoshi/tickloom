@@ -9,14 +9,14 @@ import java.util.Deque;
 
 /**
  * Bulk‑read FrameReader that handles payloads larger than the scratch buffer.
- *
+ * <p>
  * Frame wire format:
- *   4‑byte streamId │ 1‑byte type │ 4‑byte payloadLen │ payload…
+ * 4‑byte streamId │ 1‑byte type │ 4‑byte payloadLen │ payload…
  */
 public final class FrameReader {
 
     /* ---------- constants ---------- */
-    private static final int HEADER_SIZE      = Frame.HEADER_SIZE;      // 9
+    private static final int HEADER_SIZE = Frame.HEADER_SIZE;      // 9
     private static final int READ_BUFFER_SIZE = 64 * 1024;              // 64KB scratch
     private static final int MAX_PAYLOAD_SIZE = Frame.MAX_PAYLOAD_SIZE; // from your Frame
 
@@ -24,10 +24,11 @@ public final class FrameReader {
     private final ByteBuffer readBuffer = ByteBuffer.allocateDirect(READ_BUFFER_SIZE);
     private final Deque<Frame> ready = new ArrayDeque<>();
 
+    
     /* ---------- per‑frame assembly state ---------- */
-    private int  curStreamId   = -1;
-    private byte curFrameType  = -1;
-    private int  curPayloadLen = -1;
+    private int curStreamId = -1;
+    private byte curFrameType = -1;
+    private int curPayloadLen = -1;
     private ByteBuffer payloadBuf;          // null until header parsed
 
     /* ============================================== */
@@ -61,7 +62,9 @@ public final class FrameReader {
 
     /* -------------- INTERNAL -------------- */
 
-    /** Returns true if a complete frame was produced and queued. */
+    /**
+     * Returns true if a complete frame was produced and queued.
+     */
     /* -------------------------------------------------------------------------
      *  What can arrive in one selector pass?
      *
@@ -91,14 +94,13 @@ public final class FrameReader {
      *      the scratch buffer is exhausted (C).
      *    • payloadBuf tracks progress for the in‑flight partial payload(B, C).
      * ----------------------------------------------------------------------- */
-
     private boolean tryAssemble() {
         // Step 1: header
         if (payloadBuf == null) {
             if (readBuffer.remaining() < HEADER_SIZE) return false;
 
-            curStreamId   = readBuffer.getInt();
-            curFrameType  = readBuffer.get();
+            curStreamId = readBuffer.getInt();
+            curFrameType = readBuffer.get();
             curPayloadLen = readBuffer.getInt();
 
             if (curPayloadLen < 0 || curPayloadLen > MAX_PAYLOAD_SIZE)
@@ -119,10 +121,10 @@ public final class FrameReader {
             ready.addLast(new Frame(curStreamId, curFrameType, payloadBuf));
 
             // reset state for next frame
-            payloadBuf     = null;
-            curStreamId    = -1;
-            curFrameType   = -1;
-            curPayloadLen  = -1;
+            payloadBuf = null;
+            curStreamId = -1;
+            curFrameType = -1;
+            curPayloadLen = -1;
             return true;                    // produced one frame
         }
         return false;                       // need more bytes

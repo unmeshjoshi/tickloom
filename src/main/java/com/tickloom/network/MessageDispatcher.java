@@ -10,15 +10,15 @@ import com.tickloom.messaging.Message;
  * 
  * Usage:
  * <pre>
- * network.registerMessageHandler(new MessageCallback() {
- *     public void onMessage(Message message, MessageContext context) {
+ * network.registerMessageHandler(new MessageDispatcher() {
+ *     public void onMessage(Message message) {
  *         // Handle the message immediately
  *         routeToHandler(message, context);
  *     }
  * });
  * </pre>
  */
-public interface MessageCallback {
+public interface MessageDispatcher {
     
     /**
      * Called by the Network implementation when a message is ready for delivery.
