@@ -69,7 +69,8 @@ class FrameReaderTest {
 
         SocketChannel ch = new SocketChannelBuilder().thatReads(firstChunk, secondChunk).build();
         assertFalse(fr.readFrom(ch).isFrameComplete());          // after first 5 bytes
-        assertTrue(fr.readFrom(ch).isFrameComplete());           // after rest
+        ReadResult readResult = fr.readFrom(ch);
+        assertTrue(readResult.isFrameComplete());           // after rest
         Frame f = fr.pollFrame();
         assertEquals(2, f.getStreamId());
     }

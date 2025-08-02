@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.Optional;
 
 /**
  * Bulk‑read FrameReader that handles payloads larger than the scratch buffer.
@@ -31,6 +32,7 @@ public final class FrameReader {
     private int curPayloadLen = -1;
     private ByteBuffer payloadBuf;          // null until header parsed
 
+    StateBasedFrameReader.StateContext<Frame> stateContext = new StateBasedFrameReader.StateContext<>(new StateBasedFrameReader.ReadingHeader(ByteBuffer.allocate(HEADER_SIZE)));
     /* ============================================== */
 
     public ReadResult readFrom(SocketChannel ch) throws IOException {
@@ -39,7 +41,18 @@ public final class FrameReader {
         if (n == 0 && ready.isEmpty()) return ReadResult.incomplete();
 
         readBuffer.flip();
-        while (tryAssemble()) { /* keep looping */ }
+
+
+        while (readBuffer.hasRemaining()) {
+            Optional<Frame> frame = stateContext.tryReading(readBuffer);
+            if (frame.isPresent()) {
+                ready.addLast(frame.get());
+            }
+        }
+
+
+
+//        while (tryAssemble()) { /* keep looping */ }
 
 // After we’ve extracted as many complete frames as possible, there may be
 // a *partial* header or body left in the scratch buffer.  We need to keep
@@ -50,8 +63,10 @@ public final class FrameReader {
 //   • sets position = remaining, limit = capacity
 // This preserves the incomplete frame *and* switches the buffer back to
 // WRITE mode so a subsequent channel.read(...) can append new data.
-        readBuffer.compact();
 
+
+        readBuffer.compact();
+//
         return ready.isEmpty() ? ReadResult.incomplete()
                 : ReadResult.frameComplete();
     }
