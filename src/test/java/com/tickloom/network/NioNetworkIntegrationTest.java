@@ -25,7 +25,6 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class NioNetworkIntegrationTest {
 
-    private static final int TEST_TIMEOUT_SECONDS = 10;
     private static final String LOCALHOST = "127.0.0.1";
     
     private NioNetwork serverNetwork;

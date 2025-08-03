@@ -1,14 +1,11 @@
 package com.tickloom.network;
 
-import com.tickloom.network.StateBasedFrameReader.StateContext;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
 import static com.tickloom.network.Frame.HEADER_SIZE;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ByteBufferTest {
 
@@ -23,7 +20,7 @@ public class ByteBufferTest {
 //        Optional<Frame> readFrame = reader.readFrame(buf);
 //        assertTrue(readFrame.isPresent());
 
-        StateContext<Frame> context = new StateContext<>(new StateBasedFrameReader.ReadingHeader(ByteBuffer.allocate(HEADER_SIZE)));
+        StateBasedFrameReader context = new StateBasedFrameReader();
         while (buf.hasRemaining()) {
             context.tryReading(buf);
         }

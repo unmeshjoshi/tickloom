@@ -32,7 +32,7 @@ public final class FrameReader {
     private int curPayloadLen = -1;
     private ByteBuffer payloadBuf;          // null until header parsed
 
-    StateBasedFrameReader.StateContext<Frame> stateContext = new StateBasedFrameReader.StateContext<>(new StateBasedFrameReader.ReadingHeader(ByteBuffer.allocate(HEADER_SIZE)));
+    StateBasedFrameReader stateContext = new StateBasedFrameReader();
     /* ============================================== */
 
     public ReadResult readFrom(SocketChannel ch) throws IOException {

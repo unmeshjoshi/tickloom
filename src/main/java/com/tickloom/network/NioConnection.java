@@ -191,7 +191,7 @@ public class NioConnection {
     private ByteBuffer createFrameBuffer(Message message) {
         byte[] messageData = codec.encode(message);
         Frame frame = new Frame(0, (byte) 0, ByteBuffer.wrap(messageData));
-        return Frame.toByteBuffer(frame);
+        return frame.encode();
     }
 
     public boolean hasPendingWrites() {
