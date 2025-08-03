@@ -13,6 +13,29 @@ import java.util.Optional;
  * <p>
  * Frame wire format:
  * 4‑byte streamId │ 1‑byte type │ 4‑byte payloadLen │ payload…
+ /* -------------------------------------------------------------------------
+ *  What can arrive in one selector pass?
+ *
+ *  ┌──────────────────────────────┬────────────────────────────────────────┐
+ *  │  Case                         │  Example (§ = 64KB scratch buffer)   │
+ *  ├──────────────────────────────┼────────────────────────────────────────┤
+ *  │ A. **Many small frames**      │  [hdr+payload]  [hdr+payload]  ...    │
+ *  │    – each frame (≤ a few KB)  │  Entire 64KB fill may contain 10‑50  │
+ *  │    – zero partials            │  complete frames. We must loop until  │
+ *  │                               │  buffer is fully read()               │
+ *  ├──────────────────────────────┼────────────────────────────────────────┤
+ *  │ B. **Mixed**                  │  [complete frame] [partial frame]  │
+ *  │    – last frame incomplete    │  The trailing partial’s header/prefix│
+ *  │                               │  is here, but body spills to next     │
+ *  │                               │  read(). We copy what we have now and │
+ *  │                               │  leave payloadBuf with .hasRemaining().│
+ *  ├──────────────────────────────┼────────────────────────────────────────┤
+ *  │ C. **Single jumbo frame**     │  [hdr 300KB ...]          │
+ *  │    – payload » 64KB           │  We receive the message piecemeal over│
+ *  │                               │  several read() calls. Each iteration │
+ *  │                               │  copies **bytesToCopy** into the growing│
+ *  │                               │  payloadBuf until it fills.          │
+ *  └──────────────────────────────┴────────────────────────────────────────┘
  */
 public final class FrameReader {
 
@@ -25,14 +48,12 @@ public final class FrameReader {
     private final ByteBuffer readBuffer = ByteBuffer.allocateDirect(READ_BUFFER_SIZE);
     private final Deque<Frame> ready = new ArrayDeque<>();
 
-    
-    /* ---------- per‑frame assembly state ---------- */
-    private int curStreamId = -1;
-    private byte curFrameType = -1;
-    private int curPayloadLen = -1;
-    private ByteBuffer payloadBuf;          // null until header parsed
 
-    StateBasedFrameReader stateContext = new StateBasedFrameReader();
+    private State state = new ReadingHeader(ByteBuffer.allocate(Header.SIZE));
+
+    public void setState(State state) {
+        this.state = state;
+    }
     /* ============================================== */
 
     public ReadResult readFrom(SocketChannel ch) throws IOException {
@@ -42,19 +63,7 @@ public final class FrameReader {
 
         readBuffer.flip();
 
-
-        while (readBuffer.hasRemaining()) {
-            Optional<Frame> frame = stateContext.tryReading(readBuffer);
-            if (frame.isPresent()) {
-                ready.addLast(frame.get());
-            }
-        }
-
-
-
-        //Following is the original code, which was refactored to StateBasedFrameReader. This is kept here for reference
-        //to use as an example for a writeup.
-//        while (tryAssemble()) { /* keep looping */ }
+        readAllFramesFrom(readBuffer);
 
 // After we’ve extracted as many complete frames as possible, there may be
 // a *partial* header or body left in the scratch buffer.  We need to keep
@@ -73,109 +82,66 @@ public final class FrameReader {
                 : ReadResult.frameComplete();
     }
 
+    public void readAllFramesFrom(ByteBuffer buffer) {
+        while (buffer.hasRemaining()) {
+            Optional<Frame> frame = state.tryReading(this, buffer);
+            if (frame.isPresent()) {
+                ready.addLast(frame.get());
+            }
+        }
+    }
+
     public Frame pollFrame() {
         return ready.pollFirst();
     }
 
-    /* -------------- INTERNAL -------------- */
 
-    /**
-     * Returns true if a complete frame was produced and queued.
-     */
-    /* -------------------------------------------------------------------------
-     *  What can arrive in one selector pass?
-     *
-     *  ┌──────────────────────────────┬────────────────────────────────────────┐
-     *  │  Case                         │  Example (§ = 64KB scratch buffer)   │
-     *  ├──────────────────────────────┼────────────────────────────────────────┤
-     *  │ A. **Many small frames**      │  [hdr+payload]  [hdr+payload]  ...    │
-     *  │    – each frame (≤ a few KB)  │  Entire 64KB fill may contain 10‑50  │
-     *  │    – zero partials            │  complete frames. We must loop until  │
-     *  │                               │  tryExtractFrame() returns false.     │
-     *  ├──────────────────────────────┼────────────────────────────────────────┤
-     *  │ B. **Mixed**                  │  [complete frame] [partial frame]  │
-     *  │    – last frame incomplete    │  The trailing partial’s header/prefix│
-     *  │                               │  is here, but body spills to next     │
-     *  │                               │  read(). We copy what we have now and │
-     *  │                               │  leave payloadBuf with .hasRemaining().│
-     *  ├──────────────────────────────┼────────────────────────────────────────┤
-     *  │ C. **Single jumbo frame**     │  [hdr 300KB ...]          │
-     *  │    – payload » 64KB          │  We receive the message piecemeal over│
-     *  │                               │  several read() calls. Each iteration │
-     *  │                               │  copies **bytesToCopy** into the growing│
-     *  │                               │  payloadBuf until it fills.          │
-     *  └──────────────────────────────┴────────────────────────────────────────┘
-     *
-     *  The copy‑loop below handles all three cases uniformly:
-     *    • iterates until no more complete frames can be produced (A, B) or
-     *      the scratch buffer is exhausted (C).
-     *    • payloadBuf tracks progress for the in‑flight partial payload(B, C).
-     * ----------------------------------------------------------------------- */
-    private boolean tryAssemble() {
-        // Step 1: header
-        if (payloadBuf == null) {
-            if (readBuffer.remaining() < HEADER_SIZE) return false;
-
-            curStreamId = readBuffer.getInt();
-            curFrameType = readBuffer.get();
-            curPayloadLen = readBuffer.getInt();
-
-            if (curPayloadLen < 0 || curPayloadLen > MAX_PAYLOAD_SIZE)
-                throw new IllegalStateException("Bad payload len: " + curPayloadLen);
-
-            payloadBuf = ByteBuffer.allocateDirect(curPayloadLen);
+    static abstract class State {
+        ByteBuffer to;
+        public State(ByteBuffer buffer) {
+            this.to = buffer;
         }
 
-        int noOfBytesCopied = copyPayload();
-
-// Consume those bytes in the scratch buffer
-        readBuffer.position(readBuffer.position() + noOfBytesCopied);
-
-
-        // Step 3: finished?
-        if (!payloadBuf.hasRemaining()) {
-            payloadBuf.flip();
-            ready.addLast(new Frame(curStreamId, curFrameType, payloadBuf));
-
-            // reset state for next frame
-            payloadBuf = null;
-            curStreamId = -1;
-            curFrameType = -1;
-            curPayloadLen = -1;
-            return true;                    // produced one frame
+        public Optional<Frame> tryReading(FrameReader context, ByteBuffer from) {
+            int bytesToCopy = Math.min(from.remaining(), to.remaining());
+            ByteBuffer sliceToCopy = from.slice(from.position(), bytesToCopy);
+            to.put(sliceToCopy);
+            from.position(from.position() + bytesToCopy);
+            if (to.remaining() == 0) {
+                to.flip();
+                return onComplete(context,to);
+            }
+            return Optional.empty();
         }
-        return false;                       // need more bytes
+        public abstract Optional<Frame> onComplete(FrameReader context, ByteBuffer buffer);
     }
 
-    /* -------------------------------------------------------------------------
-     *  Copy bytes from the readBuffer into the per‑frame payloadBuf
-     *
-     *  Why we can’t just call payloadBuf.put(readBuffer):
-     *    • payloadBuf might require more bytes than are currently available
-     *      in readBuffer (e.g. when assembling a 300KB message with a 64KB
-     *      scratch buffer).  We therefore move data incrementally.
-     *
-     *  Algorithm
-     *    1. Calculate bytesToCopy = min(bytes available NOW, bytes still needed)
-     *    2. Create a light‑weight *view* (slice) over exactly that many bytes.
-     *       * slice() starts at readBuffer.position()
-     *       * We shrink the slice’s limit() to cap it at bytesToCopy
-     *    3. Bulk‑copy the slice into payloadBuf.
-     *       − This advances payloadBuf.position() by bytesToCopy.
-     *    4. Manually advance readBuffer.position() by bytesToCopy
-     *       (so the next iteration starts at the correct spot).
-     * ----------------------------------------------------------------------- */
-    private int copyPayload() {
+    public static class ReadingHeader extends State {
+        public ReadingHeader(ByteBuffer buf) {
+            super(buf);
+        }
+        public Optional<Frame> onComplete(FrameReader context, ByteBuffer buffer) {
+            Header header = Header.readFrom(buffer);
 
-        int bytesToCopy = Math.min(readBuffer.remaining(),   // bytes currently in scratch
-                payloadBuf.remaining());  // bytes still needed
+            ByteBuffer payloadBuf = ByteBuffer.allocate(header.payloadLength());
+            context.setState(new ReadingPayload(header, payloadBuf));
+            return Optional.empty();
+        }
+    }
 
-// Create a view onto just the bytes we’ll move this round
-        ByteBuffer chunk = readBuffer.slice();   // view: pos → limit
-        chunk.limit(bytesToCopy);                // shrink view to bytesToCopy
+    public static class ReadingPayload extends State {
+        private final Header header;
 
-// Bulk transfer into the accumulating payload
-        payloadBuf.put(chunk);
-        return bytesToCopy;
+        public ReadingPayload(Header header, ByteBuffer payloadBuf) {
+            super(payloadBuf);
+            this.header = header;
+        }
+
+        @Override
+        public Optional<Frame> onComplete(FrameReader context, ByteBuffer payloadBuf) {
+            Frame frame = new Frame(header, payloadBuf);
+            context.setState(new ReadingHeader(ByteBuffer.allocate(Header.SIZE)));
+            return Optional.of(frame);
+        }
     }
 }

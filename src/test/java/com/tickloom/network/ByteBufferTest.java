@@ -5,6 +5,9 @@ import org.junit.jupiter.api.Test;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 public class ByteBufferTest {
 
     @Test
@@ -18,10 +21,13 @@ public class ByteBufferTest {
 //        Optional<Frame> readFrame = reader.readFrame(buf);
 //        assertTrue(readFrame.isPresent());
 
-        StateBasedFrameReader context = new StateBasedFrameReader();
-        while (buf.hasRemaining()) {
-            context.tryReading(buf);
-        }
+        FrameReader context = new FrameReader();
+        context.readAllFramesFrom(buf);
+        Frame frame2 = context.pollFrame();
+        assertNotNull(frame2);
+        assertEquals(2, frame2.getStreamId());
+        assertEquals(3, frame2.getFrameType());
+        assertEquals(payload.length, frame2.getPayloadLength());
 
     }
 
