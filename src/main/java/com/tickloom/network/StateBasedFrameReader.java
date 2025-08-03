@@ -4,7 +4,6 @@ import java.nio.ByteBuffer;
 import java.util.Optional;
 
 import static com.tickloom.network.Frame.HEADER_SIZE;
-import static com.tickloom.network.Frame.MAX_PAYLOAD_SIZE;
 
 public class StateBasedFrameReader {
         State state;
@@ -44,32 +43,25 @@ public class StateBasedFrameReader {
             super(buf);
         }
         public Optional<Frame> onComplete(StateBasedFrameReader context, ByteBuffer buffer) {
-            int streamId = buffer.getInt();
-            byte type = buffer.get();
-            int payloadLength = buffer.getInt();
-            if (payloadLength < 0 || payloadLength > MAX_PAYLOAD_SIZE)
-                throw new IllegalStateException("Bad payload len: " + payloadLength);
+            Header header = Header.readFrom(buffer);
 
-            ByteBuffer payloadBuf = ByteBuffer.allocate(payloadLength);
-            context.setState(new ReadingPayload(streamId,type,payloadBuf));
+            ByteBuffer payloadBuf = ByteBuffer.allocate(header.payloadLength());
+            context.setState(new ReadingPayload(header, payloadBuf));
             return Optional.empty();
         }
     }
 
     public static class ReadingPayload extends State {
+        private final Header header;
 
-        private final int streamId;
-        private final byte type;
-
-        public ReadingPayload(int streamId, byte type, ByteBuffer buffer) {
-            super(buffer);
-            this.streamId = streamId;
-            this.type = type;
+        public ReadingPayload(Header header, ByteBuffer payloadBuf) {
+            super(payloadBuf);
+            this.header = header;
         }
 
         @Override
         public Optional<Frame> onComplete(StateBasedFrameReader context, ByteBuffer payloadBuf) {
-            Frame frame = new Frame(streamId, type, payloadBuf);
+            Frame frame = new Frame(header, payloadBuf);
             context.setState(new ReadingHeader(ByteBuffer.allocate(HEADER_SIZE)));
             return Optional.of(frame);
         }

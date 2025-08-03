@@ -2,6 +2,8 @@ package com.tickloom.network;
 
 import java.nio.ByteBuffer;
 
+import static com.tickloom.network.Frame.MAX_PAYLOAD_SIZE;
+
 /**
  * Represents a complete frame with stream ID, frame type, and payload.
  * Used by FrameReader and NioConnection for consistency.
@@ -9,6 +11,24 @@ import java.nio.ByteBuffer;
 
 record Header(int streamId, byte frameType, int payloadLength) {
     public static final int SIZE = Integer.BYTES + Byte.BYTES + Integer.BYTES;
+
+    public void writeTo(ByteBuffer buffer) {
+            buffer.putInt(streamId());
+            buffer.put(frameType());
+            buffer.putInt(payloadLength());
+    }
+
+    public static Header readFrom(ByteBuffer buffer) {
+        int streamId = buffer.getInt();
+        byte frameType = buffer.get();
+        int payloadLength = buffer.getInt();
+
+        if (payloadLength < 0 || payloadLength > MAX_PAYLOAD_SIZE)
+            throw new IllegalStateException("Bad payload len: " + payloadLength);
+
+        return new Header(streamId, frameType, payloadLength);
+    }
+
 }
 
 public record Frame(Header header, ByteBuffer payload) {
@@ -42,9 +62,7 @@ public record Frame(Header header, ByteBuffer payload) {
 
     private static void writeHeader(Frame frame, ByteBuffer buffer) {
         // Write header: streamId (4 bytes) + frameType (1 byte) + length (4 bytes)
-        buffer.putInt(frame.header.streamId());
-        buffer.put(frame.header.frameType());
-        buffer.putInt(frame.header.payloadLength());
+        frame.header.writeTo(buffer);
     }
 
     public int getStreamId() {
