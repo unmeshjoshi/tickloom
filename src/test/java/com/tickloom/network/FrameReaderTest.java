@@ -4,7 +4,6 @@ import com.tickloom.ProcessId;
 import com.tickloom.messaging.Message;
 import com.tickloom.messaging.MessageType;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.function.Executable;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -27,7 +26,7 @@ class FrameReaderTest {
 
     /* ----------------- helpers ----------------- */
     private static byte[] buildFrame(int streamId, byte type, byte[] payload) {
-        ByteBuffer buf = ByteBuffer.allocate(Frame.HEADER_SIZE + payload.length);
+        ByteBuffer buf = ByteBuffer.allocate(Header.SIZE + payload.length);
         buf.putInt(streamId);
         buf.put(type);
         buf.putInt(payload.length);
@@ -118,7 +117,7 @@ class FrameReaderTest {
     @Test
     void invalidNegativePayloadLength() throws IOException {
         FrameReader fr = new FrameReader();
-        ByteBuffer buf = ByteBuffer.allocate(Frame.HEADER_SIZE);
+        ByteBuffer buf = ByteBuffer.allocate(Header.SIZE);
         buf.putInt(1).put((byte) 1).putInt(-5).flip();
         SocketChannel ch = new SocketChannelBuilder().thatReads(buf.array()).build();
         assertThrows(IllegalStateException.class, () -> fr.readFrom(ch));
@@ -128,7 +127,7 @@ class FrameReaderTest {
     void payloadExceedsMax() throws IOException {
         FrameReader fr = new FrameReader();
         int tooBig = Frame.MAX_PAYLOAD_SIZE + 1;
-        ByteBuffer buf = ByteBuffer.allocate(Frame.HEADER_SIZE);
+        ByteBuffer buf = ByteBuffer.allocate(Header.SIZE);
         buf.putInt(1).put((byte) 1).putInt(tooBig).flip();
         SocketChannel ch = new SocketChannelBuilder().thatReads(buf.array()).build();
         assertThrows(IllegalStateException.class, () -> fr.readFrom(ch));
@@ -140,7 +139,7 @@ class FrameReaderTest {
         byte[] payload = "hello".getBytes();
         byte[] frame   = buildFrame(5, (byte) 5, payload);
         // Send only header then EOF
-        byte[] headerOnly = Arrays.copyOf(frame, Frame.HEADER_SIZE);
+        byte[] headerOnly = Arrays.copyOf(frame, Header.SIZE);
         SocketChannel ch = new SocketChannelBuilder().thatReads(headerOnly /* then EOF */).build();
         ReadResult readResult = fr.readFrom(ch);
         assertFalse(readResult.isFrameComplete());

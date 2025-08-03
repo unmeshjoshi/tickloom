@@ -17,7 +17,7 @@ import java.util.Optional;
 public final class FrameReader {
 
     /* ---------- constants ---------- */
-    private static final int HEADER_SIZE = Frame.HEADER_SIZE;      // 9
+    private static final int HEADER_SIZE = Header.SIZE;      // 9
     private static final int READ_BUFFER_SIZE = 64 * 1024;              // 64KB scratch
     private static final int MAX_PAYLOAD_SIZE = Frame.MAX_PAYLOAD_SIZE; // from your Frame
 
@@ -52,6 +52,8 @@ public final class FrameReader {
 
 
 
+        //Following is the original code, which was refactored to StateBasedFrameReader. This is kept here for reference
+        //to use as an example for a writeup.
 //        while (tryAssemble()) { /* keep looping */ }
 
 // After we’ve extracted as many complete frames as possible, there may be

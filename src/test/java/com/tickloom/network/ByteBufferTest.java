@@ -5,8 +5,6 @@ import org.junit.jupiter.api.Test;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
-import static com.tickloom.network.Frame.HEADER_SIZE;
-
 public class ByteBufferTest {
 
     @Test
@@ -32,7 +30,7 @@ public class ByteBufferTest {
         static class TrialReader {
         enum State { READING_HEADER, READING_PAYLOAD }
         State state = State.READING_HEADER;
-        ByteBuffer headerBuf = ByteBuffer.allocate(HEADER_SIZE);
+        ByteBuffer headerBuf = ByteBuffer.allocate(Header.SIZE);
         ByteBuffer payloadBuf = null;
         public Optional<Frame> readFrame(ByteBuffer buf) {
             switch (state) {
@@ -76,7 +74,7 @@ public class ByteBufferTest {
     }
 
     private static byte[] buildFrame(int streamId, byte type, byte[] payload) {
-        ByteBuffer buf = ByteBuffer.allocate(HEADER_SIZE + payload.length);
+        ByteBuffer buf = ByteBuffer.allocate(Header.SIZE + payload.length);
         buf.putInt(streamId);
         buf.put(type);
         buf.putInt(payload.length);

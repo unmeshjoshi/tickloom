@@ -10,6 +10,7 @@ import static com.tickloom.network.Frame.MAX_PAYLOAD_SIZE;
  */
 
 record Header(int streamId, byte frameType, int payloadLength) {
+    // Header size = streamId (4 bytes) + frameType (1 byte) + length (4 bytes)
     public static final int SIZE = Integer.BYTES + Byte.BYTES + Integer.BYTES;
 
     public void writeTo(ByteBuffer buffer) {
@@ -34,8 +35,6 @@ record Header(int streamId, byte frameType, int payloadLength) {
 public record Frame(Header header, ByteBuffer payload) {
     // Frame format constants
     public static final int MAX_PAYLOAD_SIZE = 10 * 1024 * 1024; // 10MB max
-    // Header size = streamId (4 bytes) + frameType (1 byte) + length (4 bytes)
-    public static final int HEADER_SIZE = Header.SIZE;
 
     // Additional convenience constructor matching the old signature
     public Frame(int streamId, byte frameType, ByteBuffer payloadBuffer) {
@@ -82,7 +81,7 @@ public record Frame(Header header, ByteBuffer payload) {
     }
 
     public int getTotalSize() {
-        return HEADER_SIZE + getPayloadLength();
+        return Header.SIZE + getPayloadLength();
     }
 
     @Override

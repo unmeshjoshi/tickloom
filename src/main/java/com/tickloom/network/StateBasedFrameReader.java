@@ -3,12 +3,10 @@ package com.tickloom.network;
 import java.nio.ByteBuffer;
 import java.util.Optional;
 
-import static com.tickloom.network.Frame.HEADER_SIZE;
-
 public class StateBasedFrameReader {
         State state;
         public StateBasedFrameReader() {
-            this.state = new ReadingHeader(ByteBuffer.allocate(HEADER_SIZE));
+            this.state = new ReadingHeader(ByteBuffer.allocate(Header.SIZE));
         }
         public void setState(State state) {
             this.state = state;
@@ -62,7 +60,7 @@ public class StateBasedFrameReader {
         @Override
         public Optional<Frame> onComplete(StateBasedFrameReader context, ByteBuffer payloadBuf) {
             Frame frame = new Frame(header, payloadBuf);
-            context.setState(new ReadingHeader(ByteBuffer.allocate(HEADER_SIZE)));
+            context.setState(new ReadingHeader(ByteBuffer.allocate(Header.SIZE)));
             return Optional.of(frame);
         }
     }
