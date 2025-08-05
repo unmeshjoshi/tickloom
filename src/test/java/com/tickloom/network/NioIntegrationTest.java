@@ -16,8 +16,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.Supplier;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 
 
 public class NioIntegrationTest {
@@ -226,6 +225,31 @@ public class NioIntegrationTest {
             assertEquals("Message " + i, new String(received.payload()));
         }
 
+    }
+
+
+    @Test
+    void shouldHandleLargeMessages() throws Exception {
+        // Create a large message (7MB) //we serialise using json, which adds some overhead,
+        // so the final message becomes just less than ~10MB, which is a bit less than the 10MB limit
+        byte[] largePayload = new byte[1024*1024*7];
+        for (int i = 0; i < largePayload.length; i++) {
+            largePayload[i] = (byte) (i % 256);
+        }
+
+        client.sendTo(serverId, MessageType.of("LARGE"), largePayload);
+
+        // Wait for message exchange
+        runUntil(() -> echoServer.getReceivedMessages().size() == 1);
+        runUntil(() -> client.getReceivedMessages().size() == 1);
+
+        // Verify large message was received correctly
+        assertEquals(1, echoServer.getReceivedMessages().size());
+        assertEquals(1, client.getReceivedMessages().size());
+
+        Message received = echoServer.getReceivedMessages().get(0);
+        assertArrayEquals(largePayload, received.payload());
+        assertEquals("LARGE", received.messageType().name());
     }
 
     private final int noOfTicks = 1000; // Shorter timeout to see what's happening
