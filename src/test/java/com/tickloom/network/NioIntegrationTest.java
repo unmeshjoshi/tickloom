@@ -364,6 +364,74 @@ public class NioIntegrationTest {
         assertEquals(0, echoServer.getNetwork().getConnectionCount());
     }
 
+    @Test
+    void shouldHandleServerRestart() throws Exception {
+      // Establish initial connection
+        Message message1 = Message.of(
+                clientId, serverId, PeerType.CLIENT,
+                MessageType.of("RESTART"),
+                "Test message 1".getBytes(),
+                "restart-test-1"
+        );
+
+        client.send(message1);
+
+        // Wait for initial message exchange
+        runUntil(() -> echoServer.getReceivedMessages().size() == 1);
+        runUntil(() -> client.getReceivedMessages().size() == 1);
+
+        // Verify initial connection exists and message was exchanged
+        assertTrue(echoServer.getNetwork().getConnectionCount() == 1);
+
+        // Restart server (close and create new instance)
+        System.out.println("Restarting server...");
+        echoServer.close();
+
+        echoServer = TestPeer.createNew(
+                serverId,
+                registry, EchoServer::new);
+
+        echoServer.bind(); //server must be bound to start listening
+
+        // The client will detect the failed connection
+        // We need to wait for the connection to be cleaned up first
+        runUntil(() -> {
+            // The client should detect the connection failure and clean up
+            return client.getNetwork().getConnectionCount() == 0;
+        });
+
+        // Now send a new message to the restarted server
+        Message message2 = Message.of(
+                clientId, serverId, PeerType.CLIENT,
+                MessageType.of("RESTART2"),
+                "Test message 2".getBytes(),
+                "restart-test-2"
+        );
+
+        client.send(message2);
+
+        // Wait for the new message to be processed by the restarted server
+        runUntil(() -> echoServer.getReceivedMessages().size() == 1);
+
+        // The restarted server should receive the message and add the client to its connections map
+        // Then it should be able to send a response using that connection
+        runUntil(() -> client.getReceivedMessages().size() == 2);
+
+        // Verify that the restarted server received the new message
+        Message newServerMessage = echoServer.getReceivedMessages().get(0);
+        assertEquals("Test message 2", new String(newServerMessage.payload()));
+        assertEquals("RESTART2", newServerMessage.messageType().name());
+
+        // Verify that the restarted server has exactly one connection (the client)
+        assertEquals(1, echoServer.getNetwork().getConnectionCount());
+
+        // Verify that the client has exactly one connection (to the restarted server)
+        assertEquals(1, client.getNetwork().getConnectionCount());
+
+        System.out.println("Server restart test completed successfully - new connection established and messages flowing");
+    }
+
+
     private void cleanupClientNetwork(List<TestPeer> clientNetworks) throws IOException {
         // Clean up client networks
         for (TestPeer clientNetwork : clientNetworks) {
