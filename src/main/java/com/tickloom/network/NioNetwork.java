@@ -330,4 +330,8 @@ public class NioNetwork extends Network {
 
         connections.clear();
     }
+
+    public int getNoOfConnections() {
+        return connections.size();
+    }
 }

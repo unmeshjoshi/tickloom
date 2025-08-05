@@ -252,6 +252,41 @@ public class NioIntegrationTest {
         assertEquals("LARGE", received.messageType().name());
     }
 
+    @Test
+    void shouldHandleConnectionReuse() throws Exception {
+      // Send first message (establishes connection)
+
+        client.sendTo(serverId, MessageType.of("FIRST"), "First message".getBytes());
+
+        // Wait for first message exchange
+        runUntil(() -> echoServer.getReceivedMessages().size() == 1);
+        runUntil(() -> client.getReceivedMessages().size() == 1);
+
+
+        // Send second message (should reuse connection)
+        Message message2 = Message.of(
+                clientId, serverId, PeerType.CLIENT,
+                MessageType.of("SECOND"),
+                "Second message".getBytes(),
+                "msg-2"
+        );
+
+        client.sendTo(serverId, MessageType.of("SECOND"), "Second message".getBytes());
+
+        // Wait for second message exchange
+        runUntil(() -> echoServer.getReceivedMessages().size() == 2);
+        runUntil(() -> client.getReceivedMessages().size() == 2);
+
+        // Verify both client and server have only one connection
+        assertEquals(1, client.getNetwork().getNoOfConnections());
+        assertEquals(1, echoServer.getNetwork().getNoOfConnections());
+
+        Message received = echoServer.getReceivedMessages().get(1);
+        assertEquals("Second message", new String(received.payload()));
+        assertEquals("SECOND", received.messageType().name());
+    }
+
+
     private final int noOfTicks = 1000; // Shorter timeout to see what's happening
     private void runUntil(Supplier<Boolean> condition) {
         int tickCount = 0;
