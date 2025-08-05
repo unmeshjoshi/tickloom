@@ -11,9 +11,8 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 
-public abstract class Replica extends Process implements MessageHandler {
+public abstract class Replica extends Process {
     protected final List<ProcessId> peerIds;
-    protected final MessageBus messageBus;
     protected final MessageCodec messageCodec;
     protected final Storage storage;
     protected final int requestTimeoutTicks;
@@ -21,17 +20,13 @@ public abstract class Replica extends Process implements MessageHandler {
     // Request tracking infrastructure
     protected final AtomicLong requestIdGenerator = new AtomicLong(0);
     public Replica(ProcessId id, List<ProcessId> peerIds, MessageBus messageBus, MessageCodec messageCodec, Storage storage, int requestTimeoutTicks) {
-        super(id);
+        super(id, messageBus);
         this.peerIds = peerIds;
-        this.messageBus = messageBus;
         this.messageCodec = messageCodec;
         this.storage = storage;
         this.waitingList = new RequestWaitingList<>(1000);
         this.requestTimeoutTicks = requestTimeoutTicks;
     }
-
-    @Override
-    public abstract void onMessageReceived(Message message);
 
     /**
      * Common tick() processing for all replica types.

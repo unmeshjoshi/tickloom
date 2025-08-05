@@ -96,9 +96,7 @@ public class NioConnection {
             this.destinationId = message.destination();
 
         }
-        nioNetwork.handleMessage(message, this);
-        //TODO: route to handlers in the messagebus.
-
+        nioNetwork.dispatch(message, this);
     }
 
     /**

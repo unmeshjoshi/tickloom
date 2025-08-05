@@ -36,7 +36,7 @@ public class MessageBus implements MessageDispatcher {
         this.network = network;
         this.messageCodec = messageCodec;
         this.processMessageHandlers = new HashMap<>();
-
+        network.registerMessageDispatcher(this);
     }
 
     /**

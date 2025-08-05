@@ -61,13 +61,12 @@ import java.util.List;
  * ──────────────────────────────────────────────────────────────────────────────
  */
 
-public class NioNetwork implements Network {
+public class NioNetwork extends Network {
 
     private final MessageCodec codec;
     private final ClusterTopology registry;
     private final Selector selector;
     final HashMap<ProcessId, NioConnection> connections = new HashMap<>();
-    private ClusterTopology clusterTopology;
 
     public NioNetwork(MessageCodec codec, ClusterTopology registry, Selector selector) {
         this.codec = codec;
@@ -81,7 +80,7 @@ public class NioNetwork implements Network {
         ServerSocketChannel serverChannel = ServerSocketChannel.open();
         serverChannel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
         serverChannel.configureBlocking(false);
-        int listenBacklog = 1024;
+        int listenBacklog = 1024; //TODO: make configurable
         serverChannel.bind(address.toInetSocketAddress(), listenBacklog);
 
         SelectionKey serverKey = serverChannel.register(selector, SelectionKey.OP_ACCEPT);
@@ -165,7 +164,7 @@ public class NioNetwork implements Network {
         }
     }
 
-    public void handleMessage(Message message, NioConnection nioConnection) {
+    public void dispatch(Message message, NioConnection nioConnection) {
         NioConnection existingConnection = connections.get(message.source());
         if (existingConnection == null || !existingConnection.isConnected()) {
             System.out.println("Received a new message from unknown source: " + message.source() + " Adding to connections map ");
@@ -174,6 +173,8 @@ public class NioNetwork implements Network {
             connections.put(message.source(), nioConnection);
         }
         System.out.println("message = " + message);
+
+        dispatchReceivedMessage(message);
     }
 
     @Override
