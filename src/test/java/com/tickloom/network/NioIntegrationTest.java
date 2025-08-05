@@ -11,9 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.channels.Selector;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -24,12 +22,13 @@ public class NioIntegrationTest {
     TestPeer client;
     private ProcessId serverId;
     private ProcessId clientId;
+    private ClusterTopology registry;
 
     @BeforeEach
     public void setUp() throws IOException {
         var serverAddress = InetAddressAndPort.from("127.0.0.1", 8080);
         serverId = ProcessId.of("echo-server");
-        var registry = createTestRegistry(
+        registry = createTestRegistry(
                 serverId,
                 serverAddress);
 
@@ -102,7 +101,7 @@ public class NioIntegrationTest {
             this.network.bind(topology.getInetAddress(id));
         }
 
-        public void sendTo(ProcessId recipient, MessageType messageType, byte[] payload) throws IOException {
+        public void send(ProcessId recipient, MessageType messageType, byte[] payload) throws IOException {
             Message message = Message.of(id, recipient, PeerType.CLIENT, messageType, payload, generateCorrelationId());
             network.send(message);
         }
@@ -111,7 +110,7 @@ public class NioIntegrationTest {
             return UUID.randomUUID().toString();
         }
 
-        public void sendTo(Message message) throws IOException {
+        public void send(Message message) throws IOException {
             network.send(message);
         }
 
@@ -162,7 +161,7 @@ public class NioIntegrationTest {
                         message.correlationId()
                 );
 
-                sendTo(response);
+                send(response);
 
             } catch (IOException e) {
                 System.err.printf("Server failed to send echo response", e);
@@ -183,7 +182,7 @@ public class NioIntegrationTest {
         );
 
         System.out.println("Sending message: " + clientMessage);
-        client.sendTo(serverId, MessageType.of("TEST"),"Hello from client".getBytes());
+        client.send(serverId, MessageType.of("TEST"),"Hello from client".getBytes());
 
         // Process networks to handle connection and message
         System.out.println("Processing networks...");
@@ -208,7 +207,7 @@ public class NioIntegrationTest {
     void shouldHandleMultipleMessages() throws IOException {
         int messageCount = 100;
         for (int i = 0; i < messageCount; i++) {
-            client.sendTo(serverId, MessageType.of("MULTI"), ("Message " + i).getBytes());
+            client.send(serverId, MessageType.of("MULTI"), ("Message " + i).getBytes());
         }
 
         // Wait for all messages to be received and responded to
@@ -237,7 +236,7 @@ public class NioIntegrationTest {
             largePayload[i] = (byte) (i % 256);
         }
 
-        client.sendTo(serverId, MessageType.of("LARGE"), largePayload);
+        client.send(serverId, MessageType.of("LARGE"), largePayload);
 
         // Wait for message exchange
         runUntil(() -> echoServer.getReceivedMessages().size() == 1);
@@ -256,7 +255,7 @@ public class NioIntegrationTest {
     void shouldHandleConnectionReuse() throws Exception {
       // Send first message (establishes connection)
 
-        client.sendTo(serverId, MessageType.of("FIRST"), "First message".getBytes());
+        client.send(serverId, MessageType.of("FIRST"), "First message".getBytes());
 
         // Wait for first message exchange
         runUntil(() -> echoServer.getReceivedMessages().size() == 1);
@@ -271,7 +270,7 @@ public class NioIntegrationTest {
                 "msg-2"
         );
 
-        client.sendTo(serverId, MessageType.of("SECOND"), "Second message".getBytes());
+        client.send(serverId, MessageType.of("SECOND"), "Second message".getBytes());
 
         // Wait for second message exchange
         runUntil(() -> echoServer.getReceivedMessages().size() == 2);
@@ -292,7 +291,7 @@ public class NioIntegrationTest {
         echoServer.close();
         // Try to connect to a non-existent server
         // This should fail gracefully
-        client.sendTo(serverId, MessageType.of("FAILURE"), "Test message".getBytes());
+        client.send(serverId, MessageType.of("FAILURE"), "Test message".getBytes());
 
         assertEquals(1, client.getNetwork().getConnectionCount());
         //we will have a non-blocking connection created, but it is not connected
@@ -310,7 +309,7 @@ public class NioIntegrationTest {
     @Test
     void shouldHandleClientDisconnection() throws Exception {
         // Establish connection
-        client.sendTo(serverId, MessageType.of("DISCONNECT"), "Test message".getBytes());
+        client.send(serverId, MessageType.of("DISCONNECT"), "Test message".getBytes());
 
         // Wait for message exchange
         runUntil(() -> echoServer.getReceivedMessages().size() == 1);
@@ -327,6 +326,100 @@ public class NioIntegrationTest {
             return echoServer.getNetwork().getConnectionCount() == 0;
         });
     }
+
+    @Test
+    void shouldHandleConcurrentConnections() throws Exception {
+        // Create multiple client networks
+        int clientCount = 100;
+        List<TestPeer> clients = new ArrayList<>();
+        List<ProcessId> clientIds = new ArrayList<>();
+
+        for (int i = 0; i < clientCount; i++) {
+            ProcessId clientId = ProcessId.of("concurrent-client-" + i);
+            clients.add(TestPeer.createNew(clientId, registry));
+            clientIds.add(clientId);
+        }
+
+        // Send messages from all clients simultaneously
+        List<Message> messages = constructMessages(clientCount, clientIds);
+
+        sendMessageFromEachClient(clientCount, clients, messages);
+
+        // Wait for all messages to be received
+        //runRuntil ticks server network
+        runUntilEveryClientGetsResponse(clients, clientCount);
+
+        // Verify all messages were received
+        assertEquals(clientCount, echoServer.getReceivedMessages().size());
+
+        // Verify server has connections for all clients
+        assertEquals(clientCount, echoServer.getNetwork().getConnectionCount());
+
+        assertThatEachClientGotOnlyOneResponse(clients);
+
+
+        cleanupClientNetwork(clients);
+
+        // Verify all connections were cleaned up
+        assertEquals(0, echoServer.getNetwork().getConnectionCount());
+    }
+
+    private void cleanupClientNetwork(List<TestPeer> clientNetworks) throws IOException {
+        // Clean up client networks
+        for (TestPeer clientNetwork : clientNetworks) {
+            clientNetwork.close();
+        }
+
+        // Wait for server to clean up all connections
+        runUntil(() -> {
+            echoServer.tick();
+            return echoServer.getNetwork().getConnectionCount() == 0;
+        });
+    }
+
+    private static void assertThatEachClientGotOnlyOneResponse(List<TestPeer> clients) {
+        clients.stream().allMatch(peer -> {
+                    Message message = peer.getReceivedMessages().get(0);
+                    String response = new String(message.payload());
+                    return response.contains(peer.id.toString());
+                });
+    }
+
+    private void runUntilEveryClientGetsResponse(List<TestPeer> clients, int clientCount) {
+        runUntil(() -> {
+            // Tick all clients
+            for (TestPeer clientNetwork : clients) {
+                try {
+                    clientNetwork.tick();
+                } catch (Exception e) {
+                    // Ignore closed networks
+                }
+            }
+            return echoServer.getReceivedMessages().size() == clientCount && clients.stream().map(peer -> peer.getReceivedMessages().size()).allMatch(size -> size == 1);
+        });
+    }
+
+    private static void sendMessageFromEachClient(int clientCount, List<TestPeer> clients, List<Message> messages) throws IOException {
+        // Send all messages
+        for (int i = 0; i < clientCount; i++) {
+            clients.get(i).send(messages.get(i));
+        }
+    }
+
+    private List<Message> constructMessages(int clientCount, List<ProcessId> clientIds) {
+        List<Message> messages = new ArrayList<>();
+        for (int i = 0; i < clientCount; i++) {
+            Message message = Message.of(
+                    clientIds.get(i), serverId, PeerType.CLIENT,
+                    MessageType.of("CONCURRENT"),
+                    ("Message from client " + i).getBytes(),
+                    "concurrent-" + i
+            );
+            messages.add(message);
+        }
+        return messages;
+    }
+
 
     private final int noOfTicks = 1000; // Shorter timeout to see what's happening
     private void runUntil(Supplier<Boolean> condition) {
