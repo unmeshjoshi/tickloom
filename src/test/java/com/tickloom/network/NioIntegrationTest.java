@@ -307,6 +307,27 @@ public class NioIntegrationTest {
         assertEquals(0, client.getNetwork().getConnectionCount());
     }
 
+    @Test
+    void shouldHandleClientDisconnection() throws Exception {
+        // Establish connection
+        client.sendTo(serverId, MessageType.of("DISCONNECT"), "Test message".getBytes());
+
+        // Wait for message exchange
+        runUntil(() -> echoServer.getReceivedMessages().size() == 1);
+
+        // Verify connection exists
+        assertTrue(echoServer.getNetwork().getConnectionCount() == 1);
+
+        // Close client network (simulates client crash/disconnect)
+        client.close();
+
+        // Run for a while to let server detect disconnection
+        runUntil(() -> {
+            // Server should detect disconnection and clean up
+            return echoServer.getNetwork().getConnectionCount() == 0;
+        });
+    }
+
     private final int noOfTicks = 1000; // Shorter timeout to see what's happening
     private void runUntil(Supplier<Boolean> condition) {
         int tickCount = 0;
