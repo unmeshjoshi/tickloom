@@ -286,6 +286,26 @@ public class NioIntegrationTest {
         assertEquals("SECOND", received.messageType().name());
     }
 
+    @Test
+    void shouldHandleConnectionFailures() throws Exception {
+        // Don't start the server - this will cause connection failures
+        echoServer.close();
+        // Try to connect to a non-existent server
+        // This should fail gracefully
+        client.sendTo(serverId, MessageType.of("FAILURE"), "Test message".getBytes());
+
+        assertEquals(1, client.getNetwork().getConnectionCount());
+        //we will have a non-blocking connection created, but it is not connected
+
+        // Run for a short time to let the connection failure is detected
+        runUntil(() -> {
+            // Check if connection was cleaned up
+            return client.getNetwork().getConnectionCount() == 0;
+        });
+
+        // Verify connection was cleaned up
+        assertEquals(0, client.getNetwork().getConnectionCount());
+    }
 
     private final int noOfTicks = 1000; // Shorter timeout to see what's happening
     private void runUntil(Supplier<Boolean> condition) {
