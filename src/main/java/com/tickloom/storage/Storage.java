@@ -1,5 +1,6 @@
 package com.tickloom.storage;
 
+import com.tickloom.Tickable;
 import com.tickloom.future.ListenableFuture;
 
 /**
@@ -7,7 +8,7 @@ import com.tickloom.future.ListenableFuture;
  * All operations return ListenableFuture to support non-blocking I/O
  * in the single-threaded event loop.
  */
-public interface Storage {
+public interface Storage extends Tickable {
     
     /**
      * Retrieves a value for the given key.

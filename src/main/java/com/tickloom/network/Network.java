@@ -1,10 +1,11 @@
 package com.tickloom.network;
 
+import com.tickloom.Tickable;
 import com.tickloom.messaging.Message;
 
 import java.io.IOException;
 
-public abstract class Network {
+public abstract class Network implements Tickable {
     MessageDispatcher dispatcher;
 
     public void registerMessageDispatcher(MessageDispatcher dispatcher) {
@@ -18,6 +19,8 @@ public abstract class Network {
         }
     }
 
+    @Override
     public abstract void tick();
+
     public abstract void send(Message message) throws IOException;
 }
