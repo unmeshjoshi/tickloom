@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.channels.Selector;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -103,8 +104,12 @@ public class NioIntegrationTest {
         }
 
         public void sendTo(ProcessId recipient, MessageType messageType, byte[] payload) throws IOException {
-            Message message = Message.of(id, recipient, PeerType.CLIENT, messageType, payload, "msg-correlation-id-1");
+            Message message = Message.of(id, recipient, PeerType.CLIENT, messageType, payload, generateCorrelationId());
             network.send(message);
+        }
+
+        private String generateCorrelationId() {
+            return UUID.randomUUID().toString();
         }
 
         public void sendTo(Message message) throws IOException {
@@ -130,6 +135,7 @@ public class NioIntegrationTest {
 
         @Override
         public void close() throws IOException {
+            receivedMessages.clear();
             network.close();
         }
 
@@ -197,6 +203,29 @@ public class NioIntegrationTest {
         assertEquals(serverId, receivedResponse.source());
         assertEquals(clientId, receivedResponse.destination());
         assertEquals("Hello from server to peer: " + clientId, new String(receivedResponse.payload()));
+    }
+
+    @Test
+    void shouldHandleMultipleMessages() throws IOException {
+        int messageCount = 100;
+        for (int i = 0; i < messageCount; i++) {
+            client.sendTo(serverId, MessageType.of("MULTI"), ("Message " + i).getBytes());
+        }
+
+        // Wait for all messages to be received and responded to
+        runUntil(() -> echoServer.getReceivedMessages().size() == messageCount);
+        runUntil(() -> client.getReceivedMessages().size() == messageCount);
+
+        // Verify all messages were received
+        assertEquals(messageCount, echoServer.getReceivedMessages().size());
+        assertEquals(messageCount, client.getReceivedMessages().size());
+
+        // Verify message content
+        for (int i = 0; i < messageCount; i++) {
+            Message received = echoServer.getReceivedMessages().get(i);
+            assertEquals("Message " + i, new String(received.payload()));
+        }
+
     }
 
     private final int noOfTicks = 1000; // Shorter timeout to see what's happening
