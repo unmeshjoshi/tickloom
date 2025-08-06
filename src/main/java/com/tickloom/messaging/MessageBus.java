@@ -14,7 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class MessageBus implements MessageDispatcher, Tickable {
+public class MessageBus implements MessageDispatcher, Tickable, AutoCloseable {
 
     protected final Network network;
     protected final MessageCodec messageCodec;
@@ -153,4 +153,8 @@ public class MessageBus implements MessageDispatcher, Tickable {
         return Collections.unmodifiableMap(processMessageHandlers);
     }
 
+    @Override
+    public void close() throws Exception {
+
+    }
 }

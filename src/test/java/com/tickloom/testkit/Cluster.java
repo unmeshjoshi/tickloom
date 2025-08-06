@@ -7,10 +7,7 @@ import com.tickloom.config.ClusterTopology;
 import com.tickloom.config.Config;
 import com.tickloom.config.ProcessConfig;
 import com.tickloom.messaging.MessageBus;
-import com.tickloom.network.JsonMessageCodec;
-import com.tickloom.network.MessageCodec;
-import com.tickloom.network.Network;
-import com.tickloom.network.NioNetwork;
+import com.tickloom.network.*;
 import com.tickloom.storage.SimulatedStorage;
 import com.tickloom.storage.Storage;
 
@@ -40,8 +37,11 @@ class OrderedTicker implements Tickable {
     }
 }
 public class Cluster implements Tickable {
+    long seed = 0;
+    Random random;
     List<Node> serverNodes = new ArrayList<>();
     List<Cluster.ClientNode> clientNodes = new ArrayList<>();
+    boolean useSimulatedNetwork = false;
 
     private int numProcesses = 3;
     private ClusterTopology topo;
@@ -52,8 +52,18 @@ public class Cluster implements Tickable {
         return this;
     }
 
+    public Cluster withSeed(long seed) {
+        this.seed = seed;
+        return this;
+    }
+
+    public Cluster useSimulatedNetwork() {
+        this.useSimulatedNetwork = true;
+        return this;
+    }
+
     public void tickUntil(Supplier<Boolean> p) {
-        int timeout = 1000;
+        int timeout = 10000;
         int tickCount = 0;
         while (!p.get()) {
             if (tickCount > timeout) {
@@ -62,6 +72,24 @@ public class Cluster implements Tickable {
             tick();
             tickCount++;
         }
+    }
+
+    public void close() {
+        serverNodes.forEach(node -> {
+            try {
+                node.close();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        clientNodes.forEach(node -> {
+            try {
+                node.close();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
     public interface ProcessFactory<T extends com.tickloom.Process> {
@@ -75,11 +103,17 @@ public class Cluster implements Tickable {
     }
 
     public <T extends ClusterClient> T newClient(ProcessId id, Cluster.ClientFactory<T> factory) throws IOException {
-        Network network = NioNetwork.create(topo, messageCodec);
-        MessageBus messageBus = new MessageBus(network, messageCodec);
-        T clusterClient = factory.create(id, serverProcessIds(), messageBus, messageCodec, 1000);
+        Network network = useSimulatedNetwork ? this.serverNodes.get(0).network: createNetwork(messageCodec);
+        MessageBus messageBus = useSimulatedNetwork ? this.serverNodes.get(0).messageBus: new MessageBus(network, messageCodec);
+        T clusterClient = factory.create(id, serverProcessIds(), messageBus, messageCodec, 10000);
         clientNodes.add(new ClientNode(id, network, messageBus, clusterClient));
         return clusterClient;
+    }
+
+    private Network createNetwork(MessageCodec messageCodec) throws IOException {
+        //as of now creating simulated network with no packet loss or delay
+        return useSimulatedNetwork? new SimulatedNetwork(random, 0, 0)
+                :NioNetwork.create(topo, messageCodec);
     }
 
     private List<ProcessId> serverProcessIds() {
@@ -115,6 +149,13 @@ public class Cluster implements Tickable {
                     storage)
                     .tick();
         }
+
+        public void close() throws Exception {
+            network.close();
+            messageBus.close();
+            process.close();
+            storage.close();
+        }
     }
 
     static class ClientNode {
@@ -136,6 +177,12 @@ public class Cluster implements Tickable {
                     messageBus,
                     client).tick();
         }
+
+        public void close() throws Exception {
+            network.close();
+            messageBus.close();
+            client.close();
+        }
     }
 
 
@@ -145,7 +192,13 @@ public class Cluster implements Tickable {
     }
 
     public <T extends com.tickloom.Process> Cluster build(ProcessFactory<T> factory) throws IOException {
-        Random random = new Random();
+        return build(factory, useSimulatedNetwork);
+    }
+
+    public <T extends com.tickloom.Process> Cluster build(ProcessFactory<T> factory, boolean withSimulatedNetwork) throws IOException {
+        //Seed the random number generator
+        random = new Random(seed);
+
         List<ProcessId> processIds = new ArrayList<>(numProcesses);
         for (int i = 1; i <= numProcesses; i++) {
             ProcessId processId = ProcessId.of("process-" + i);
@@ -161,13 +214,22 @@ public class Cluster implements Tickable {
 
         topo = new ClusterTopology(new Config(endpoints.values().stream().toList()));
         JsonMessageCodec messageCodec = new JsonMessageCodec();
+
+        //In simulation mode, we use a single shared messagebus. so that message delivery
+        //destinations are registered on the same messagebus. If different messagebuses are used
+        //we need to do some wiring at the network layer.
+        //When we use a real NIO network, we can use different networks and messagebuses as
+        //messages are routed with the real network layer.
+        Network sharedNetwork = createNetwork(messageCodec);
+        MessageBus sharedMessageBus = new MessageBus(sharedNetwork, messageCodec);
+
         for (int i = 0; i < processIds.size(); i++) {
             ProcessId processId = processIds.get(i);
             List<ProcessId> peers = processIds.stream().filter(id -> !id.equals(processId)).toList();
-            NioNetwork network = NioNetwork.create(topo, messageCodec);
+            Network network = sharedNetwork; //We can create separate network, NioNetwork.create(topo, messageCodec);
             SimulatedStorage storage = new SimulatedStorage(random);
-            MessageBus messageBus = new MessageBus(network, messageCodec);
-            com.tickloom.Process process = factory.create(processId, peers, messageBus, messageCodec, storage, 1000);
+            MessageBus messageBus = sharedMessageBus; //new MessageBus(network, messageCodec);
+            com.tickloom.Process process = factory.create(processId, peers, messageBus, messageCodec, storage, 10000);
             serverNodes.add(new Node(processId, network, messageBus, process, storage));
         }
         return this;

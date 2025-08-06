@@ -7,7 +7,7 @@ import com.tickloom.messaging.MessageHandler;
 /**
  * A logical entity that is endpoint for the messages
  * */
-public abstract class Process implements Tickable, MessageHandler {
+public abstract class Process implements Tickable, MessageHandler, AutoCloseable {
     public final ProcessId id;
     public final MessageBus messageBus;
 
@@ -22,4 +22,8 @@ public abstract class Process implements Tickable, MessageHandler {
 
     @Override
     public abstract void tick();
+
+    @Override
+    public void close() throws Exception {
+    }
 }

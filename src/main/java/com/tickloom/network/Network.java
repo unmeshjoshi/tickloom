@@ -6,7 +6,7 @@ import com.tickloom.messaging.Message;
 
 import java.io.IOException;
 
-public abstract class Network implements Tickable {
+public abstract class Network implements Tickable, AutoCloseable {
     MessageDispatcher dispatcher;
 
     public void registerMessageDispatcher(MessageDispatcher dispatcher) {
@@ -27,5 +27,10 @@ public abstract class Network implements Tickable {
 
     public void bind(ProcessId processId) throws IOException {
         //no-op.. only used by NioNetwork
+    }
+
+    @Override
+    public void close() throws Exception {
+
     }
 }

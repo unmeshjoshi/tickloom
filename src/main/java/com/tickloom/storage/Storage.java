@@ -8,7 +8,7 @@ import com.tickloom.future.ListenableFuture;
  * All operations return ListenableFuture to support non-blocking I/O
  * in the single-threaded event loop.
  */
-public interface Storage extends Tickable {
+public interface Storage extends Tickable, AutoCloseable {
     
     /**
      * Retrieves a value for the given key.
@@ -34,4 +34,9 @@ public interface Storage extends Tickable {
      * Storage implementations manage their own internal tick counters for timing.
      */
     void tick();
+
+    @Override
+    default void close() throws Exception {
+
+    }
 } 

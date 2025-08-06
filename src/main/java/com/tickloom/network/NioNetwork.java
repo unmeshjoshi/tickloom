@@ -320,6 +320,7 @@ public class NioNetwork extends Network {
         return connections.size();
     }
 
+    @Override
     public void close() throws IOException {
         closeAndClearConnections();
         closeAllAcceptors();
