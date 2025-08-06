@@ -1,0 +1,39 @@
+package com.tickloom;
+
+import com.tickloom.messaging.Message;
+import com.tickloom.messaging.MessageBus;
+import com.tickloom.network.JsonMessageCodec;
+import com.tickloom.network.Network;
+import com.tickloom.network.SimulatedNetwork;
+import org.junit.jupiter.api.Test;
+
+import java.util.Random;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class ProcessTest {
+
+    @Test
+    void registersItselfAsMessageHandler() {
+        ProcessId pid = ProcessId.random();
+        Network network = new SimulatedNetwork(new Random(), 0, 0.0);
+        MessageBus messageBus = new MessageBus(network, new JsonMessageCodec());
+        Process process = new Process(pid, messageBus) {
+
+            @Override
+            public void onMessageReceived(Message message) {
+
+            }
+
+            @Override
+            public void tick() {
+
+            }
+        };
+
+        assertEquals(1, messageBus.getHandlers().size());
+        assertEquals(messageBus.getHandlers().get(pid), process);
+
+    }
+
+}

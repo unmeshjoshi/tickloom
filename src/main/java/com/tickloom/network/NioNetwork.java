@@ -2,9 +2,11 @@ package com.tickloom.network;
 
 import com.tickloom.ProcessId;
 import com.tickloom.config.ClusterTopology;
+import com.tickloom.config.ProcessConfig;
 import com.tickloom.messaging.Message;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.StandardSocketOptions;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -75,6 +77,27 @@ public class NioNetwork extends Network {
     }
 
     private final List<Acceptor> acceptors = new ArrayList<>();
+
+    public static NioNetwork create(ClusterTopology topo, MessageCodec messageCodec) throws IOException {
+        Selector selector = Selector.open();
+        return new NioNetwork(messageCodec, topo, selector);
+    }
+
+    /**
+     * Binds a process to its configured address from the topology.
+     * This method automatically looks up the process configuration and binds to the appropriate address.
+     *
+     * @param processId the process to bind
+     * @throws IOException if binding fails
+     * @throws IllegalArgumentException if process not found in topology
+     */
+    public void bind(ProcessId processId) throws IOException {
+        InetAddressAndPort address = registry.getInetAddress(processId);
+        if (address == null) {
+            throw new IllegalArgumentException("Process " + processId + " not found in cluster topology");
+        }
+        bind(address);
+    }
 
     public void bind(InetAddressAndPort address) throws IOException {
         ServerSocketChannel serverChannel = ServerSocketChannel.open();

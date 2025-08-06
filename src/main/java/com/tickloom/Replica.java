@@ -21,10 +21,10 @@ public abstract class Replica extends Process {
     protected final AtomicLong requestIdGenerator = new AtomicLong(0);
     public Replica(ProcessId id, List<ProcessId> peerIds, MessageBus messageBus, MessageCodec messageCodec, Storage storage, int requestTimeoutTicks) {
         super(id, messageBus);
-        this.peerIds = peerIds;
+        this.peerIds = List.copyOf(peerIds);
         this.messageCodec = messageCodec;
         this.storage = storage;
-        this.waitingList = new RequestWaitingList<>(1000);
+        this.waitingList = new RequestWaitingList<>(requestTimeoutTicks);
         this.requestTimeoutTicks = requestTimeoutTicks;
     }
 

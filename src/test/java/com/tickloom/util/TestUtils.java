@@ -30,4 +30,8 @@ public class TestUtils {
         }
         System.out.println("Condition met after " + tickCount + " ticks");
     }
+
+    public static String randomProcessId(String prefix) {
+        return prefix + "-" + (int) (Math.random() * 1000);
+    }
 }

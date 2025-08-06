@@ -8,6 +8,7 @@ import com.tickloom.network.PeerType;
 
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -145,4 +146,10 @@ public class MessageBus implements MessageDispatcher {
     protected String generateCorrelationId() {
         return "msg-" + System.currentTimeMillis() + "-" + correlationIdCounter.incrementAndGet();
     }
-} 
+
+    //Visibility for testing
+    public Map<ProcessId, MessageHandler> getHandlers() {
+        return Collections.unmodifiableMap(processMessageHandlers);
+    }
+
+}

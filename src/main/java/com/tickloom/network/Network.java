@@ -1,5 +1,6 @@
 package com.tickloom.network;
 
+import com.tickloom.ProcessId;
 import com.tickloom.Tickable;
 import com.tickloom.messaging.Message;
 
@@ -23,4 +24,8 @@ public abstract class Network implements Tickable {
     public abstract void tick();
 
     public abstract void send(Message message) throws IOException;
+
+    public void bind(ProcessId processId) throws IOException {
+        //no-op.. only used by NioNetwork
+    }
 }
