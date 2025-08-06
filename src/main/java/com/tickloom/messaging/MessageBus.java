@@ -1,6 +1,7 @@
 package com.tickloom.messaging;
 
 import com.tickloom.ProcessId;
+import com.tickloom.Tickable;
 import com.tickloom.network.MessageDispatcher;
 import com.tickloom.network.MessageCodec;
 import com.tickloom.network.Network;
@@ -13,7 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class MessageBus implements MessageDispatcher {
+public class MessageBus implements MessageDispatcher, Tickable {
 
     protected final Network network;
     protected final MessageCodec messageCodec;
