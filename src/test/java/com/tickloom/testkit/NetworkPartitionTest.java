@@ -31,6 +31,7 @@ class NetworkPartitionTest {
         ProcessId cyrene = ProcessId.of("cyrene");
         ProcessId delphi = ProcessId.of("delphi");
         ProcessId sparta = ProcessId.of("sparta");
+
         ProcessId minorityClientId = ProcessId.of("minority_client");
         ProcessId majorityClientId = ProcessId.of("majority_client");
 

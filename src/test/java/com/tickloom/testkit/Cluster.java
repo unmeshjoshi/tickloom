@@ -13,7 +13,6 @@ import com.tickloom.storage.SimulatedStorage;
 import com.tickloom.storage.Storage;
 import com.tickloom.storage.VersionedValue;
 import com.tickloom.util.Clock;
-import com.tickloom.util.SystemClock;
 import com.tickloom.util.StubClock;
 
 import java.io.IOException;
@@ -50,12 +49,13 @@ public class Cluster implements Tickable, AutoCloseable {
     Map<ProcessId, StubClock> processClocks = new HashMap<>();
 
     private int numProcesses = 3;
-    private List<String> customProcessNames = null; // Custom process names like 'athens', 'byzantium', etc.
+    private List<ProcessId> customProcessIds = new ArrayList<>(); // Custom process names like 'athens', 'byzantium', etc.
     private long initialClockTime = 1000L; // Initial time for all clocks (must be positive)
     private ClusterTopology topo;
     private MessageCodec messageCodec = new JsonMessageCodec();
     private Network sharedNetwork;
     private MessageBus sharedMessageBus;
+    private int DEFAULT_TIMEOUT_TICKS = 10000;
 
     public Cluster withNumProcesses(int numProcesses) {
         this.numProcesses = numProcesses;
@@ -80,32 +80,6 @@ public class Cluster implements Tickable, AutoCloseable {
         return this;
     }
 
-    public Cluster withProcessNames(String... processNames) {
-        return withProcessNames(Arrays.asList(processNames));
-    }
-
-    public Cluster withProcessNames(List<String> processNames) {
-        if (processNames == null || processNames.isEmpty()) {
-            throw new IllegalArgumentException("Process names cannot be null or empty");
-        }
-        
-        // Validate names are non-empty and unique
-        Set<String> uniqueNames = new HashSet<>();
-        for (String name : processNames) {
-            if (name == null || name.trim().isEmpty()) {
-                throw new IllegalArgumentException("Process name cannot be null or empty");
-            }
-            String trimmedName = name.trim();
-            if (!uniqueNames.add(trimmedName)) {
-                throw new IllegalArgumentException("Duplicate process name: " + trimmedName);
-            }
-        }
-        
-        this.customProcessNames = new ArrayList<>(processNames);
-        this.numProcesses = processNames.size(); // Override numProcesses
-        return this;
-    }
-
     public Cluster withProcessIds(ProcessId... processIds) {
         return withProcessIds(Arrays.asList(processIds));
     }
@@ -116,20 +90,17 @@ public class Cluster implements Tickable, AutoCloseable {
         }
         
         // Validate ProcessIds are unique
-        Set<String> uniqueNames = new HashSet<>();
+        Set<ProcessId> uniqueIds = new HashSet<>();
         for (ProcessId processId : processIds) {
             if (processId == null) {
                 throw new IllegalArgumentException("Process ID cannot be null");
             }
-            String name = processId.toString();
-            if (!uniqueNames.add(name)) {
-                throw new IllegalArgumentException("Duplicate process ID: " + name);
+            if (!uniqueIds.add(processId)) {
+                throw new IllegalArgumentException("Duplicate process ID: " + processId);
             }
         }
         
-        this.customProcessNames = processIds.stream()
-            .map(ProcessId::toString)
-            .collect(Collectors.toList());
+        this.customProcessIds = processIds;
         this.numProcesses = processIds.size(); // Override numProcesses
         return this;
     }
@@ -137,10 +108,9 @@ public class Cluster implements Tickable, AutoCloseable {
 
 
     public void tickUntil(Supplier<Boolean> p) {
-        int timeout = 10000;
         int tickCount = 0;
         while (!p.get()) {
-            if (tickCount > timeout) {
+            if (tickCount > DEFAULT_TIMEOUT_TICKS) {
                 fail("Timeout waiting for condition to be met.");
             }
             tick();
@@ -569,20 +539,8 @@ public class Cluster implements Tickable, AutoCloseable {
         //Seed the random number generator
         random = new Random(seed);
 
-        List<ProcessId> processIds = new ArrayList<>(numProcesses);
-        if (customProcessNames != null) {
-            // Use custom process names
-            for (String name : customProcessNames) {
-                ProcessId processId = ProcessId.of(name.trim());
-                processIds.add(processId);
-            }
-        } else {
-            // Use default process-1, process-2, etc.
-            for (int i = 1; i <= numProcesses; i++) {
-                ProcessId processId = ProcessId.of("process-" + i);
-                processIds.add(processId);
-            }
-        }
+        List<ProcessId> processIds = customProcessIds.isEmpty() ?
+                generateDefaultIds(numProcesses): customProcessIds;
 
         var basePort = 8000;
         Map<ProcessId, ProcessConfig> endpoints = new HashMap<>();
@@ -616,6 +574,17 @@ public class Cluster implements Tickable, AutoCloseable {
             serverNodes.add(new Node(processId, network, messageBus, process, storage));
         }
         return this;
+    }
+
+    private List<ProcessId> generateDefaultIds(int numProcesses) {
+        // Use custom process names
+        // Use default process-1, process-2, etc.
+        List<ProcessId> processIds = new ArrayList<>(numProcesses);
+        for (int i = 1; i <= numProcesses; i++) {
+            ProcessId processId = ProcessId.of("process-" + i);
+            processIds.add(processId);
+        }
+        return processIds;
     }
 
     public Cluster start() throws IOException {

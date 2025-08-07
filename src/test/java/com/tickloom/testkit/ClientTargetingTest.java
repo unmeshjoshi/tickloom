@@ -3,6 +3,7 @@ package com.tickloom.testkit;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
+import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,8 +23,9 @@ public class ClientTargetingTest {
     @Test
     @DisplayName("Should allow clients to connect to specific nodes for targeted failure scenarios")
     void shouldAllowTargetedClientConnections() throws IOException {
+        List<ProcessId> processIds = List.of(ProcessId.of("athens"), ProcessId.of("byzantium"), ProcessId.of("cyrene"), ProcessId.of("delphi"), ProcessId.of("sparta")); // <"athens", "byzantium", "cyrene", "delphi", "sparta">
         try (Cluster cluster = new Cluster()
-                .withProcessNames("athens", "byzantium", "cyrene", "delphi", "sparta")
+                .withProcessIds(processIds)
                 .useSimulatedNetwork()
                 .build(QuorumReplica::new)
                 .start()) {
@@ -107,8 +109,9 @@ public class ClientTargetingTest {
     @Test
     @DisplayName("Should demonstrate clock control using ProcessId-only methods")
     void shouldDemonstrateProcessIdClockControl() throws IOException {
+        List<ProcessId> processIds = List.of(ProcessId.of("fast_node"), ProcessId.of("slow_node"), ProcessId.of("normal_node"));
         try (Cluster cluster = new Cluster()
-                .withProcessNames("fast_node", "slow_node", "normal_node")
+                .withProcessIds(processIds)
                 .withInitialClockTime(2000L)
                 .useSimulatedNetwork()
                 .build(QuorumReplica::new)
