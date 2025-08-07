@@ -15,7 +15,7 @@ import java.util.Map;
 /**
  * Quorum-based replica implementation for distributed key-value store.
  * This implementation uses majority quorum consensus for read and write operations.
- * 
+ * <p>
  * Based on the quorum consensus algorithm where operations require majority
  * agreement from replicas before completing successfully.
  */
@@ -54,25 +54,21 @@ public class QuorumReplica extends Replica {
     private void handleClientGetRequest(Message message) {
         String correlationId = message.correlationId();
         GetRequest clientRequest = deserializePayload(message.payload(), GetRequest.class);
-        ProcessId clientAddress = message.source();
+        ProcessId clientId = message.source();
 
-        logIncomingGetRequest(clientRequest, correlationId, clientAddress);
+        logIncomingGetRequest(clientRequest, correlationId, clientId);
 
         var quorumCallback = createGetQuorumCallback();
-        quorumCallback.onSuccess(responses -> sendSuccessGetResponse(clientRequest, correlationId, clientAddress, responses))
-                     .onFailure(error -> sendFailureGetResponse(clientRequest, correlationId, clientAddress, error));
+        quorumCallback.onSuccess(responses -> sendSuccessGetResponse(clientRequest, correlationId, clientId, responses))
+                .onFailure(error -> sendFailureGetResponse(clientRequest, correlationId, clientId, error));
 
-        try {
-            broadcastToAllReplicas(quorumCallback, (node, internalCorrelationId) -> {
-                InternalGetRequest internalRequest = new InternalGetRequest(clientRequest.key(), internalCorrelationId);
-                return Message.of(
-                        id, node, message.peerType(), QuorumMessageTypes.INTERNAL_GET_REQUEST,
-                        serializePayload(internalRequest), internalCorrelationId
-                );
-            });
-        } catch (IOException e) {
-            sendFailureGetResponse(clientRequest, correlationId, clientAddress, e);
-        }
+        broadcastToAllReplicas(quorumCallback, (node, internalCorrelationId) -> {
+            InternalGetRequest internalRequest = new InternalGetRequest(clientRequest.key(), internalCorrelationId);
+            return Message.of(
+                    id, node, message.peerType(), QuorumMessageTypes.INTERNAL_GET_REQUEST,
+                    serializePayload(internalRequest), internalCorrelationId
+            );
+        });
     }
 
     private AsyncQuorumCallback<InternalGetResponse> createGetQuorumCallback() {
@@ -91,40 +87,32 @@ public class QuorumReplica extends Replica {
     private void sendSuccessGetResponse(GetRequest req, String correlationId, ProcessId clientAddr,
                                         Map<ProcessId, InternalGetResponse> responses) {
         VersionedValue latestValue = getLatestValueFromResponses(responses);
-        
+
         logSuccessfulGetResponse(req, correlationId, latestValue);
-        
-        GetResponse response = new GetResponse(req.key(), 
-                latestValue != null ? latestValue.value() : null, 
+
+        GetResponse response = new GetResponse(req.key(),
+                latestValue != null ? latestValue.value() : null,
                 latestValue != null);
-        
+
         Message responseMessage = Message.of(
                 id, clientAddr, com.tickloom.network.PeerType.SERVER, QuorumMessageTypes.CLIENT_GET_RESPONSE,
                 serializePayload(response), correlationId
         );
-        
-        try {
-            messageBus.sendMessage(responseMessage);
-        } catch (IOException e) {
-            System.err.println("QuorumReplica: Failed to send GET response: " + e.getMessage());
-        }
+
+        send(responseMessage);
     }
 
     private void sendFailureGetResponse(GetRequest req, String correlationId, ProcessId clientAddr, Throwable error) {
         logFailedGetResponse(req, correlationId, error);
-        
+
         GetResponse response = new GetResponse(req.key(), null, false);
-        
+
         Message responseMessage = Message.of(
                 id, clientAddr, com.tickloom.network.PeerType.SERVER, QuorumMessageTypes.CLIENT_GET_RESPONSE,
                 serializePayload(response), correlationId
         );
-        
-        try {
-            messageBus.sendMessage(responseMessage);
-        } catch (IOException e) {
-            System.err.println("QuorumReplica: Failed to send GET error response: " + e.getMessage());
-        }
+
+        send(responseMessage);
     }
 
     private void logSuccessfulGetResponse(GetRequest req, String correlationId, VersionedValue latestValue) {
@@ -146,22 +134,17 @@ public class QuorumReplica extends Replica {
 
         var quorumCallback = createSetQuorumCallback();
         quorumCallback.onSuccess(responses -> sendSuccessSetResponseToClient(clientRequest, correlationId, clientAddress))
-                     .onFailure(error -> sendFailureSetResponseToClient(clientRequest, correlationId, clientAddress, error));
+                .onFailure(error -> sendFailureSetResponseToClient(clientRequest, correlationId, clientAddress, error));
 
-        try {
-            long timestamp = System.currentTimeMillis();
-            broadcastToAllReplicas(quorumCallback, (node, internalCorrelationId) -> {
-                InternalSetRequest internalRequest = new InternalSetRequest(
-                        clientRequest.key(), clientRequest.value(), timestamp, internalCorrelationId);
-                return Message.of(
-                        id, node, message.peerType(), QuorumMessageTypes.INTERNAL_SET_REQUEST,
-                        serializePayload(internalRequest), internalCorrelationId
-                );
-            });
-        } catch (IOException e) {
-            e.printStackTrace();
-            sendFailureSetResponseToClient(clientRequest, correlationId, clientAddress, e);
-        }
+        long timestamp = System.currentTimeMillis();
+        broadcastToAllReplicas(quorumCallback, (node, internalCorrelationId) -> {
+            InternalSetRequest internalRequest = new InternalSetRequest(
+                    clientRequest.key(), clientRequest.value(), timestamp, internalCorrelationId);
+            return Message.of(
+                    id, node, message.peerType(), QuorumMessageTypes.INTERNAL_SET_REQUEST,
+                    serializePayload(internalRequest), internalCorrelationId
+            );
+        });
     }
 
     private void logIncomingSetRequest(SetRequest req, String correlationId, ProcessId clientAddr) {
@@ -179,36 +162,28 @@ public class QuorumReplica extends Replica {
 
     private void sendSuccessSetResponseToClient(SetRequest req, String correlationId, ProcessId clientAddr) {
         logSuccessfulSetResponse(req, correlationId);
-        
+
         SetResponse response = new SetResponse(req.key(), true);
-        
+
         Message responseMessage = Message.of(
                 id, clientAddr, com.tickloom.network.PeerType.SERVER, QuorumMessageTypes.CLIENT_SET_RESPONSE,
                 serializePayload(response), correlationId
         );
-        
-        try {
-            messageBus.sendMessage(responseMessage);
-        } catch (IOException e) {
-            System.err.println("QuorumReplica: Failed to send SET response: " + e.getMessage());
-        }
+
+        send(responseMessage);
     }
 
     private void sendFailureSetResponseToClient(SetRequest req, String correlationId, ProcessId clientAddr, Throwable error) {
         logFailedSetResponse(req, correlationId, error);
-        
+
         SetResponse response = new SetResponse(req.key(), false);
-        
+
         Message responseMessage = Message.of(
                 id, clientAddr, com.tickloom.network.PeerType.SERVER, QuorumMessageTypes.CLIENT_SET_RESPONSE,
                 serializePayload(response), correlationId
         );
-        
-        try {
-            messageBus.sendMessage(responseMessage);
-        } catch (IOException e) {
-            System.err.println("QuorumReplica: Failed to send SET error response: " + e.getMessage());
-        }
+
+        send(responseMessage);
     }
 
     private void logSuccessfulSetResponse(SetRequest req, String correlationId) {
@@ -225,7 +200,7 @@ public class QuorumReplica extends Replica {
     private VersionedValue getLatestValueFromResponses(Map<ProcessId, InternalGetResponse> responses) {
         VersionedValue latestValue = null;
         long latestTimestamp = -1;
-        
+
         for (InternalGetResponse response : responses.values()) {
             if (response.value() != null) {
                 long timestamp = response.value().timestamp();
@@ -235,7 +210,7 @@ public class QuorumReplica extends Replica {
                 }
             }
         }
-        
+
         return latestValue;
     }
 
@@ -243,45 +218,40 @@ public class QuorumReplica extends Replica {
 
     private void handleInternalGetRequest(Message message) {
         InternalGetRequest getRequest = deserializePayload(message.payload(), InternalGetRequest.class);
-        
         System.out.println("QuorumReplica: Processing internal GET request - keyLength: " + getRequest.key().length +
                 ", correlationId: " + getRequest.correlationId() + ", from: " + message.source());
-
         // Perform local storage operation
         ListenableFuture<VersionedValue> future = storage.get(getRequest.key());
+        future.handle((value, error) -> {
+            sendInternalGetResponse(message, value, error, getRequest);
+        });
+    }
 
-        future.onSuccess(value -> {
+    private void sendInternalGetResponse(Message incomingMessage, VersionedValue value, Throwable error, InternalGetRequest getRequest) {
+
+        logInternalGetResponse(value, error, getRequest);
+        //value will be null if not found or error
+        InternalGetResponse response = new InternalGetResponse(getRequest.key(), value, getRequest.correlationId());
+        Message responseMessage = Message.of(
+                id, incomingMessage.source(), incomingMessage.peerType(), QuorumMessageTypes.INTERNAL_GET_RESPONSE,
+                serializePayload(response), getRequest.correlationId()
+        );
+
+
+        send(responseMessage);
+
+    }
+
+    private static void logInternalGetResponse(VersionedValue value, Throwable error, InternalGetRequest getRequest) {
+        if (error == null) {
             String valueStr = value != null ? "found" : "not found";
             System.out.println("QuorumReplica: Internal GET completed - keyLength: " + getRequest.key().length +
                     ", value: " + valueStr + ", correlationId: " + getRequest.correlationId());
 
-            InternalGetResponse response = new InternalGetResponse(getRequest.key(), value, getRequest.correlationId());
-            Message responseMessage = Message.of(
-                    id, message.source(), message.peerType(), QuorumMessageTypes.INTERNAL_GET_RESPONSE,
-                    serializePayload(response), getRequest.correlationId()
-            );
-            
-            try {
-                messageBus.sendMessage(responseMessage);
-            } catch (IOException e) {
-                System.err.println("QuorumReplica: Failed to send internal GET response: " + e.getMessage());
-            }
-        }).onFailure(error -> {
+        } else {
             System.out.println("QuorumReplica: Internal GET failed - keyLength: " + getRequest.key().length +
                     ", error: " + error.getMessage() + ", correlationId: " + getRequest.correlationId());
-
-            InternalGetResponse response = new InternalGetResponse(getRequest.key(), null, getRequest.correlationId());
-            Message responseMessage = Message.of(
-                    id, message.source(), message.peerType(), QuorumMessageTypes.INTERNAL_GET_RESPONSE,
-                    serializePayload(response), getRequest.correlationId()
-            );
-            
-            try {
-                messageBus.sendMessage(responseMessage);
-            } catch (IOException e) {
-                System.err.println("QuorumReplica: Failed to send internal GET error response: " + e.getMessage());
-            }
-        });
+        }
     }
 
     private void handleInternalSetRequest(Message message) {
@@ -294,38 +264,34 @@ public class QuorumReplica extends Replica {
 
         // Perform local storage operation
         ListenableFuture<Boolean> future = storage.set(setRequest.key(), value);
+        future.handle((success, error)
+                -> sendInternalSetResponse(message, success, error, setRequest));
+    }
 
-        future.onSuccess(success -> {
+    private void sendInternalSetResponse(Message message, Boolean success, Throwable error, InternalSetRequest setRequest) {
+        logInternalSetResponse(success, error, setRequest);
+
+        InternalSetResponse response = new InternalSetResponse(setRequest.key(), success, setRequest.correlationId());
+        //success will be false if error
+        Message responseMessage = Message.of(
+                id, message.source(), message.peerType(), QuorumMessageTypes.INTERNAL_SET_RESPONSE,
+                serializePayload(response), setRequest.correlationId()
+        );
+
+        send(responseMessage);
+
+    }
+
+    private static void logInternalSetResponse(Boolean success, Throwable error, InternalSetRequest setRequest) {
+        if (error == null) {
             System.out.println("QuorumReplica: Internal SET completed - keyLength: " + setRequest.key().length +
                     ", success: " + success + ", correlationId: " + setRequest.correlationId());
 
-            InternalSetResponse response = new InternalSetResponse(setRequest.key(), success, setRequest.correlationId());
-            Message responseMessage = Message.of(
-                    id, message.source(), message.peerType(), QuorumMessageTypes.INTERNAL_SET_RESPONSE,
-                    serializePayload(response), setRequest.correlationId()
-            );
-            
-            try {
-                messageBus.sendMessage(responseMessage);
-            } catch (IOException e) {
-                System.err.println("QuorumReplica: Failed to send internal SET response: " + e.getMessage());
-            }
-        }).onFailure(error -> {
+        } else {
             System.out.println("QuorumReplica: Internal SET failed - keyLength: " + setRequest.key().length +
                     ", error: " + error.getMessage() + ", correlationId: " + setRequest.correlationId());
 
-            InternalSetResponse response = new InternalSetResponse(setRequest.key(), false, setRequest.correlationId());
-            Message responseMessage = Message.of(
-                    id, message.source(), message.peerType(), QuorumMessageTypes.INTERNAL_SET_RESPONSE,
-                    serializePayload(response), setRequest.correlationId()
-            );
-            
-            try {
-                messageBus.sendMessage(responseMessage);
-            } catch (IOException e) {
-                System.err.println("QuorumReplica: Failed to send internal SET error response: " + e.getMessage());
-            }
-        });
+        }
     }
 
     private void handleInternalGetResponse(Message message) {
@@ -344,7 +310,7 @@ public class QuorumReplica extends Replica {
         System.out.println("QuorumReplica: Processing internal SET response - keyLength: " + response.key().length +
                 ", success: " + response.success() + ", internalCorrelationId: " + response.correlationId() +
                 ", from: " + message.source());
-        
+
         waitingList.handleResponse(message.correlationId(), response, message.source());
     }
 }

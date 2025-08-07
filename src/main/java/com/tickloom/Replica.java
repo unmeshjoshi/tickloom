@@ -107,14 +107,21 @@ public abstract class Replica extends Process {
      * It handles correlation ID generation, waiting list registration and message sending.
      */
     protected <T> void broadcastToAllReplicas(AsyncQuorumCallback<T> quorumCallback,
-                                              BiFunction<ProcessId, String, Message> messageBuilder) throws IOException {
+                                              BiFunction<ProcessId, String, Message> messageBuilder)  {
         for (ProcessId node : getAllNodes()) {
             String internalCorrelationId = generateCorrelationId();
             waitingList.add(internalCorrelationId, quorumCallback);
 
             Message internalMessage = messageBuilder.apply(node, internalCorrelationId);
-            messageBus.sendMessage(internalMessage);
+            send(internalMessage);
         }
     }
 
+    protected void send(Message responseMessage) {
+        try {
+            messageBus.sendMessage(responseMessage);
+        } catch (IOException e) {
+            System.err.println("QuorumReplica: Failed to send response: " + e.getMessage());
+        }
+    }
 }

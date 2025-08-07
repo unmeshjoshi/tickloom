@@ -73,7 +73,7 @@ class ReplicaTest {
     }
 
     @Test
-    void shouldBroadcastInternalRequestsToAllNodes() throws IOException {
+    void shouldBroadcastInternalRequestsToAllNodes()  {
         // Given
         int timeoutTicks = 1;
         Random random = new Random();
@@ -120,7 +120,7 @@ class ReplicaTest {
             return waitingList.size();
         }
 
-        List<String> broadcastInternal() throws IOException {
+        List<String> broadcastInternal()  {
             java.util.List<String> captured = new java.util.ArrayList<>();
             AsyncQuorumCallback<Message> cb = new AsyncQuorumCallback<>(getAllNodes().size(), msg -> true);
             broadcastToAllReplicas(cb, (destinationId, correlationId) -> {
