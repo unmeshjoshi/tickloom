@@ -104,6 +104,15 @@ public class NioConnection {
      * This follows production patterns for proper connection lifecycle management.
      */
     public void cleanupConnection() {
+        closeChannel();
+        nioNetwork.removeConnection(this);
+    }
+
+    /**
+     * Connection cleanup without removing from the connections map.
+     * Used during network shutdown to avoid ConcurrentModificationException.
+     */
+    public void closeChannel() {
         try {
             // Cancel any selection key (this will also detach the ChannelState)
             if (channelKey != null) {
@@ -114,7 +123,7 @@ public class NioConnection {
             }
             channel.close();
             System.out.println("NIO: Connection cleanup completed for channel");
-            nioNetwork.removeConnection(this);
+            // Note: Not calling nioNetwork.removeConnection(this) to avoid ConcurrentModificationException
         } catch (IOException e) {
             System.err.println("NIO: Error during connection cleanup: " + e.getMessage());
         }

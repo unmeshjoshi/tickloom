@@ -2,11 +2,9 @@ package com.tickloom.network;
 
 import com.tickloom.ProcessId;
 import com.tickloom.config.ClusterTopology;
-import com.tickloom.config.ProcessConfig;
 import com.tickloom.messaging.Message;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.StandardSocketOptions;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -347,9 +345,11 @@ public class NioNetwork extends Network {
     }
 
     private void closeAndClearConnections() {
-        // Close all connections
-        for (NioConnection connection : connections.values()) {
-                connection.cleanupConnection();
+        // Close all connections - create a copy to avoid ConcurrentModificationException
+        // since cleanupConnection() calls removeConnection() which modifies the map
+        List<NioConnection> connectionsToClose = new ArrayList<>(connections.values());
+        for (NioConnection connection : connectionsToClose) {
+                connection.closeChannel();
         }
 
         connections.clear();

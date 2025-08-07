@@ -36,7 +36,7 @@ class OrderedTicker implements Tickable {
         tickables.forEach(Tickable::tick);
     }
 }
-public class Cluster implements Tickable {
+public class Cluster implements Tickable, AutoCloseable {
     long seed = 0;
     Random random;
     List<Node> serverNodes = new ArrayList<>();
