@@ -527,6 +527,7 @@ public class Cluster implements Tickable, AutoCloseable {
 
 
     public void tick() {
+        advanceTimeForAllProcesses(1);
         clientNodes.forEach(ClientNode::tick);
         serverNodes.forEach(Node::tick);
     }
