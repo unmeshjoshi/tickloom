@@ -6,6 +6,7 @@ import com.tickloom.network.MessageDispatcher;
 import com.tickloom.network.MessageCodec;
 import com.tickloom.network.Network;
 import com.tickloom.network.PeerType;
+import com.tickloom.util.Utils;
 
 
 import java.io.IOException;
@@ -20,6 +21,7 @@ public class MessageBus implements MessageDispatcher, Tickable, AutoCloseable {
     protected final MessageCodec messageCodec;
 
     private final Map<ProcessId, MessageHandler> processMessageHandlers;
+
     /**
      * Creates a MessageBus with the given network and codec dependencies.
      *
@@ -83,20 +85,19 @@ public class MessageBus implements MessageDispatcher, Tickable, AutoCloseable {
         System.out.println("MessageBus: Routing message " + message.messageType() + " from " + message.source() +
                 " to " + destination + " (correlationId=" + correlationId + ")");
 
-          MessageHandler addressHandler = processMessageHandlers.get(destination);
-            if (addressHandler != null) {
-                System.out.println("MessageBus: Delivering to address handler (" + destination + ")");
-                addressHandler.onMessageReceived(message);
-                return;
-            }
+        MessageHandler addressHandler = processMessageHandlers.get(destination);
+        if (addressHandler != null) {
+            System.out.println("MessageBus: Delivering to address handler (" + destination + ")");
+            addressHandler.onMessageReceived(message);
+            return;
+        }
 
-            // PRIORITY 3: Unroutable message (log but don't crash)
+        // Unroutable message (log but don't crash)
         System.out.println("MessageBus: No handler found for message " + message.messageType() +
                 " (correlationId=" + correlationId + ", destination=" + destination + ")");
     }
 
     /**
-     * Routes received messages to registered handlers.
      * This method implements the reactive Service Layer tick() pattern.
      * <p>
      * Note: This method does NOT tick the network - that is handled by the centralized
@@ -104,19 +105,6 @@ public class MessageBus implements MessageDispatcher, Tickable, AutoCloseable {
      * messages that were delivered in previous ticks.
      */
     public void tick() {
-        // Route messages to registered handlers (now handled by onMessage callback)
-        // The network is ticked separately by SimulationDriver to maintain
-        // centralized tick orchestration and deterministic ordering
-        routeMessagesToHandlers();
-    }
-
-    /**
-     * Routes messages to their respective handlers based on correlation ID or destination address.
-     * This method is now called by the network callback instead of polling.
-     */
-    protected void routeMessagesToHandlers() {
-        // This method is now handled by the onMessage callback
-        // The network will call onMessage when messages are available
     }
 
     /**
@@ -133,19 +121,18 @@ public class MessageBus implements MessageDispatcher, Tickable, AutoCloseable {
         for (ProcessId recipient : recipients) {
             if (!recipient.equals(source)) {  // Don't send to self
                 String correlationId = generateCorrelationId();
-                Message message = Message.of(source, recipient, sourcePeerType,messageType, payload, correlationId);
+                Message message = Message.of(source, recipient, sourcePeerType, messageType, payload, correlationId);
                 sendMessage(message);
             }
         }
     }
 
-    private static final java.util.concurrent.atomic.AtomicLong correlationIdCounter = new java.util.concurrent.atomic.AtomicLong(0);
 
     /**
      * Generates a unique correlation ID for message tracking.
      */
     protected String generateCorrelationId() {
-        return "msg-" + System.currentTimeMillis() + "-" + correlationIdCounter.incrementAndGet();
+        return Utils.generateCorrelationId("msg");
     }
 
     //Visibility for testing

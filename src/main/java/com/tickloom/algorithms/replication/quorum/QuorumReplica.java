@@ -7,6 +7,7 @@ import com.tickloom.messaging.*;
 import com.tickloom.network.MessageCodec;
 import com.tickloom.storage.Storage;
 import com.tickloom.storage.VersionedValue;
+import com.tickloom.util.Clock;
 
 import java.io.IOException;
 import java.util.List;
@@ -21,17 +22,12 @@ import java.util.Map;
  */
 public class QuorumReplica extends Replica {
 
-    public QuorumReplica(ProcessId id, List<ProcessId> peerIds, MessageBus messageBus, MessageCodec messageCodec, Storage storage, int requestTimeoutTicks) {
-        super(id, peerIds, messageBus, messageCodec, storage, requestTimeoutTicks);
+    public QuorumReplica(ProcessId id, List<ProcessId> peerIds, MessageBus messageBus, MessageCodec messageCodec, Storage storage, Clock clock, int requestTimeoutTicks) {
+        super(id, peerIds, messageBus, messageCodec, storage, clock, requestTimeoutTicks);
     }
 
     @Override
     public void onMessageReceived(Message message) {
-        if (messageBus == null || storage == null) {
-            // Skip message processing if not fully configured
-            return;
-        }
-
         var messageType = message.messageType();
         if (messageType.equals(QuorumMessageTypes.CLIENT_GET_REQUEST)) {
             handleClientGetRequest(message);
@@ -136,7 +132,7 @@ public class QuorumReplica extends Replica {
         quorumCallback.onSuccess(responses -> sendSuccessSetResponseToClient(clientRequest, correlationId, clientAddress))
                 .onFailure(error -> sendFailureSetResponseToClient(clientRequest, correlationId, clientAddress, error));
 
-        long timestamp = System.currentTimeMillis();
+        long timestamp = clock.now();
         broadcastToAllReplicas(quorumCallback, (node, internalCorrelationId) -> {
             InternalSetRequest internalRequest = new InternalSetRequest(
                     clientRequest.key(), clientRequest.value(), timestamp, internalCorrelationId);

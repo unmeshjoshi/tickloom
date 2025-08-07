@@ -10,6 +10,9 @@ import com.tickloom.messaging.MessageBus;
 import com.tickloom.network.*;
 import com.tickloom.storage.SimulatedStorage;
 import com.tickloom.storage.Storage;
+import com.tickloom.util.Clock;
+import com.tickloom.util.SystemClock;
+import com.tickloom.util.StubClock;
 
 import java.io.IOException;
 import java.util.*;
@@ -42,8 +45,10 @@ public class Cluster implements Tickable, AutoCloseable {
     List<Node> serverNodes = new ArrayList<>();
     List<Cluster.ClientNode> clientNodes = new ArrayList<>();
     boolean useSimulatedNetwork = false;
+    Map<ProcessId, StubClock> processClocks = new HashMap<>();
 
     private int numProcesses = 3;
+    private long initialClockTime = 1000L; // Initial time for all clocks (must be positive)
     private ClusterTopology topo;
     private MessageCodec messageCodec = new JsonMessageCodec();
     private Network sharedNetwork;
@@ -63,6 +68,16 @@ public class Cluster implements Tickable, AutoCloseable {
         this.useSimulatedNetwork = true;
         return this;
     }
+
+    public Cluster withInitialClockTime(long initialTime) {
+        if (initialTime <= 0) {
+            throw new IllegalArgumentException("Initial clock time must be positive, got: " + initialTime);
+        }
+        this.initialClockTime = initialTime;
+        return this;
+    }
+
+
 
     public void tickUntil(Supplier<Boolean> p) {
         int timeout = 10000;
@@ -94,20 +109,85 @@ public class Cluster implements Tickable, AutoCloseable {
         });
     }
 
+    /**
+     * Gets the clock for a specific process.
+     * 
+     * @param processId the ID of the process
+     * @return the StubClock for the process
+     * @throws IllegalArgumentException if the process ID is not found
+     */
+    public StubClock getClockForProcess(ProcessId processId) {
+        StubClock clock = processClocks.get(processId);
+        if (clock == null) {
+            throw new IllegalArgumentException("Process not found: " + processId);
+        }
+        return clock;
+    }
+
+    /**
+     * Gets clocks for all processes.
+     * 
+     * @return map of process IDs to their clocks
+     */
+    public Map<ProcessId, StubClock> getAllProcessClocks() {
+        return new HashMap<>(processClocks);
+    }
+
+    /**
+     * Sets the time for a specific process.
+     * 
+     * @param processId the ID of the process
+     * @param time the time to set in milliseconds
+     */
+    public void setTimeForProcess(ProcessId processId, long time) {
+        getClockForProcess(processId).setTime(time);
+    }
+
+    /**
+     * Advances the time for a specific process.
+     * 
+     * @param processId the ID of the process
+     * @param millis the number of milliseconds to advance
+     */
+    public void advanceTimeForProcess(ProcessId processId, long millis) {
+        getClockForProcess(processId).advance(millis);
+    }
+
+    /**
+     * Sets the same time for all processes.
+     * 
+     * @param time the time to set in milliseconds for all processes
+     */
+    public void setTimeForAllProcesses(long time) {
+        processClocks.values().forEach(clock -> clock.setTime(time));
+    }
+
+    /**
+     * Advances the time for all processes by the same amount.
+     * 
+     * @param millis the number of milliseconds to advance for all processes
+     */
+    public void advanceTimeForAllProcesses(long millis) {
+        processClocks.values().forEach(clock -> clock.advance(millis));
+    }
+
     public interface ProcessFactory<T extends com.tickloom.Process> {
-        T create(ProcessId id, List<ProcessId> peerIds, MessageBus messageBus, MessageCodec messageCodec, Storage storage, int requestTimeoutTicks);
+        T create(ProcessId id, List<ProcessId> peerIds, MessageBus messageBus, MessageCodec messageCodec, Storage storage, Clock clock, int requestTimeoutTicks);
     }
 
     public interface ClientFactory<T extends ClusterClient> {
         T create(ProcessId clientId, List<ProcessId> replicaEndpoints,
                  MessageBus messageBus, MessageCodec messageCodec,
-                 int timeoutTicks);
+                 Clock clock, int timeoutTicks);
     }
 
     public <T extends ClusterClient> T newClient(ProcessId id, Cluster.ClientFactory<T> factory) throws IOException {
         Network network = useSimulatedNetwork ? sharedNetwork: createNetwork(messageCodec);
         MessageBus messageBus = useSimulatedNetwork ? sharedMessageBus: new MessageBus(network, messageCodec);
-        T clusterClient = factory.create(id, serverProcessIds(), messageBus, messageCodec, 10000);
+        // Create a StubClock for the client as well
+        StubClock clientClock = new StubClock(initialClockTime);
+        processClocks.put(id, clientClock);
+        T clusterClient = factory.create(id, serverProcessIds(), messageBus, messageCodec, clientClock, 10000);
         clientNodes.add(new ClientNode(id, network, messageBus, clusterClient));
         return clusterClient;
     }
@@ -231,7 +311,11 @@ public class Cluster implements Tickable, AutoCloseable {
             Network network = sharedNetwork; //We can create separate network, NioNetwork.create(topo, messageCodec);
             SimulatedStorage storage = new SimulatedStorage(random);
             MessageBus messageBus = sharedMessageBus; //new MessageBus(network, messageCodec);
-            com.tickloom.Process process = factory.create(processId, peers, messageBus, messageCodec, storage, 10000);
+            // Always use StubClock for deterministic testing
+            StubClock stubClock = new StubClock(initialClockTime);
+            processClocks.put(processId, stubClock);
+            Clock clock = stubClock;
+            com.tickloom.Process process = factory.create(processId, peers, messageBus, messageCodec, storage, clock, 10000);
             serverNodes.add(new Node(processId, network, messageBus, process, storage));
         }
         return this;

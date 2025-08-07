@@ -4,6 +4,7 @@ import com.tickloom.messaging.*;
 import com.tickloom.network.*;
 import com.tickloom.storage.SimulatedStorage;
 import com.tickloom.storage.Storage;
+import com.tickloom.util.SystemClock;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -95,7 +96,7 @@ class ReplicaTest {
         boolean onTickCalled = false;
 
         public TestableReplica(ProcessId id, List<ProcessId> peerIds, MessageBus messageBus, MessageCodec messageCodec, Storage storage, int requestTimeoutTicks) {
-            super(id, peerIds, messageBus, messageCodec, storage, requestTimeoutTicks);
+            super(id, peerIds, messageBus, messageCodec, storage, new SystemClock(), requestTimeoutTicks);
         }
 
 

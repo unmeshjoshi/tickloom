@@ -10,12 +10,13 @@ import com.tickloom.network.JsonMessageCodec;
 import com.tickloom.network.MessageCodec;
 import com.tickloom.network.NioNetwork;
 import com.tickloom.network.PeerType;
+import com.tickloom.util.SystemClock;
+import com.tickloom.util.Utils;
 
 import java.io.IOException;
 import java.nio.channels.Selector;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 class TestPeer extends com.tickloom.Process implements Tickable, AutoCloseable {
     protected final NioNetwork network;
@@ -24,7 +25,7 @@ class TestPeer extends com.tickloom.Process implements Tickable, AutoCloseable {
     protected final List<Message> receivedMessages = new ArrayList<>();
 
     protected TestPeer(ProcessId id, MessageBus messageBus, NioNetwork network, ClusterTopology topology, MessageCodec codec) {
-        super(id, messageBus);
+        super(id, messageBus, new SystemClock());
         this.network = network;
         this.topology = topology;
         this.codec = codec;
@@ -59,7 +60,7 @@ class TestPeer extends com.tickloom.Process implements Tickable, AutoCloseable {
     }
 
     private String generateCorrelationId() {
-        return UUID.randomUUID().toString();
+        return Utils.generateCorrelationId();
     }
 
     public void send(Message message) throws IOException {

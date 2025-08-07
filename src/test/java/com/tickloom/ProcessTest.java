@@ -5,6 +5,7 @@ import com.tickloom.messaging.MessageBus;
 import com.tickloom.network.JsonMessageCodec;
 import com.tickloom.network.Network;
 import com.tickloom.network.SimulatedNetwork;
+import com.tickloom.util.SystemClock;
 import org.junit.jupiter.api.Test;
 
 import java.util.Random;
@@ -18,7 +19,7 @@ class ProcessTest {
         ProcessId pid = ProcessId.random();
         Network network = SimulatedNetwork.noLossNetwork(new Random());
         MessageBus messageBus = new MessageBus(network, new JsonMessageCodec());
-        Process process = new Process(pid, messageBus) {
+        Process process = new Process(pid, messageBus, new SystemClock()) {
 
             @Override
             public void onMessageReceived(Message message) {

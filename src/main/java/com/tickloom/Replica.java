@@ -3,11 +3,12 @@ package com.tickloom;
 import com.tickloom.messaging.*;
 import com.tickloom.network.MessageCodec;
 import com.tickloom.storage.Storage;
+import com.tickloom.util.Utils;
+import com.tickloom.util.Clock;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 
@@ -19,8 +20,9 @@ public abstract class Replica extends Process {
     protected final RequestWaitingList waitingList;
     // Request tracking infrastructure
     protected final AtomicLong requestIdGenerator = new AtomicLong(0);
-    public Replica(ProcessId id, List<ProcessId> peerIds, MessageBus messageBus, MessageCodec messageCodec, Storage storage, int requestTimeoutTicks) {
-        super(id, messageBus);
+    
+    public Replica(ProcessId id, List<ProcessId> peerIds, MessageBus messageBus, MessageCodec messageCodec, Storage storage, Clock clock, int requestTimeoutTicks) {
+        super(id, messageBus, clock);
         this.peerIds = List.copyOf(peerIds);
         this.messageCodec = messageCodec;
         this.storage = storage;
@@ -88,9 +90,7 @@ public abstract class Replica extends Process {
      * Generates a unique correlation ID for internal messages.
      */
     private String generateCorrelationId() {
-        return "internal-" + UUID.randomUUID();
-        //internal correlation ID should be UUID as it should not use System.currentTimeMillis
-        //Multiple internal messages can be sent at the same millisecond.
+        return Utils.generateCorrelationId("internal");
     }
 
     /**

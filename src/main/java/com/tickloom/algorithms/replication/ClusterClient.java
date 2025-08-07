@@ -6,6 +6,8 @@ import com.tickloom.future.ListenableFuture;
 import com.tickloom.messaging.*;
 import com.tickloom.network.MessageCodec;
 import com.tickloom.network.PeerType;
+import com.tickloom.util.Clock;
+import com.tickloom.util.Utils;
 
 import java.io.IOException;
 import java.util.List;
@@ -19,8 +21,8 @@ public abstract class ClusterClient extends Process {
     
     public ClusterClient(ProcessId clientId, List<ProcessId> replicaEndpoints,
                          MessageBus messageBus, MessageCodec messageCodec,
-                         int timeoutTicks) {
-        super(clientId, messageBus);
+                         Clock clock, int timeoutTicks) {
+        super(clientId, messageBus, clock);
         this.replicaEndpoints = List.copyOf(replicaEndpoints);
         this.messageCodec = messageCodec;
         this.timeoutTicks = timeoutTicks;
@@ -85,8 +87,7 @@ public abstract class ClusterClient extends Process {
     }
     
     protected String generateCorrelationId() {
-        return id.name() + "-" + System.currentTimeMillis() + "-" + 
-               java.util.concurrent.ThreadLocalRandom.current().nextInt(10000);
+        return Utils.generateCorrelationId();
     }
     
     @SuppressWarnings("unchecked")
