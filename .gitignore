@@ -6,3 +6,4 @@ build
 bin
 # Ignore Java heap dumps
 *.hprof
+bin/
