@@ -46,6 +46,8 @@ public class Cluster implements Tickable {
     private int numProcesses = 3;
     private ClusterTopology topo;
     private MessageCodec messageCodec = new JsonMessageCodec();
+    private Network sharedNetwork;
+    private MessageBus sharedMessageBus;
 
     public Cluster withNumProcesses(int numProcesses) {
         this.numProcesses = numProcesses;
@@ -103,8 +105,8 @@ public class Cluster implements Tickable {
     }
 
     public <T extends ClusterClient> T newClient(ProcessId id, Cluster.ClientFactory<T> factory) throws IOException {
-        Network network = useSimulatedNetwork ? this.serverNodes.get(0).network: createNetwork(messageCodec);
-        MessageBus messageBus = useSimulatedNetwork ? this.serverNodes.get(0).messageBus: new MessageBus(network, messageCodec);
+        Network network = useSimulatedNetwork ? sharedNetwork: createNetwork(messageCodec);
+        MessageBus messageBus = useSimulatedNetwork ? sharedMessageBus: new MessageBus(network, messageCodec);
         T clusterClient = factory.create(id, serverProcessIds(), messageBus, messageCodec, 10000);
         clientNodes.add(new ClientNode(id, network, messageBus, clusterClient));
         return clusterClient;
@@ -112,7 +114,7 @@ public class Cluster implements Tickable {
 
     private Network createNetwork(MessageCodec messageCodec) throws IOException {
         //as of now creating simulated network with no packet loss or delay
-        return useSimulatedNetwork? new SimulatedNetwork(random, 0, 0)
+        return useSimulatedNetwork? SimulatedNetwork.noLossNetwork(random)
                 :NioNetwork.create(topo, messageCodec);
     }
 
@@ -220,8 +222,8 @@ public class Cluster implements Tickable {
         //we need to do some wiring at the network layer.
         //When we use a real NIO network, we can use different networks and messagebuses as
         //messages are routed with the real network layer.
-        Network sharedNetwork = createNetwork(messageCodec);
-        MessageBus sharedMessageBus = new MessageBus(sharedNetwork, messageCodec);
+        this.sharedNetwork = createNetwork(messageCodec);
+        this.sharedMessageBus = new MessageBus(sharedNetwork, messageCodec);
 
         for (int i = 0; i < processIds.size(); i++) {
             ProcessId processId = processIds.get(i);

@@ -17,8 +17,8 @@ import java.util.*;
 public class SimulatedNetwork extends Network {
 
     private final Random random;
-    private final int defaultDelayTicks;
-    private final double defaultPacketLossRate;
+    private int defaultDelayTicks;
+    private double defaultPacketLossRate;
 
     private final PriorityQueue<QueuedMessage> pendingMessages = new PriorityQueue<>();
 
@@ -45,7 +45,7 @@ public class SimulatedNetwork extends Network {
      * @param delayTicks     number of ticks to delay message delivery (0 = immediate)
      * @param packetLossRate probability [0.0-1.0] that a message will be lost
      */
-    public SimulatedNetwork(Random random, int delayTicks, double packetLossRate) {
+    private SimulatedNetwork(Random random, int delayTicks, double packetLossRate) {
         if (random == null) {
             throw new IllegalArgumentException("Random cannot be null");
         }
@@ -59,6 +59,25 @@ public class SimulatedNetwork extends Network {
         this.random = random;
         this.defaultDelayTicks = delayTicks;
         this.defaultPacketLossRate = packetLossRate;
+    }
+
+
+    public static SimulatedNetwork noLossNetwork(Random random) {
+        return new SimulatedNetwork(random, 0, 0);
+    }
+
+    public static SimulatedNetwork lossyNetwork(Random random,double packetLossRate) {
+        return new SimulatedNetwork(random, 0, packetLossRate);
+    }
+
+    public SimulatedNetwork withDelayTicks(int delayTicks) {
+        this.defaultDelayTicks = delayTicks;
+        return this;
+    }
+
+    public SimulatedNetwork withPacketLossRate(double packetLossRate) {
+        this.defaultPacketLossRate = packetLossRate;
+        return this;
     }
 
     @Override

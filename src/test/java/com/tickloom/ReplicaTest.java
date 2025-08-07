@@ -23,7 +23,7 @@ class ReplicaTest {
         Random random = new Random();
         JsonMessageCodec messageCodec = new JsonMessageCodec();
 
-        Network network = new SimulatedNetwork(random, timeoutTicks, 0.0);
+        Network network = SimulatedNetwork.noLossNetwork(random);
         MessageBus messageBus = new MessageBus(network, messageCodec);
 
         TestableReplica replica = new TestableReplica(ProcessId.of("test"), mutablePeers, messageBus, messageCodec, new SimulatedStorage(random), timeoutTicks);
@@ -40,7 +40,7 @@ class ReplicaTest {
         Random random = new Random();
         JsonMessageCodec messageCodec = new JsonMessageCodec();
 
-        Network network = new SimulatedNetwork(random, timeoutTicks, 0.0);
+        Network network = SimulatedNetwork.noLossNetwork(random);
         MessageBus messageBus = new MessageBus(network, messageCodec);
 
         TestableReplica replica = new TestableReplica(ProcessId.of("test"), List.of(), messageBus, messageCodec, new SimulatedStorage(random), timeoutTicks);
@@ -57,7 +57,7 @@ class ReplicaTest {
         Random random = new Random();
         JsonMessageCodec messageCodec = new JsonMessageCodec();
 
-        Network network = new SimulatedNetwork(random, timeoutTicks, 0.0);
+        Network network = SimulatedNetwork.noLossNetwork(random);
         MessageBus messageBus = new MessageBus(network, messageCodec);
 
         TestableReplica replica = new TestableReplica(ProcessId.of("test"), List.of(), messageBus, messageCodec, new SimulatedStorage(random), timeoutTicks);
@@ -79,7 +79,7 @@ class ReplicaTest {
         Random random = new Random();
         JsonMessageCodec messageCodec = new JsonMessageCodec();
 
-        Network network = new SimulatedNetwork(random, timeoutTicks, 0.0);
+        Network network = SimulatedNetwork.noLossNetwork(random);
         MessageBus messageBus = new MessageBus(network, messageCodec);
 
         TestableReplica replica = new TestableReplica(ProcessId.of("test"), List.of(ProcessId.of("node1"), ProcessId.of("node2")), messageBus, messageCodec, new SimulatedStorage(random), timeoutTicks);

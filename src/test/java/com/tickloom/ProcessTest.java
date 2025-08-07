@@ -16,7 +16,7 @@ class ProcessTest {
     @Test
     void registersItselfAsMessageHandler() {
         ProcessId pid = ProcessId.random();
-        Network network = new SimulatedNetwork(new Random(), 0, 0.0);
+        Network network = SimulatedNetwork.noLossNetwork(new Random());
         MessageBus messageBus = new MessageBus(network, new JsonMessageCodec());
         Process process = new Process(pid, messageBus) {
 

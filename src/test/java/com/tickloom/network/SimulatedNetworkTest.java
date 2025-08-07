@@ -27,7 +27,7 @@ public class SimulatedNetworkTest {
     void setUp() {
         seededRandom = new Random(12345L); // Fixed seed for deterministic tests
         messageDispatcher = new TestMessageDispatcher();
-        network = new SimulatedNetwork(seededRandom, 1, 0.0); // 1 tick delay, no packet loss
+        network = SimulatedNetwork.noLossNetwork(seededRandom).withDelayTicks(1); // 1 tick delay, no packet loss
         network.registerMessageDispatcher(messageDispatcher);
     }
 
@@ -110,7 +110,7 @@ public class SimulatedNetworkTest {
     void shouldSupportConfigurableDelay() {
         // Given - network with 2 tick delay
         TestMessageDispatcher delayedHandler = new TestMessageDispatcher();
-        SimulatedNetwork delayedNetwork = new SimulatedNetwork(seededRandom, 2, 0.0); // 2 tick delay, no packet loss
+        SimulatedNetwork delayedNetwork = SimulatedNetwork.noLossNetwork(seededRandom).withDelayTicks(2); // 2 tick delay, no packet loss
         delayedNetwork.registerMessageDispatcher(delayedHandler);
 
         ProcessId source = new ProcessId("192.168.1.1");
@@ -134,7 +134,7 @@ public class SimulatedNetworkTest {
     void shouldSimulatePacketLoss() {
         // Given - network with 100% packet loss
         TestMessageDispatcher lossyHandler = new TestMessageDispatcher();
-        SimulatedNetwork lossyNetwork = new SimulatedNetwork(seededRandom, 0, 1.0); // No delay, 100% packet loss
+        SimulatedNetwork lossyNetwork = SimulatedNetwork.lossyNetwork(new Random(), 1.0); // No delay, 100% packet loss
         lossyNetwork.registerMessageDispatcher(lossyHandler);
 
         ProcessId source = new ProcessId("192.168.1.1");
@@ -156,9 +156,9 @@ public class SimulatedNetworkTest {
         // Given - two networks with same seed
         Random seed1 = new Random(42L);
         Random seed2 = new Random(42L);
-        SimulatedNetwork network1 = new SimulatedNetwork(seed1, 1, 0.5 ); // 50% packet loss
+        SimulatedNetwork network1 = SimulatedNetwork.lossyNetwork(seed1,  0.5 ).withDelayTicks(1); // 50% packet loss
         network1.registerMessageDispatcher(handler1);
-        SimulatedNetwork network2 = new SimulatedNetwork(seed2, 1, 0.5); // 50% packet loss
+        SimulatedNetwork network2 = SimulatedNetwork.lossyNetwork(seed2,  0.5 ).withDelayTicks(1); // 50% packet loss
         network2.registerMessageDispatcher(handler2);
 
         ProcessId source = new ProcessId("192.168.1.1");
