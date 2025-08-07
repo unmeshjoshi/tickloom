@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -220,6 +221,15 @@ public class Cluster implements Tickable, AutoCloseable {
         ((SimulatedNetwork) sharedNetwork).partition(process1, process2);
     }
 
+    public void partitionNodes(NodeGroup from, NodeGroup to) {
+        ensureSimulatedNetwork();
+        for (ProcessId toProcess : to.processIds()) {
+            for (ProcessId fromProcess : from.processIds()) {
+                ((SimulatedNetwork) sharedNetwork).partition(fromProcess, toProcess);
+            }
+        }
+    }
+
 
 
     /**
@@ -378,6 +388,12 @@ public class Cluster implements Tickable, AutoCloseable {
         return getStorageValue(processId, key) != null;
     }
 
+
+    public boolean allNodeStoragesContainValue(byte[] key, byte[] expectedValue) {
+        return serverNodes.stream()
+            .allMatch(node -> storageContainsValue(node.id, key, expectedValue));
+    }
+
     /**
      * Asserts that a specific value exists in storage on a specific process.
      * 
@@ -392,6 +408,15 @@ public class Cluster implements Tickable, AutoCloseable {
             return false;
         }
         return java.util.Arrays.equals(actual.value(), expectedValue);
+    }
+
+    public void healAllPartitions() {
+        ensureSimulatedNetwork();
+        ((SimulatedNetwork) sharedNetwork).healAllPartitions();
+    }
+
+    public long getTimeForProcess(ProcessId processId) {
+        return processClocks.get(processId).now();
     }
 
     public interface ProcessFactory<T extends com.tickloom.Process> {

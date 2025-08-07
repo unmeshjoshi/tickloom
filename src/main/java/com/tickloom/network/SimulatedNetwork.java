@@ -206,6 +206,10 @@ public class SimulatedNetwork extends Network {
         partitionedLinks.add(new NetworkLink(source, destination));
     }
 
+    public void healAllPartitions() {
+        partitionedLinks.clear();
+    }
+
     public void healPartition(ProcessId source, ProcessId destination) {
         if (source == null || destination == null) {
             throw new IllegalArgumentException("Source and destination addresses cannot be null");
