@@ -10,8 +10,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 
+import static com.tickloom.testkit.ClusterAssertions.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -55,11 +57,11 @@ class NetworkPartitionTest {
             byte[] initialValue = "genesis_block".getBytes();
 
             ListenableFuture<SetResponse> initialSet = majorityClientConnectedWithCyrene.set(key, initialValue);
-            cluster.tickUntil(() -> initialSet.isCompleted());
+            assertEventually(cluster,() -> initialSet.isCompleted());
             assertTrue(initialSet.getResult().success(), "Initial write should succeed");
 
             // Verify all nodes have the initial data
-            assertTrue(cluster.allNodeStoragesContainValue(key, initialValue), "All nodes should have initial data");
+            assertAllNodeStoragesContainValue(cluster, key, initialValue);
 
             System.out.println("=== All nodes synchronized with initial data ===");
 
@@ -73,27 +75,22 @@ class NetworkPartitionTest {
             // Phase 3: Test minority partition - should fail due to lack of quorum
             byte[] minorityValue = "minority_attempt".getBytes();
             ListenableFuture<SetResponse> minorityWrite = minorityClientConnectedToAthens.set(key, minorityValue);
-            cluster.tickUntil(() -> minorityWrite.isFailed());
-
+            assertEventually(cluster,() -> minorityWrite.isFailed());
             // Check the actual status of the minority write
             boolean minorityWriteSucceeded = minorityWrite.isCompleted() && minorityWrite.getResult().success();
             System.out.println("Minority partition write succeeded: " + minorityWriteSucceeded);
 
+            assertNodesContainValue(cluster, Arrays.asList(athens, byzantium), key, minorityValue);
             // Check what value is actually in the minority nodes (regardless of client response)
-            assertTrue(cluster.storageContainsValue(athens, key, minorityValue));
-            assertTrue(cluster.storageContainsValue(byzantium, key, minorityValue));
 
             // Phase 4: Test majority partition - should succeed
             byte[] majorityValue = "majority_success".getBytes();
             ListenableFuture<SetResponse> majorityWrite = majorityClientConnectedWithCyrene.set(key, majorityValue);
-            cluster.tickUntil(() -> majorityWrite.isCompleted());
-            assertTrue(majorityWrite.getResult().success(), "Majority partition should succeed");
+            assertEventually(cluster,() ->
+                    majorityWrite.isCompleted() && majorityWrite.getResult().success()); // assertEventually(cluster,() -> majorityWrite.isCompleted());
 
             // Verify majority nodes have the new data
-            assertTrue(cluster.storageContainsValue(cyrene, key, majorityValue), "Cyrene should have majority value");
-            assertTrue(cluster.storageContainsValue(delphi, key, majorityValue), "Delphi should have majority value");
-            assertTrue(cluster.storageContainsValue(sparta, key, majorityValue), "Sparta should have majority value");
-
+            assertNodesContainValue(cluster, Arrays.asList(cyrene, delphi, sparta), key, majorityValue);
 
             // Phase 5: Heal the partition
             cluster.healAllPartitions();
@@ -102,8 +99,7 @@ class NetworkPartitionTest {
 
             // Phase 6: After healing, perform a read to see the final state
             ListenableFuture<GetResponse> healedRead = majorityClientConnectedWithCyrene.get(key);
-            cluster.tickUntil(() -> healedRead.isCompleted());
-            assertTrue(healedRead.getResult().found(), "Data should be retrievable after healing");
+            assertEventually(cluster,(() -> healedRead.isCompleted() && healedRead.getResult().found())); // assertEventually(cluster,() -> healedRead.getResult().found(), "Data should be retrievable after healing");
 
             // After healing, the system must resolve conflicts between the values written in the two partitions.
             // The quorum algorithm returns the majority value because it was written later than the minority value.
@@ -148,11 +144,11 @@ class NetworkPartitionTest {
             byte[] initialValue = "genesis_block".getBytes();
 
             ListenableFuture<SetResponse> initialSet = majorityClientConnectedWithCyrene.set(key, initialValue);
-            cluster.tickUntil(() -> initialSet.isCompleted());
+            assertEventually(cluster,() -> initialSet.isCompleted());
             assertTrue(initialSet.getResult().success(), "Initial write should succeed");
 
             // Verify all nodes have the initial data
-            assertTrue(cluster.allNodeStoragesContainValue(key, initialValue), "All nodes should have initial data");
+            assertAllNodeStoragesContainValue(cluster, key, initialValue);
 
             System.out.println("=== All nodes synchronized with initial data ===");
 
@@ -166,14 +162,13 @@ class NetworkPartitionTest {
             // Phase 3: Test minority partition - should fail due to lack of quorum
             byte[] minorityValue = "minority_attempt".getBytes();
             ListenableFuture<SetResponse> minorityWrite = minorityClientConnectedToAthens.set(key, minorityValue);
-            cluster.tickUntil(() -> minorityWrite.isFailed());
+            assertEventually(cluster,() -> minorityWrite.isFailed());
 
             assertTrue(minorityWrite.isFailed());
             System.out.println("Minority partition write failed.");
 
             // Check what value is actually in the minority nodes (regardless of client response)
-            assertTrue(cluster.storageContainsValue(athens, key, minorityValue));
-            assertTrue(cluster.storageContainsValue(byzantium, key, minorityValue));
+            assertNodesContainValue(cluster, List.of(athens, byzantium), key, minorityValue);
 
             // Phase 4: Test majority partition - should succeed
             byte[] majorityValue = "majority_success".getBytes();
@@ -185,14 +180,11 @@ class NetworkPartitionTest {
             //The value with lower timestamp will not be overwritten.
             cluster.setTimeForProcess(cyrene, cluster.getStorageValue(athens, key).timestamp() - 10);
             ListenableFuture<SetResponse> majorityWrite = majorityClientConnectedWithCyrene.set(key, majorityValue);
-            cluster.tickUntil(() -> majorityWrite.isCompleted());
-            assertTrue(majorityWrite.getResult().success(), "Majority partition should succeed");
+            assertEventually(cluster,() -> majorityWrite.isCompleted()
+                                        && majorityWrite.getResult().success());
 
             // Verify majority nodes have the new data
-            assertTrue(cluster.storageContainsValue(cyrene, key, majorityValue), "Cyrene should have majority value");
-            assertTrue(cluster.storageContainsValue(delphi, key, majorityValue), "Delphi should have majority value");
-            assertTrue(cluster.storageContainsValue(sparta, key, majorityValue), "Sparta should have majority value");
-
+            assertNodesContainValue(cluster, List.of(cyrene, delphi, sparta), key, majorityValue);
 
             // Phase 5: Heal the partition
             cluster.healAllPartitions();
@@ -201,7 +193,7 @@ class NetworkPartitionTest {
 
             // Phase 6: After healing, perform a read to see the final state
             ListenableFuture<GetResponse> healedRead = minorityClientConnectedToAthens.get(key);
-            cluster.tickUntil(() -> healedRead.isCompleted());
+            assertEventually(cluster,() -> healedRead.isCompleted());
             assertTrue(healedRead.getResult().found(), "Data should be retrievable after healing");
 
             // After healing, the system must resolve conflicts between the values written in the two partitions.
@@ -256,14 +248,14 @@ class NetworkPartitionTest {
             ListenableFuture<SetResponse> delayedWrite = client.set(key, value);
 
             // Allow enough ticks for the longest delay path
-            cluster.tickUntil(() -> delayedWrite.isCompleted());
+            assertEventually(cluster,() -> delayedWrite.isCompleted());
 
             assertTrue(delayedWrite.getResult().success(),
                     "Write should succeed despite network delays");
 
             // Verify read consistency
             ListenableFuture<GetResponse> delayedRead = client.get(key);
-            cluster.tickUntil(() -> delayedRead.isCompleted());
+            assertEventually(cluster,() -> delayedRead.isCompleted());
 
             assertTrue(delayedRead.getResult().found(), "Data should be retrievable");
             assertArrayEquals(value, delayedRead.getResult().value(), "Data should be consistent");

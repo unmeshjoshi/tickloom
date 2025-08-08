@@ -1,18 +1,20 @@
 package com.tickloom.network.integration;
 
 import com.tickloom.ProcessId;
-import com.tickloom.Tickable;
 import com.tickloom.config.ClusterTopology;
 import com.tickloom.messaging.Message;
 import com.tickloom.messaging.MessageType;
-import com.tickloom.network.*;
+import com.tickloom.network.InetAddressAndPort;
+import com.tickloom.network.PeerType;
 import com.tickloom.util.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;

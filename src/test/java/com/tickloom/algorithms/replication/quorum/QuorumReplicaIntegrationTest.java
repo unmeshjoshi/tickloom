@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
+import static com.tickloom.testkit.ClusterAssertions.assertEventually;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -36,15 +37,15 @@ public class QuorumReplicaIntegrationTest {
             System.out.println("Initial pending requests: " + client.getPendingRequestCount());
             assertTrue(setFuture.isPending(), "Set future should be pending initially");
 
-            cluster.tickUntil(() -> setFuture.isCompleted());
+            assertEventually(cluster,() -> setFuture.isCompleted());
             assertTrue(setFuture.isCompleted(), "Set operation should complete");
             SetResponse setResponse = setFuture.getResult();
             assertTrue(setResponse.success(), "Set operation should succeed");
             assertArrayEquals(key, setResponse.key(), "Response key should match request key");
 
             ListenableFuture<GetResponse> getFuture = client.get(key);
-            cluster.tickUntil(() -> getFuture.isCompleted());
-            assertTrue(getFuture.isCompleted(), "Get operation should complete");
+            assertEventually(cluster,() -> getFuture.isCompleted());
+
             GetResponse getResponse = getFuture.getResult();
             assertArrayEquals(key, getResponse.key(), "Response key should match request key");
             assertArrayEquals(value, getResponse.value(), "Response value should match request value");
@@ -69,20 +70,17 @@ public class QuorumReplicaIntegrationTest {
             System.out.println("Initial pending requests: " + client.getPendingRequestCount());
             assertTrue(setFuture.isPending(), "Set future should be pending initially");
 
-            cluster.tickUntil(() -> setFuture.isCompleted());
-            assertTrue(setFuture.isCompleted(), "Set operation should complete");
+            assertEventually(cluster,() -> setFuture.isCompleted());
+
             SetResponse setResponse = setFuture.getResult();
             assertTrue(setResponse.success(), "Set operation should succeed");
             assertArrayEquals(key, setResponse.key(), "Response key should match request key");
 
             ListenableFuture<GetResponse> getFuture = client.get(key);
-            cluster.tickUntil(() -> getFuture.isCompleted());
-            assertTrue(getFuture.isCompleted(), "Get operation should complete");
+            assertEventually(cluster,() -> getFuture.isCompleted());
             GetResponse getResponse = getFuture.getResult();
             assertArrayEquals(key, getResponse.key(), "Response key should match request key");
             assertArrayEquals(value, getResponse.value(), "Response value should match request value");
         }
     }
-
-
 }

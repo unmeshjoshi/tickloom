@@ -17,6 +17,7 @@ import com.tickloom.util.StubClock;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -56,7 +57,6 @@ public class Cluster implements Tickable, AutoCloseable {
     private MessageCodec messageCodec = new JsonMessageCodec();
     private Network sharedNetwork;
     private MessageBus sharedMessageBus;
-    private int DEFAULT_TIMEOUT_TICKS = 10000;
 
     public Cluster withNumProcesses(int numProcesses) {
         this.numProcesses = numProcesses;
@@ -104,19 +104,6 @@ public class Cluster implements Tickable, AutoCloseable {
         this.customProcessIds = processIds;
         this.numProcesses = processIds.size(); // Override numProcesses
         return this;
-    }
-
-
-
-    public void tickUntil(Supplier<Boolean> p) {
-        int tickCount = 0;
-        while (!p.get()) {
-            if (tickCount > DEFAULT_TIMEOUT_TICKS) {
-                fail("Timeout waiting for condition to be met.");
-            }
-            tick();
-            tickCount++;
-        }
     }
 
     public void close() {
@@ -375,39 +362,6 @@ public class Cluster implements Tickable, AutoCloseable {
         }
         
         return future.getResult();
-    }
-
-    /**
-     * Checks if a specific key exists in storage on a specific process.
-     * 
-     * @param processId the ID of the process
-     * @param key the key to check
-     * @return true if the key exists, false otherwise
-     */
-    public boolean storageContainsKey(ProcessId processId, byte[] key) {
-        return getStorageValue(processId, key) != null;
-    }
-
-
-    public boolean allNodeStoragesContainValue(byte[] key, byte[] expectedValue) {
-        return serverNodes.stream()
-            .allMatch(node -> storageContainsValue(node.id, key, expectedValue));
-    }
-
-    /**
-     * Asserts that a specific value exists in storage on a specific process.
-     * 
-     * @param processId the ID of the process
-     * @param key the key to check
-     * @param expectedValue the expected value
-     * @return true if the value matches, false otherwise
-     */
-    public boolean storageContainsValue(ProcessId processId, byte[] key, byte[] expectedValue) {
-        VersionedValue actual = getStorageValue(processId, key);
-        if (actual == null) {
-            return false;
-        }
-        return java.util.Arrays.equals(actual.value(), expectedValue);
     }
 
     public void healAllPartitions() {
