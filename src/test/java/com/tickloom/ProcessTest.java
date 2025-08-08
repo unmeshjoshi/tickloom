@@ -19,7 +19,7 @@ class ProcessTest {
         ProcessId pid = ProcessId.random();
         Network network = SimulatedNetwork.noLossNetwork(new Random());
         MessageBus messageBus = new MessageBus(network, new JsonMessageCodec());
-        Process process = new Process(pid, messageBus, new SystemClock()) {
+        Process process = new Process(pid, messageBus, null, 1, new SystemClock()) {
 
             @Override
             public void onMessageReceived(Message message) {
@@ -27,7 +27,7 @@ class ProcessTest {
             }
 
             @Override
-            public void tick() {
+            public void onTick() {
 
             }
         };

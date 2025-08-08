@@ -14,69 +14,16 @@ import java.util.function.BiFunction;
 
 public abstract class Replica extends Process {
     protected final List<ProcessId> peerIds;
-    protected final MessageCodec messageCodec;
     protected final Storage storage;
-    protected final int requestTimeoutTicks;
-    protected final RequestWaitingList waitingList;
     // Request tracking infrastructure
     protected final AtomicLong requestIdGenerator = new AtomicLong(0);
     
     public Replica(ProcessId id, List<ProcessId> peerIds, MessageBus messageBus, MessageCodec messageCodec, Storage storage, Clock clock, int requestTimeoutTicks) {
-        super(id, messageBus, clock);
+        super(id, messageBus, messageCodec, requestTimeoutTicks, clock);
         this.peerIds = List.copyOf(peerIds);
-        this.messageCodec = messageCodec;
         this.storage = storage;
-        this.waitingList = new RequestWaitingList<>(requestTimeoutTicks);
-        this.requestTimeoutTicks = requestTimeoutTicks;
     }
 
-    /**
-     * Common tick() processing for all replica types.
-     * This handles infrastructure concerns like storage ticks and timeouts.
-     * Subclasses can override to add specific logic.
-     */
-    public void tick() {
-        if (messageBus == null || storage == null) {
-            return;
-        }
-
-        // Tick the main timeout object
-        waitingList.tick();
-
-
-        // Allow subclasses to perform additional tick processing
-        onTick();
-    }
-
-    /**
-     * Hook method for subclasses to perform additional tick processing.
-     * This is called after common timeout handling.
-     */
-    protected void onTick() {
-        // Subclasses can override to add specific tick processing
-    }
-
-    /**
-     * Generates a unique request ID for this replica.
-     */
-    protected String generateRequestId() {
-        return id.name() + "-" + requestIdGenerator.incrementAndGet();
-    }
-
-
-    /**
-     * Serializes a payload object to bytes.
-     */
-    protected byte[] serializePayload(Object payload) {
-        return messageCodec.encode(payload);
-    }
-
-    /**
-     * Deserializes bytes to a payload object.
-     */
-    protected <T> T deserializePayload(byte[] data, Class<T> type) {
-        return messageCodec.decode(data, type);
-    }
 
     @Override
     public String toString() {
@@ -86,13 +33,14 @@ public abstract class Replica extends Process {
                 '}';
     }
 
+
     /**
-     * Generates a unique correlation ID for internal messages.
+     * Generates a unique correlation ID for internal messages
+     * for replica to replica communication.
      */
-    private String generateCorrelationId() {
+    private String internalCorrelationId() {
         return Utils.generateCorrelationId("internal");
     }
-
     /**
      * Gets all nodes in the cluster (peers + self).
      */
@@ -109,8 +57,8 @@ public abstract class Replica extends Process {
     protected <T> void broadcastToAllReplicas(AsyncQuorumCallback<T> quorumCallback,
                                               BiFunction<ProcessId, String, Message> messageBuilder)  {
         for (ProcessId node : getAllNodes()) {
-            String internalCorrelationId = generateCorrelationId();
-            waitingList.add(internalCorrelationId, quorumCallback);
+            String internalCorrelationId = internalCorrelationId();
+            waitingList.add(internalCorrelationId, (RequestCallback<Object>) quorumCallback);
 
             Message internalMessage = messageBuilder.apply(node, internalCorrelationId);
             send(internalMessage);

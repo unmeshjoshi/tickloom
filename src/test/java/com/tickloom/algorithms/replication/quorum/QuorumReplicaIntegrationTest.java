@@ -3,7 +3,6 @@ package com.tickloom.algorithms.replication.quorum;
 import com.tickloom.ProcessId;
 import com.tickloom.testkit.Cluster;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

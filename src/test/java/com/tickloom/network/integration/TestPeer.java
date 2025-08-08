@@ -21,14 +21,12 @@ import java.util.List;
 class TestPeer extends com.tickloom.Process implements Tickable, AutoCloseable {
     protected final NioNetwork network;
     private final ClusterTopology topology;
-    private final MessageCodec codec;
     protected final List<Message> receivedMessages = new ArrayList<>();
 
     protected TestPeer(ProcessId id, MessageBus messageBus, NioNetwork network, ClusterTopology topology, MessageCodec codec) {
-        super(id, messageBus, new SystemClock());
+        super(id, messageBus, codec, 1, new SystemClock());
         this.network = network;
         this.topology = topology;
-        this.codec = codec;
     }
 
     @Override
@@ -41,7 +39,8 @@ class TestPeer extends com.tickloom.Process implements Tickable, AutoCloseable {
         //subclasses can do something more than just storing the received message.
     }
 
-    public void tick() {
+    @Override
+    public void onTick() {
         messageBus.tick();
         network.tick();
     }

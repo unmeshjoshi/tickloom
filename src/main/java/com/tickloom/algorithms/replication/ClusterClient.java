@@ -15,31 +15,20 @@ import java.util.List;
 public abstract class ClusterClient extends Process {
     
     protected final List<ProcessId> replicaEndpoints;
-    protected final MessageCodec messageCodec;
-    protected final RequestWaitingList<String, Object> pendingRequests;
-    protected final int timeoutTicks;
-    
+
     public ClusterClient(ProcessId clientId, List<ProcessId> replicaEndpoints,
                          MessageBus messageBus, MessageCodec messageCodec,
                          Clock clock, int timeoutTicks) {
-        super(clientId, messageBus, clock);
+        super(clientId, messageBus, messageCodec, timeoutTicks, clock);
         this.replicaEndpoints = List.copyOf(replicaEndpoints);
-        this.messageCodec = messageCodec;
-        this.timeoutTicks = timeoutTicks;
-        this.pendingRequests = new RequestWaitingList<>(timeoutTicks);
     }
-    
-    @Override
-    public void tick() {
-        pendingRequests.tick();
-    }
-    
+
     public List<ProcessId> getReplicaEndpoints() {
         return replicaEndpoints;
     }
     
     public int getPendingRequestCount() {
-        return pendingRequests.size();
+        return waitingList.size();
     }
     
     protected <T> ListenableFuture<T> sendRequest(Object request, ProcessId destination, 
@@ -48,7 +37,7 @@ public abstract class ClusterClient extends Process {
         ListenableFuture<T> future = new ListenableFuture<>();
         
         RequestCallback<Object> callback = createCallback(future);
-        pendingRequests.add(correlationId, callback);
+        waitingList.add(correlationId, callback);
         
         Message message = createMessage(request, correlationId, destination, messageType);
         sendMessageOrHandleError(message, correlationId);
@@ -57,11 +46,11 @@ public abstract class ClusterClient extends Process {
     }
     
     protected void handleResponse(String correlationId, Object response, ProcessId fromNode) {
-        pendingRequests.handleResponse(correlationId, response, fromNode);
+        waitingList.handleResponse(correlationId, response, fromNode);
     }
     
     protected void handleError(String correlationId, Exception error) {
-        pendingRequests.handleError(correlationId, error);
+        waitingList.handleError(correlationId, error);
     }
     
     protected Message createMessage(Object request, String correlationId, 
@@ -74,7 +63,7 @@ public abstract class ClusterClient extends Process {
         try {
             messageBus.sendMessage(message);
         } catch (IOException e) {
-            pendingRequests.handleError(correlationId, e);
+            waitingList.handleError(correlationId, e);
         }
     }
     

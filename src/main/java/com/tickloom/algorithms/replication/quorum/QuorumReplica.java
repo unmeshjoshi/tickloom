@@ -5,11 +5,11 @@ import com.tickloom.Replica;
 import com.tickloom.future.ListenableFuture;
 import com.tickloom.messaging.*;
 import com.tickloom.network.MessageCodec;
+import com.tickloom.network.PeerType;
 import com.tickloom.storage.Storage;
 import com.tickloom.storage.VersionedValue;
 import com.tickloom.util.Clock;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -41,6 +41,9 @@ public class QuorumReplica extends Replica {
             handleInternalGetResponse(message);
         } else if (messageType.equals(QuorumMessageTypes.INTERNAL_SET_RESPONSE)) {
             handleInternalSetResponse(message);
+        } else {
+            // Unknown message type
+            System.out.println("QuorumReplica: Received unknown message type: " + messageType);
         }
         // else ignore unknown message types
     }
@@ -48,22 +51,22 @@ public class QuorumReplica extends Replica {
     // Client request handlers
 
     private void handleClientGetRequest(Message message) {
-        String correlationId = message.correlationId();
-        GetRequest clientRequest = deserializePayload(message.payload(), GetRequest.class);
-        ProcessId clientId = message.source();
+        var correlationId = message.correlationId();
+        var clientRequest = deserializePayload(message.payload(), GetRequest.class);
+        var clientId = message.source();
 
         logIncomingGetRequest(clientRequest, correlationId, clientId);
 
         var quorumCallback = createGetQuorumCallback();
-        quorumCallback.onSuccess(responses -> sendSuccessGetResponse(clientRequest, correlationId, clientId, responses))
-                .onFailure(error -> sendFailureGetResponse(clientRequest, correlationId, clientId, error));
+        quorumCallback
+                .onSuccess(
+                        responses -> sendSuccessGetResponse(clientRequest, correlationId, clientId, responses))
+                .onFailure(
+                        error -> sendFailureGetResponse(clientRequest, correlationId, clientId, error));
 
         broadcastToAllReplicas(quorumCallback, (node, internalCorrelationId) -> {
-            InternalGetRequest internalRequest = new InternalGetRequest(clientRequest.key(), internalCorrelationId);
-            return Message.of(
-                    id, node, message.peerType(), QuorumMessageTypes.INTERNAL_GET_REQUEST,
-                    serializePayload(internalRequest), internalCorrelationId
-            );
+            var internalRequest = new InternalGetRequest(clientRequest.key(), internalCorrelationId);
+            return createMessage(node, internalCorrelationId, internalRequest, QuorumMessageTypes.INTERNAL_GET_REQUEST);
         });
     }
 
@@ -90,10 +93,7 @@ public class QuorumReplica extends Replica {
                 latestValue != null ? latestValue.value() : null,
                 latestValue != null);
 
-        Message responseMessage = Message.of(
-                id, clientAddr, com.tickloom.network.PeerType.SERVER, QuorumMessageTypes.CLIENT_GET_RESPONSE,
-                serializePayload(response), correlationId
-        );
+        Message responseMessage = createMessage(clientAddr, correlationId, response, QuorumMessageTypes.CLIENT_GET_RESPONSE);
 
         send(responseMessage);
     }
@@ -103,10 +103,7 @@ public class QuorumReplica extends Replica {
 
         GetResponse response = new GetResponse(req.key(), null, false);
 
-        Message responseMessage = Message.of(
-                id, clientAddr, com.tickloom.network.PeerType.SERVER, QuorumMessageTypes.CLIENT_GET_RESPONSE,
-                serializePayload(response), correlationId
-        );
+        Message responseMessage = createMessage(clientAddr, correlationId, response, QuorumMessageTypes.CLIENT_GET_RESPONSE);
 
         send(responseMessage);
     }
@@ -136,10 +133,7 @@ public class QuorumReplica extends Replica {
         broadcastToAllReplicas(quorumCallback, (node, internalCorrelationId) -> {
             InternalSetRequest internalRequest = new InternalSetRequest(
                     clientRequest.key(), clientRequest.value(), timestamp, internalCorrelationId);
-            return Message.of(
-                    id, node, message.peerType(), QuorumMessageTypes.INTERNAL_SET_REQUEST,
-                    serializePayload(internalRequest), internalCorrelationId
-            );
+            return createMessage(node, internalCorrelationId, internalRequest, QuorumMessageTypes.INTERNAL_SET_REQUEST);
         });
     }
 
@@ -161,10 +155,7 @@ public class QuorumReplica extends Replica {
 
         SetResponse response = new SetResponse(req.key(), true);
 
-        Message responseMessage = Message.of(
-                id, clientAddr, com.tickloom.network.PeerType.SERVER, QuorumMessageTypes.CLIENT_SET_RESPONSE,
-                serializePayload(response), correlationId
-        );
+        Message responseMessage = createMessage(clientAddr, correlationId, response, QuorumMessageTypes.CLIENT_SET_RESPONSE);
 
         send(responseMessage);
     }
@@ -174,10 +165,7 @@ public class QuorumReplica extends Replica {
 
         SetResponse response = new SetResponse(req.key(), false);
 
-        Message responseMessage = Message.of(
-                id, clientAddr, com.tickloom.network.PeerType.SERVER, QuorumMessageTypes.CLIENT_SET_RESPONSE,
-                serializePayload(response), correlationId
-        );
+        Message responseMessage = createMessage(clientAddr, correlationId, response, QuorumMessageTypes.CLIENT_SET_RESPONSE);
 
         send(responseMessage);
     }
@@ -228,10 +216,7 @@ public class QuorumReplica extends Replica {
         logInternalGetResponse(value, error, getRequest);
         //value will be null if not found or error
         InternalGetResponse response = new InternalGetResponse(getRequest.key(), value, getRequest.correlationId());
-        Message responseMessage = Message.of(
-                id, incomingMessage.source(), incomingMessage.peerType(), QuorumMessageTypes.INTERNAL_GET_RESPONSE,
-                serializePayload(response), getRequest.correlationId()
-        );
+        Message responseMessage = createResponseMessage(incomingMessage, response, QuorumMessageTypes.INTERNAL_GET_RESPONSE);
 
 
         send(responseMessage);
@@ -269,10 +254,7 @@ public class QuorumReplica extends Replica {
 
         InternalSetResponse response = new InternalSetResponse(setRequest.key(), success, setRequest.correlationId());
         //success will be false if error
-        Message responseMessage = Message.of(
-                id, message.source(), message.peerType(), QuorumMessageTypes.INTERNAL_SET_RESPONSE,
-                serializePayload(response), setRequest.correlationId()
-        );
+        Message responseMessage = createResponseMessage(message, response, QuorumMessageTypes.INTERNAL_SET_RESPONSE);
 
         send(responseMessage);
 
