@@ -5,6 +5,8 @@ plugins {
     id 'signing'
 }
 
+import org.gradle.plugins.signing.Sign
+
 group = 'com.github.tickloom'
 version = '0.1.0-alpha.1'
 
@@ -70,8 +72,7 @@ task shadowClientJar(type: com.github.jengelman.gradle.plugins.shadow.tasks.Shad
     }
 }
 
-// Make the shadowJar task depend on the jar task
-jar.dependsOn shadowJar
+// Do not tie library jar to shaded apps; keep shadow artifacts separate from the published library
 
 test {
     useJUnitPlatform()
@@ -174,26 +175,36 @@ task inspectData {
 }
 
 // --- Publishing -------------------------------------------------------------
+
+// Your project's coordinates
+group = 'io.github.unmeshjoshi' // Change to your chosen group ID
+version = '0.1.0-alpha.1'
+
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+// Relax doclint to avoid failing the build on missing Javadoc and minor issues
+tasks.withType(Javadoc) {
+    options.addStringOption('Xdoclint:none', '-quiet')
+}
+
 publishing {
     publications {
         mavenJava(MavenPublication) {
             from components.java
-            groupId = project.group
-            artifactId = 'tickloom-core'
-            version = project.version
-            
+
             pom {
-                name = 'tickloom'
-                description = 'a deterministic single‑thread tick engine for distributed systems.'
-                url = 'https://github.com/unmeshjoshi/tickloom'
-                
+                name = 'TickLoom'
+                description = 'A library for building distributed systems.'
+                url = 'https://github.com/unmeshjoshi/tickloom' // Change to your project's URL
                 licenses {
                     license {
-                        name = 'MIT License'
-                        url = 'https://opensource.org/licenses/MIT'
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
                     }
                 }
-                
                 developers {
                     developer {
                         id = 'unmeshjoshi'
@@ -201,47 +212,163 @@ publishing {
                         email = 'unmeshjoshi@gmail.com'
                     }
                 }
-                
                 scm {
-                    connection = 'scm:git:git://github.com/unmeshjoshi/tickloom.git'
-                    developerConnection = 'scm:git:ssh://github.com:unmeshjoshi/tickloom.git'
-                    url = 'https://github.com/unmeshjoshi/tickloom'
+                    connection = 'scm:git:git://github.com/unmeshjoshi/tickloom.git' // Change to your repo's URL
+                    developerConnection = 'scm:git:ssh://github.com/unmeshjoshi/tickloom.git' // Change to your repo's URL
+                    url = 'https://github.com/unmeshjoshi/tickloom' // Change to your project's URL
                 }
             }
         }
     }
     repositories {
-        mavenLocal()
-        
-        // Maven Central (requires signing and proper credentials)
         maven {
-            name = 'OSSRH'
-            url = 'https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/'
+            name = "OSSRH"
+            url = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
             credentials {
-                username = findProperty('ossrhUsername') ?: System.getenv('OSSRH_USERNAME')
-                password = findProperty('ossrhPassword') ?: System.getenv('OSSRH_PASSWORD')
-            }
-        }
-        
-        // Snapshot repository
-        maven {
-            name = 'OSSRH-Snapshots'
-            url = 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
-            credentials {
-                username = findProperty('ossrhUsername') ?: System.getenv('OSSRH_USERNAME')
-                password = findProperty('ossrhPassword') ?: System.getenv('OSSRH_PASSWORD')
+                username = (findProperty("ossrhUsername") ?: System.getenv("OSSRH_USERNAME"))
+                password = (findProperty("ossrhPassword") ?: System.getenv("OSSRH_PASSWORD"))
             }
         }
     }
 }
 
-// Signing configuration for Maven Central
 signing {
-    def signingKey = findProperty('signingKey') ?: System.getenv('SIGNING_KEY')
-    def signingPassword = findProperty('signingPassword') ?: System.getenv('SIGNING_PASSWORD')
-    
-    if (signingKey && signingPassword) {
-        useInMemoryPgpKeys(signingKey, signingPassword)
-        sign publishing.publications.mavenJava
+    // Support both env vars and Gradle properties for in-memory PGP keys
+    def signingKey = System.getenv("OSSRH_GPG_SECRET_KEY") ?: findProperty("signingKey")
+    // Also support reading key from a file to avoid newline escaping issues
+    def signingKeyFilePath = System.getenv("OSSRH_GPG_SECRET_KEY_FILE") ?: findProperty("signingKeyFile")
+    if (!signingKey && signingKeyFilePath) {
+        def f = file(signingKeyFilePath.toString())
+        if (f.exists()) {
+            signingKey = f.getText('UTF-8')
+        } else {
+            println "Signing key file not found: ${f}"
+        }
     }
+    def signingPassword = System.getenv("OSSRH_GPG_SECRET_KEY_PASSWORD") ?: findProperty("signingPassword")
+
+    // Only configure signing if keys are present. This avoids failures for local builds.
+    if (signingKey && signingPassword) {
+        useInMemoryPgpKeys(signingKey.toString(), signingPassword.toString())
+        sign publishing.publications.mavenJava
+    } else if (findProperty("signing.keyId") && findProperty("signing.password") && findProperty("signing.secretKeyRingFile")) {
+        // Fall back to classic keyring-based signing if configured via Gradle properties
+        sign publishing.publications.mavenJava
+    } else {
+        println "Signing disabled: PGP key not configured (set OSSRH_GPG_SECRET_KEY and OSSRH_GPG_SECRET_KEY_PASSWORD or Gradle signingKey/signingPassword)."
+    }
+}
+
+// --- Central Portal bundle ----------------------------------------------------
+
+// Verify that signing is configured (Central requires .asc signatures)
+tasks.register('verifyCentralSigning') {
+    group = 'verification'
+    doLast {
+        def skip = (findProperty('skipCentralSigningCheck')?.toString() == 'true')
+        if (!skip) {
+            def hasInMemory = (System.getenv('OSSRH_GPG_SECRET_KEY') ?: findProperty('signingKey')) && (System.getenv('OSSRH_GPG_SECRET_KEY_PASSWORD') ?: findProperty('signingPassword'))
+            def hasKeyring = findProperty('signing.keyId') && findProperty('signing.password') && findProperty('signing.secretKeyRingFile')
+            if (!(hasInMemory || hasKeyring)) {
+                throw new GradleException('Signing not configured. Set signingKey/signingPassword or signing.keyId/signing.password/signing.secretKeyRingFile. To bypass for testing, run with -PskipCentralSigningCheck=true')
+            }
+        } else {
+            println 'Skipping central signing verification (-PskipCentralSigningCheck=true)'
+        }
+    }
+}
+
+// Package a bundle zip in Maven repository layout for Central Portal upload
+tasks.register('prepareCentralBundle') {
+    group = 'distribution'
+    description = 'Stages artifacts and signatures into build/central-bundle in Maven repo layout.'
+    dependsOn 'assemble', 'sourcesJar', 'javadocJar', 'generatePomFileForMavenJavaPublication'
+    // If the signing task exists (i.e., signing is configured), ensure signatures are produced
+    if (tasks.findByName('signMavenJavaPublication') != null) {
+        dependsOn 'signMavenJavaPublication'
+    }
+    doLast {
+        def artifactId = project.name
+        def versionStr = project.version.toString()
+        def groupPath = project.group.toString().replace('.', '/')
+        def targetDir = file("${buildDir}/central-bundle/${groupPath}/${artifactId}/${versionStr}")
+        targetDir.mkdirs()
+
+        def pomSrc = file("${buildDir}/publications/mavenJava/pom-default.xml")
+        def pomAscSrc = file("${buildDir}/publications/mavenJava/pom-default.xml.asc")
+        def jarSrc = tasks.jar.archiveFile.get().asFile
+        def sourcesSrc = tasks.sourcesJar.archiveFile.get().asFile
+        def javadocSrc = tasks.javadocJar.archiveFile.get().asFile
+        // Find signatures; prefer publications, fallback to libs
+        def jarAscCandidates = [
+                file("${buildDir}/publications/mavenJava/${artifactId}-${versionStr}.jar.asc"),
+                file("${buildDir}/libs/${artifactId}-${versionStr}.jar.asc")
+        ]
+        def sourcesAscCandidates = [
+                file("${buildDir}/publications/mavenJava/${artifactId}-${versionStr}-sources.jar.asc"),
+                file("${buildDir}/libs/${artifactId}-${versionStr}-sources.jar.asc")
+        ]
+        def javadocAscCandidates = [
+                file("${buildDir}/publications/mavenJava/${artifactId}-${versionStr}-javadoc.jar.asc"),
+                file("${buildDir}/libs/${artifactId}-${versionStr}-javadoc.jar.asc")
+        ]
+
+        copy { from(pomSrc); into(targetDir); rename { "${artifactId}-${versionStr}.pom" } }
+        if (pomAscSrc.exists()) { copy { from(pomAscSrc); into(targetDir); rename { "${artifactId}-${versionStr}.pom.asc" } } }
+
+        copy { from(jarSrc); into(targetDir) }
+        copy { from(sourcesSrc); into(targetDir) }
+        copy { from(javadocSrc); into(targetDir) }
+
+        [jarAscCandidates, sourcesAscCandidates, javadocAscCandidates].each { List<File> candidates ->
+            def found = candidates.find { it.exists() }
+            if (found) { copy { from(found); into(targetDir) } }
+        }
+
+        // Generate MD5 and SHA1 checksums required by Central validation
+        def filesNeedingChecksums = [
+                new File(targetDir, "${artifactId}-${versionStr}.pom"),
+                new File(targetDir, "${artifactId}-${versionStr}.jar"),
+                new File(targetDir, "${artifactId}-${versionStr}-sources.jar"),
+                new File(targetDir, "${artifactId}-${versionStr}-javadoc.jar")
+        ]
+
+        def computeDigestHex = { File f, String algo ->
+            def md = java.security.MessageDigest.getInstance(algo)
+            f.withInputStream { is ->
+                byte[] buf = new byte[8192]
+                int read
+                while ((read = is.read(buf)) != -1) {
+                    md.update(buf, 0, read)
+                }
+            }
+            return md.digest().collect { String.format('%02x', it) }.join()
+        }
+
+        filesNeedingChecksums.each { File f ->
+            if (f.exists()) {
+                def md5 = computeDigestHex(f, 'MD5')
+                def sha1 = computeDigestHex(f, 'SHA-1')
+                new File(f.parentFile, f.name + '.md5').text = md5
+                new File(f.parentFile, f.name + '.sha1').text = sha1
+            } else {
+                logger.warn("Central bundle: missing expected file ${f.name} when generating checksums")
+            }
+        }
+    }
+}
+
+tasks.register('createCentralBundle', Zip) { z ->
+    group = 'distribution'
+    description = 'Creates a bundle ZIP (Maven repo layout) for upload to Central Portal.'
+    dependsOn 'prepareCentralBundle'
+
+    def artifactId = project.name
+    def versionStr = project.version.toString()
+    def groupPath = project.group.toString().replace('.', '/')
+
+    archiveBaseName.set("${artifactId}-${versionStr}-bundle")
+    destinationDirectory.set(layout.buildDirectory.dir('distributions'))
+
+    from(layout.buildDirectory.dir('central-bundle')) { include("${groupPath}/**") }
 }

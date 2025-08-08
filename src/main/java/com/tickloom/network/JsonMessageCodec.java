@@ -19,6 +19,10 @@ import java.io.IOException;
 public class JsonMessageCodec implements MessageCodec {
     private final ObjectMapper objectMapper;
 
+    /**
+     * Creates a new {@link JsonMessageCodec} configured with custom serializers
+     * for project-specific types.
+     */
     public JsonMessageCodec() {
         this.objectMapper = new ObjectMapper();
         

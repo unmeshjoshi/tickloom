@@ -109,7 +109,7 @@ public class SimulatedNetwork extends Network {
      * <p>
      * Timing Mechanics:
      * 1. Increments internal currentTick counter
-     * 2. Processes all messages whose deliveryTick <= currentTick
+     * 2. Processes all messages whose {@code deliveryTick <= currentTick}
      * 3. Moves processed messages from pendingMessages to deliveredMessages
      * 4. Messages become available via receive() after processing
      * <p>
@@ -121,8 +121,8 @@ public class SimulatedNetwork extends Network {
      * <p>
      * Example Timeline:
      * Tick 0: send(message) with 2-tick delay -> queued for delivery at tick 2
-     * Tick 1: tick() -> currentTick = 1, message not delivered (1 < 2)
-     * Tick 2: tick() -> currentTick = 2, message delivered (2 <= 2)
+     * Tick 1: tick() -> currentTick = 1, message not delivered ({@code 1 < 2})
+     * Tick 2: tick() -> currentTick = 2, message delivered ({@code 2 <= 2})
      * Tick 2: receive() -> returns the delivered message
      * <p>
      * This method must be called by the simulation master thread in the correct

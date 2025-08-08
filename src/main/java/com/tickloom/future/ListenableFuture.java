@@ -43,6 +43,12 @@ public class ListenableFuture<T> {
         return state == State.FAILED;
     }
 
+    /**
+     * Returns the completed result.
+     *
+     * @return the result value
+     * @throws IllegalStateException if the future is not successfully completed
+     */
     public T getResult() {
         if (state != State.COMPLETED) {
             throw new IllegalStateException("Future is not completed successfully");
@@ -50,6 +56,12 @@ public class ListenableFuture<T> {
         return result;
     }
 
+    /**
+     * Returns the failure exception.
+     *
+     * @return the exception that caused the failure
+     * @throws IllegalStateException if the future has not failed
+     */
     public Throwable getException() {
         if (state != State.FAILED) {
             throw new IllegalStateException("Future has not failed");

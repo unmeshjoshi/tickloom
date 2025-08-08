@@ -1,3 +1,27 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# Gradle
+.gradle/
+build/
+
+# IDEs/editors
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+.vscode/
+
+# Logs
+*.log
+
+# Misc
+ehthumbs.db
+Thumbs.db
 # Ignore Gradle project-specific cache directory
 .gradle
 

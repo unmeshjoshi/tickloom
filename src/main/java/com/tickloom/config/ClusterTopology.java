@@ -8,10 +8,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * A class that represents the cluster layout of processes in a distributed system.
- * @ProcessConfig provides the configuration for each process. As of now
- * this is only the IP and port, but in future it can also include stuff like
- * rack, datacenter, region
+ * Represents the cluster layout of processes in a distributed system.
+ * Each process is described by a {@link ProcessConfig}.
+ * <p>
+ * Currently it captures network coordinates (IP and port); in the future it
+ * may include additional placement attributes such as rack, datacenter, and region.
  */
 public class ClusterTopology {
     Map<ProcessId, ProcessConfig> processConfigs = new HashMap<>();
