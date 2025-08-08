@@ -67,11 +67,6 @@ public abstract class Replica extends Process {
 
     protected void send(Message responseMessage) {
         try {
-            //if it's a self message immediately process
-            if (responseMessage.destination().equals(id)) {
-                receiveMessage(responseMessage);
-                return;
-            }
             messageBus.sendMessage(responseMessage);
         } catch (IOException e) {
             System.err.println("QuorumReplica: Failed to send response: " + e.getMessage());

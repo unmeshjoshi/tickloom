@@ -2,7 +2,6 @@ package com.tickloom.algorithms.replication.quorum;
 
 import com.tickloom.ProcessId;
 import com.tickloom.testkit.Cluster;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -13,10 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class QuorumReplicaIntegrationTest {
-    @BeforeEach
-    void setUp() {
-    }
-
     @Test
     public void testSetAndGetRequestWithSimulatedNetwork() throws IOException {
         var key = "test-key".getBytes();

@@ -1,5 +1,6 @@
 package com.tickloom.messaging;
 
+import com.tickloom.Process;
 import com.tickloom.ProcessId;
 import com.tickloom.Tickable;
 import com.tickloom.network.MessageDispatcher;
@@ -54,7 +55,17 @@ public class MessageBus implements MessageDispatcher, Tickable, AutoCloseable {
             throw new IllegalArgumentException("Message cannot be null");
         }
 
+        if (isSelfMessage(message)) {
+            Process self = processMessageHandlers.get(message.destination());
+            self.receiveMessage(message);
+            return;
+        }
+
         network.send(message);
+    }
+
+    private static boolean isSelfMessage(Message message) {
+        return message.source().equals(message.destination());
     }
 
     public void register(com.tickloom.Process process) {
@@ -65,11 +76,7 @@ public class MessageBus implements MessageDispatcher, Tickable, AutoCloseable {
     /**
      * Callback method that receives messages from the network.
      * This is called by the network when messages are available.
-     * <p>
-     * Routing Priority:
-     * 1. Check correlation ID first (client response pattern)
-     * 2. Fall back to address routing (server request pattern)
-     * 3. Log unroutable messages (no crash)
+     * The MessageBus is responsible for routing messages to the correct process.
      */
     @Override
     public void onMessage(Message message) {
