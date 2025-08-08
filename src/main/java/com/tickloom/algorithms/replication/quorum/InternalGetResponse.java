@@ -8,10 +8,9 @@ import java.util.Objects;
 /**
  * Internal response sent between replicas for GET requests.
  */
-public record InternalGetResponse(byte[] key, VersionedValue value, String correlationId) {
+public record InternalGetResponse(byte[] key, VersionedValue value) {
     public InternalGetResponse {
         Objects.requireNonNull(key, "Key cannot be null");
-        Objects.requireNonNull(correlationId, "Correlation ID cannot be null");
         // value can be null when not found
     }
 
@@ -21,18 +20,17 @@ public record InternalGetResponse(byte[] key, VersionedValue value, String corre
         if (obj == null || getClass() != obj.getClass()) return false;
         InternalGetResponse that = (InternalGetResponse) obj;
         return Arrays.equals(key, that.key) &&
-               Objects.equals(value, that.value) &&
-               Objects.equals(correlationId, that.correlationId);
+               Objects.equals(value, that.value);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(Arrays.hashCode(key), value, correlationId);
+        return Objects.hash(Arrays.hashCode(key), value);
     }
 
     @Override
     public String toString() {
-        return "InternalGetResponse{keyLength=" + key.length + ", correlationId='" + correlationId + 
+        return "InternalGetResponse{keyLength=" + key.length + ", correlationId='"  +
                "', hasValue=" + (value != null) + "}";
     }
 }

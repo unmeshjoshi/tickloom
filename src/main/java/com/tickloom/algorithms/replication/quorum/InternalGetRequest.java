@@ -6,15 +6,11 @@ import java.util.Objects;
 /**
  * Internal request sent between replicas to get a value for a specific key.
  */
-public record InternalGetRequest(byte[] key, String correlationId) {
+public record InternalGetRequest(byte[] key) {
     public InternalGetRequest {
         Objects.requireNonNull(key, "Key cannot be null");
-        Objects.requireNonNull(correlationId, "Correlation ID cannot be null");
         if (key.length == 0) {
             throw new IllegalArgumentException("Key cannot be empty");
-        }
-        if (correlationId.isBlank()) {
-            throw new IllegalArgumentException("Correlation ID cannot be blank");
         }
     }
 
@@ -23,16 +19,16 @@ public record InternalGetRequest(byte[] key, String correlationId) {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
         InternalGetRequest that = (InternalGetRequest) obj;
-        return Arrays.equals(key, that.key) && Objects.equals(correlationId, that.correlationId);
+        return Arrays.equals(key, that.key);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(Arrays.hashCode(key), correlationId);
+        return Objects.hash(Arrays.hashCode(key));
     }
 
     @Override
     public String toString() {
-        return "InternalGetRequest{keyLength=" + key.length + ", correlationId='" + correlationId + "'}";
+        return "InternalGetRequest{keyLength=" + key.length + "'}";
     }
 }

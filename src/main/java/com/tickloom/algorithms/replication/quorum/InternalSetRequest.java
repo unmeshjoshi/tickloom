@@ -6,16 +6,12 @@ import java.util.Objects;
 /**
  * Internal request sent between replicas to set a value for a specific key.
  */
-public record InternalSetRequest(byte[] key, byte[] value, long timestamp, String correlationId) {
+public record InternalSetRequest(byte[] key, byte[] value, long timestamp) {
     public InternalSetRequest {
         Objects.requireNonNull(key, "Key cannot be null");
         Objects.requireNonNull(value, "Value cannot be null");
-        Objects.requireNonNull(correlationId, "Correlation ID cannot be null");
         if (key.length == 0) {
             throw new IllegalArgumentException("Key cannot be empty");
-        }
-        if (correlationId.isBlank()) {
-            throw new IllegalArgumentException("Correlation ID cannot be blank");
         }
         if (timestamp <= 0) {
             throw new IllegalArgumentException("Timestamp must be positive");
@@ -29,18 +25,17 @@ public record InternalSetRequest(byte[] key, byte[] value, long timestamp, Strin
         InternalSetRequest that = (InternalSetRequest) obj;
         return timestamp == that.timestamp &&
                Arrays.equals(key, that.key) &&
-               Arrays.equals(value, that.value) &&
-               Objects.equals(correlationId, that.correlationId);
+               Arrays.equals(value, that.value);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(Arrays.hashCode(key), Arrays.hashCode(value), timestamp, correlationId);
+        return Objects.hash(Arrays.hashCode(key), Arrays.hashCode(value), timestamp);
     }
 
     @Override
     public String toString() {
-        return "InternalSetRequest{keyLength=" + key.length + ", timestamp=" + timestamp + 
-               ", correlationId='" + correlationId + "', valueLength=" + value.length + "}";
+        return "InternalSetRequest{keyLength=" + key.length + ", timestamp=" + timestamp
+                + "', valueLength=" + value.length + "}";
     }
 }

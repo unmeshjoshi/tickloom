@@ -54,7 +54,7 @@ public class QuorumReplica extends Replica {
                         error -> sendFailureGetResponse(clientRequest, correlationId, clientId, error));
 
         broadcastToAllReplicas(quorumCallback, (node, internalCorrelationId) -> {
-            var internalRequest = new InternalGetRequest(clientRequest.key(), internalCorrelationId);
+            var internalRequest = new InternalGetRequest(clientRequest.key());
             return createMessage(node, internalCorrelationId, internalRequest, QuorumMessageTypes.INTERNAL_GET_REQUEST);
         });
     }
@@ -121,7 +121,7 @@ public class QuorumReplica extends Replica {
         var timestamp = clock.now();
         broadcastToAllReplicas(quorumCallback, (node, internalCorrelationId) -> {
             var internalRequest = new InternalSetRequest(
-                    clientRequest.key(), clientRequest.value(), timestamp, internalCorrelationId);
+                    clientRequest.key(), clientRequest.value(), timestamp);
             return createMessage(node, internalCorrelationId, internalRequest, QuorumMessageTypes.INTERNAL_SET_REQUEST);
         });
     }
@@ -191,8 +191,8 @@ public class QuorumReplica extends Replica {
 
     private void handleInternalGetRequest(Message message) {
         var getRequest = deserializePayload(message.payload(), InternalGetRequest.class);
-        System.out.println("QuorumReplica: Processing internal GET request - keyLength: " + getRequest.key().length +
-                ", correlationId: " + getRequest.correlationId() + ", from: " + message.source());
+        System.out.println("QuorumReplica: Processing internal GET request - keyLength: " + getRequest.key().length
+                + ", from: " + message.source());
         // Perform local storage operation
         var future = storage.get(getRequest.key());
         future.handle((value, error) -> {
@@ -204,7 +204,7 @@ public class QuorumReplica extends Replica {
 
         logInternalGetResponse(value, error, getRequest);
         //value will be null if not found or error
-        var response = new InternalGetResponse(getRequest.key(), value, getRequest.correlationId());
+        var response = new InternalGetResponse(getRequest.key(), value);
         var responseMessage = createResponseMessage(incomingMessage, response, QuorumMessageTypes.INTERNAL_GET_RESPONSE);
 
 
@@ -216,11 +216,11 @@ public class QuorumReplica extends Replica {
         if (error == null) {
             String valueStr = value != null ? "found" : "not found";
             System.out.println("QuorumReplica: Internal GET completed - keyLength: " + getRequest.key().length +
-                    ", value: " + valueStr + ", correlationId: " + getRequest.correlationId());
+                    ", value: " + valueStr );
 
         } else {
             System.out.println("QuorumReplica: Internal GET failed - keyLength: " + getRequest.key().length +
-                    ", error: " + error.getMessage() + ", correlationId: " + getRequest.correlationId());
+                    ", error: " + error.getMessage());
         }
     }
 
@@ -230,7 +230,7 @@ public class QuorumReplica extends Replica {
 
         System.out.println("QuorumReplica: Processing internal SET request - keyLength: " + setRequest.key().length +
                 ", valueLength: " + setRequest.value().length + ", timestamp: " + setRequest.timestamp() +
-                ", correlationId: " + setRequest.correlationId() + ", from: " + message.source());
+                 ", from: " + message.source());
 
         // Perform local storage operation
         var future = storage.set(setRequest.key(), value);
@@ -241,7 +241,7 @@ public class QuorumReplica extends Replica {
     private void sendInternalSetResponse(Message message, Boolean success, Throwable error, InternalSetRequest setRequest) {
         logInternalSetResponse(success, error, setRequest);
 
-        var response = new InternalSetResponse(setRequest.key(), success, setRequest.correlationId());
+        var response = new InternalSetResponse(setRequest.key(), success);
         //success will be false if error
         var responseMessage = createResponseMessage(message, response, QuorumMessageTypes.INTERNAL_SET_RESPONSE);
 
@@ -252,11 +252,11 @@ public class QuorumReplica extends Replica {
     private static void logInternalSetResponse(Boolean success, Throwable error, InternalSetRequest setRequest) {
         if (error == null) {
             System.out.println("QuorumReplica: Internal SET completed - keyLength: " + setRequest.key().length +
-                    ", success: " + success + ", correlationId: " + setRequest.correlationId());
+                    ", success: " + success);
 
         } else {
             System.out.println("QuorumReplica: Internal SET failed - keyLength: " + setRequest.key().length +
-                    ", error: " + error.getMessage() + ", correlationId: " + setRequest.correlationId());
+                    ", error: " + error.getMessage());
 
         }
     }
@@ -265,7 +265,7 @@ public class QuorumReplica extends Replica {
         var response = deserializePayload(message.payload(), InternalGetResponse.class);
 
         System.out.println("QuorumReplica: Processing internal GET response - keyLength: " + response.key().length +
-                ", internalCorrelationId: " + response.correlationId() + ", from: " + message.source());
+                  ", from: " + message.source());
 
         // Route the response to the RequestWaitingList
         waitingList.handleResponse(message.correlationId(), response, message.source());
@@ -275,7 +275,7 @@ public class QuorumReplica extends Replica {
         var response = deserializePayload(message.payload(), InternalSetResponse.class);
 
         System.out.println("QuorumReplica: Processing internal SET response - keyLength: " + response.key().length +
-                ", success: " + response.success() + ", internalCorrelationId: " + response.correlationId() +
+                ", success: " + response.success() + ", internalCorrelationId: " + message.correlationId() +
                 ", from: " + message.source());
 
         waitingList.handleResponse(message.correlationId(), response, message.source());
