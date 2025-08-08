@@ -69,7 +69,7 @@ public abstract class Replica extends Process {
         try {
             //if it's a self message immediately process
             if (responseMessage.destination().equals(id)) {
-                onMessageReceived(responseMessage);
+                receiveMessage(responseMessage);
                 return;
             }
             messageBus.sendMessage(responseMessage);

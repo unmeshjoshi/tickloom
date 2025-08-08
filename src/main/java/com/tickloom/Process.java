@@ -4,13 +4,15 @@ import com.tickloom.messaging.*;
 import com.tickloom.network.MessageCodec;
 import com.tickloom.network.PeerType;
 import com.tickloom.util.Clock;
-import com.tickloom.util.Utils;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * A logical entity that is endpoint for the messages
  * Has all the common utility methods.
- * */
-public abstract class Process implements Tickable, MessageHandler, AutoCloseable {
+ */
+public abstract class Process implements Tickable, AutoCloseable {
     public final ProcessId id;
     public final MessageBus messageBus;
     protected final MessageCodec messageCodec;
@@ -26,18 +28,32 @@ public abstract class Process implements Tickable, MessageHandler, AutoCloseable
         this.messageCodec = messageCodec;
         this.timeoutTicks = timeoutTicks;
         this.waitingList = new RequestWaitingList<>(timeoutTicks);
-        messageBus.registerHandler(id, this);
+        messageBus.register(this);
+        initialiseMessageHandlers();
     }
 
-    @Override
-    public abstract void onMessageReceived(Message message);
+    public final void receiveMessage(Message message) {
+        onMessageReceived(message);
+        MessageType messageType = message.messageType();
+        Handler handler = getHandler(messageType);
+        if (handler == null) {
+            System.err.println("No handler found for message " + messageType);
+            return;
+        }
+        handler.handle(message);
+
+    }
+
+    //TODO: Probably remove this hook.
+    protected void onMessageReceived(Message message) {
+        //hook for subclasses to perform additional preprocessing
+    }
 
     @Override
     public final void tick() {
         waitingList.tick();
         onTick();
-    };
-
+    }
 
     /**
      * Hook method for subclasses to perform additional tick processing.
@@ -50,6 +66,22 @@ public abstract class Process implements Tickable, MessageHandler, AutoCloseable
 
     @Override
     public void close() throws Exception {
+    }
+
+    protected interface Handler {
+        void handle(Message message);
+    }
+
+    protected Map<MessageType, Handler> handlers = new HashMap<>();
+
+    private void initialiseMessageHandlers() {
+        this.handlers.putAll(initialiseHandlers());
+    }
+
+    protected abstract Map<MessageType, Handler> initialiseHandlers();
+
+    protected Handler getHandler(MessageType messageType) {
+        return handlers.get(messageType);
     }
 
     protected final Message createResponseMessage(Message receivedMessage, Object responsePayload, MessageType responseType) {

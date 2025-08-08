@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.nio.channels.Selector;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 class TestPeer extends com.tickloom.Process implements Tickable, AutoCloseable {
     protected final NioNetwork network;
@@ -32,12 +33,7 @@ class TestPeer extends com.tickloom.Process implements Tickable, AutoCloseable {
     @Override
     public void onMessageReceived(Message message) {
         receivedMessages.add(message);
-        handleMessage(message);
-    }
-
-    protected void handleMessage(Message message) {
-        //subclasses can do something more than just storing the received message.
-    }
+     }
 
     @Override
     public void onTick() {
@@ -87,6 +83,11 @@ class TestPeer extends com.tickloom.Process implements Tickable, AutoCloseable {
     public void close() throws IOException {
         receivedMessages.clear();
         network.close();
+    }
+
+    @Override
+    protected Map<MessageType, Handler> initialiseHandlers() {
+        return Map.of();
     }
 
     public List<Message> getReceivedMessages() {

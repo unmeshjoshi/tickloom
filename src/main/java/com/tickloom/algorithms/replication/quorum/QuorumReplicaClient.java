@@ -8,6 +8,7 @@ import com.tickloom.network.MessageCodec;
 import com.tickloom.util.Clock;
 
 import java.util.List;
+import java.util.Map;
 
 public class QuorumReplicaClient extends ClusterClient {
     
@@ -30,31 +31,27 @@ public class QuorumReplicaClient extends ClusterClient {
         
         return sendRequest(request, primaryReplica, QuorumMessageTypes.CLIENT_SET_REQUEST);
     }
-    
-    @Override
-    public void onMessageReceived(Message message) {
-        String correlationId = message.correlationId();
-        MessageType messageType = message.messageType();
-        
-        if (isGetResponse(messageType)) {
-            GetResponse response = deserialize(message.payload(), GetResponse.class);
-            handleResponse(correlationId, response, message.source());
-            
-        } else if (isSetResponse(messageType)) {
-            SetResponse response = deserialize(message.payload(), SetResponse.class);
-            handleResponse(correlationId, response, message.source());
-        }
+
+
+    private void handleSetResponse(Message message) {
+        SetResponse response = deserialize(message.payload(), SetResponse.class);
+        handleResponse(message.correlationId(), response, message.source());
     }
-    
+
+    private void handleGetResponse(Message message) {
+        GetResponse response = deserialize(message.payload(), GetResponse.class);
+        handleResponse(message.correlationId(), response, message.source());
+    }
+
+    @Override
+    protected Map<MessageType, Handler> initialiseHandlers() {
+        return Map.of(
+                QuorumMessageTypes.CLIENT_GET_RESPONSE, this::handleGetResponse,
+                QuorumMessageTypes.CLIENT_SET_RESPONSE, this::handleSetResponse);
+
+    }
+
     private ProcessId getPrimaryReplica() {
         return replicaEndpoints.get(0);
-    }
-    
-    private boolean isGetResponse(MessageType messageType) {
-        return messageType.equals(QuorumMessageTypes.CLIENT_GET_RESPONSE);
-    }
-    
-    private boolean isSetResponse(MessageType messageType) {
-        return messageType.equals(QuorumMessageTypes.CLIENT_SET_RESPONSE);
     }
 }

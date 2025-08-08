@@ -22,7 +22,8 @@ class EchoServer extends TestPeer {
     }
 
     @Override
-    public void handleMessage(Message message) {
+    public void onMessageReceived(Message message) {
+        super.onMessageReceived(message);
         try {
             Message response = Message.of(
                     this.id, message.source(), PeerType.SERVER,

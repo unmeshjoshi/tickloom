@@ -20,7 +20,7 @@ public class MessageBus implements MessageDispatcher, Tickable, AutoCloseable {
     protected final Network network;
     protected final MessageCodec messageCodec;
 
-    private final Map<ProcessId, MessageHandler> processMessageHandlers;
+    private final Map<ProcessId, com.tickloom.Process> processMessageHandlers;
 
     /**
      * Creates a MessageBus with the given network and codec dependencies.
@@ -57,14 +57,8 @@ public class MessageBus implements MessageDispatcher, Tickable, AutoCloseable {
         network.send(message);
     }
 
-    public void registerHandler(ProcessId processId, MessageHandler handler) {
-        if (processId == null) {
-            throw new IllegalArgumentException("Process ID cannot be null");
-        }
-        if (handler == null) {
-            throw new IllegalArgumentException("Handler cannot be null");
-        }
-        processMessageHandlers.put(processId, handler);
+    public void register(com.tickloom.Process process) {
+        processMessageHandlers.put(process.id, process);
     }
 
 
@@ -85,10 +79,10 @@ public class MessageBus implements MessageDispatcher, Tickable, AutoCloseable {
         System.out.println("MessageBus: Routing message " + message.messageType() + " from " + message.source() +
                 " to " + destination + " (correlationId=" + correlationId + ")");
 
-        MessageHandler addressHandler = processMessageHandlers.get(destination);
-        if (addressHandler != null) {
+        com.tickloom.Process p = processMessageHandlers.get(destination);
+        if (p != null) {
             System.out.println("MessageBus: Delivering to address handler (" + destination + ")");
-            addressHandler.onMessageReceived(message);
+            p.receiveMessage(message);
             return;
         }
 
@@ -136,7 +130,7 @@ public class MessageBus implements MessageDispatcher, Tickable, AutoCloseable {
     }
 
     //Visibility for testing
-    public Map<ProcessId, MessageHandler> getHandlers() {
+    public Map<ProcessId, com.tickloom.Process> getHandlers() {
         return Collections.unmodifiableMap(processMessageHandlers);
     }
 

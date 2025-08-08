@@ -27,25 +27,14 @@ public class QuorumReplica extends Replica {
     }
 
     @Override
-    public void onMessageReceived(Message message) {
-        var messageType = message.messageType();
-        if (messageType.equals(QuorumMessageTypes.CLIENT_GET_REQUEST)) {
-            handleClientGetRequest(message);
-        } else if (messageType.equals(QuorumMessageTypes.CLIENT_SET_REQUEST)) {
-            handleClientSetRequest(message);
-        } else if (messageType.equals(QuorumMessageTypes.INTERNAL_GET_REQUEST)) {
-            handleInternalGetRequest(message);
-        } else if (messageType.equals(QuorumMessageTypes.INTERNAL_SET_REQUEST)) {
-            handleInternalSetRequest(message);
-        } else if (messageType.equals(QuorumMessageTypes.INTERNAL_GET_RESPONSE)) {
-            handleInternalGetResponse(message);
-        } else if (messageType.equals(QuorumMessageTypes.INTERNAL_SET_RESPONSE)) {
-            handleInternalSetResponse(message);
-        } else {
-            // Unknown message type
-            System.out.println("QuorumReplica: Received unknown message type: " + messageType);
-        }
-        // else ignore unknown message types
+    protected Map<MessageType, Handler> initialiseHandlers() {
+        return Map.of(
+                QuorumMessageTypes.CLIENT_GET_REQUEST, this::handleClientGetRequest,
+                QuorumMessageTypes.CLIENT_SET_REQUEST, this::handleClientSetRequest,
+                QuorumMessageTypes.INTERNAL_GET_RESPONSE, this::handleInternalGetResponse,
+                QuorumMessageTypes.INTERNAL_SET_RESPONSE, this::handleInternalSetResponse,
+                QuorumMessageTypes.INTERNAL_GET_REQUEST, this::handleInternalGetRequest,
+                QuorumMessageTypes.INTERNAL_SET_REQUEST, this::handleInternalSetRequest);
     }
 
     // Client request handlers

@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.sql.Array;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -101,13 +102,13 @@ class ReplicaTest {
 
 
         @Override
-        public void onMessageReceived(Message message) {
-            // No-op for tests
+        protected void onTick() {
+            onTickCalled = true;
         }
 
         @Override
-        protected void onTick() {
-            onTickCalled = true;
+        protected Map<MessageType, Handler> initialiseHandlers() {
+            return Map.of();
         }
 
         void addDummyPendingRequest(String key) {
