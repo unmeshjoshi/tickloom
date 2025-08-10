@@ -1,3 +1,4 @@
+![TickLoom Logo](logo.png)
 ## TickLoom
 ### A fabric of ticking processes
 
