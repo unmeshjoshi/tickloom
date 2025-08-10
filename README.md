@@ -1,4 +1,7 @@
-![TickLoom Logo](logo.png)
+<p align="center">
+  <img src="logo.png" alt="TickLoom Logo" width="200"/>
+</p>
+
 ## TickLoom
 ### A fabric of ticking processes
 
