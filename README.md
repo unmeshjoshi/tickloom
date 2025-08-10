@@ -1,4 +1,4 @@
-<p align="center">
+<p align="left">
   <img src="logo.png" alt="TickLoom Logo" width="200"/>
 </p>
 
