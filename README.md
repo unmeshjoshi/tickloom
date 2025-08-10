@@ -38,8 +38,8 @@ Each call to `tick()` advances time, processes I/O, and delivers messages determ
 ┌──────────┐       messages       ┌──────────┐
 │ ProcessA │  ─────────────────→  │ ProcessB │
 └──────────┘ ←──────────────────  └──────────┘
-      ▲         simulated ticks          ▲
-      └────── deterministic clock ───────┘
+      ▲                                ▲
+      └──────  single threaded ticks ──┘
 ```
 
 ---
@@ -87,14 +87,105 @@ Below is a minimal Echo example that shows how to build on TickLoom’s primitiv
 *(Full code retained as in original)*
 
 ```java
-// TODO: Insert full EchoServer and EchoClient code here from your source
+// Example EchoServer and EchoClient code 
+public class EchoServer extends Process {
+
+    private final List<ProcessId> peerIds;
+
+    public EchoServer(ProcessId id,
+                      List<ProcessId> peerIds,
+                      MessageBus messageBus,
+                      MessageCodec messageCodec,
+                      Storage storage,
+                      Clock clock,
+                      int timeoutTicks) {
+        super(id, messageBus, messageCodec, timeoutTicks, clock);
+        this.peerIds = peerIds;
+    }
+
+    @Override
+    protected Map<MessageType, Handler> initialiseHandlers() {
+        return Map.of(
+                ECHO_REQUEST, this::onEchoRequest
+        );
+    }
+
+    private void onEchoRequest(Message msg) {
+        EchoRequest request = deserializePayload(msg.payload(), EchoRequest.class);
+        EchoResponse response = new EchoResponse(request.text());
+        Message responseMessage = createResponseMessage(msg, response, ECHO_RESPONSE);
+        try {
+            messageBus.sendMessage(responseMessage);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
+
+public class EchoClient extends ClusterClient {
+
+    public EchoClient(ProcessId clientId,
+                      List<ProcessId> replicaEndpoints,
+                      MessageBus messageBus,
+                      MessageCodec messageCodec,
+                      Clock clock,
+                      int timeoutTicks) {
+        super(clientId, replicaEndpoints, messageBus, messageCodec, clock, timeoutTicks);
+    }
+
+    public ListenableFuture<EchoResponse> echo(ProcessId server, String text) {
+        EchoRequest req = new EchoRequest(text);
+        return sendRequest(req, server, ECHO_REQUEST);
+    }
+
+    @Override
+    protected java.util.Map<MessageType, Handler> initialiseHandlers() {
+        return java.util.Map.of(
+                ECHO_RESPONSE, msg -> {
+                    EchoResponse resp = deserialize(msg.payload(), EchoResponse.class);
+                    handleResponse(msg.correlationId(), resp, msg.source());
+                }
+        );
+    }
+}
 ```
 
 ---
 
 ### JUnit test with the Cluster testkit
 ```java
-// TODO: Insert full EchoExampleTest code here from your source
+public class EchoClusterTest {
+
+    private Cluster cluster;
+
+    @BeforeEach
+    void setup() throws Exception {
+        cluster = new Cluster()
+                .withNumProcesses(1)
+                .useSimulatedNetwork()
+                .build(EchoServer::new)
+                .start();
+    }
+
+    @AfterEach
+    void teardown() {
+        if (cluster != null) cluster.close();
+    }
+
+    @Test
+    void echo_roundtrip() throws Exception {
+        ProcessId serverId = ProcessId.of("process-1");
+
+        EchoClient client = cluster.newClient(ProcessId.of("client-1"), (clientId, endpoints, bus, codec, clock, timeoutTicks) ->
+                new EchoClient(clientId, java.util.List.of(serverId), bus, codec, clock, timeoutTicks));
+
+        var future = client.echo(serverId, "hello");
+        assertEventually(cluster, () -> future.isCompleted());
+
+        assertEquals("hello", future.getResult().text());
+    }
+}
+
 ```
 
 ---
@@ -166,10 +257,10 @@ TickLoom is for you if you:
 
 ## Acknowledgements
 
-TickLoom’s tick model and deterministic simulation approach are inspired by the excellent [TigerBeetle](https://github.com/tigerbeetle/tigerbeetle) project.
+#TickLoom’s tick model and deterministic simulation approach are inspired by the excellent [TigerBeetle](https://github.com/tigerbeetle/tigerbeetle) project.
+#ChatGPT-5 was used to brainstorm some ideas and generate some parts of this code.
 
 ---
 
 ## License
-
-Apache License 2.0. See `LICENSE`.
+This project is licensed under the Apache License 2.0 – see the [LICENSE](LICENSE) file for details.
