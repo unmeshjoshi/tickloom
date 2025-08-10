@@ -8,7 +8,7 @@ plugins {
 import org.gradle.plugins.signing.Sign
 
 group = 'com.github.tickloom'
-version = '0.1.0-alpha.1'
+version = '0.1.0-alpha.2'
 
 repositories {
     mavenCentral()
@@ -178,11 +178,58 @@ task inspectData {
 
 // Your project's coordinates
 group = 'io.github.unmeshjoshi' // Change to your chosen group ID
-version = '0.1.0-alpha.1'
+version = '0.1.0-alpha.2'
 
 java {
     withSourcesJar()
     withJavadocJar()
+}
+
+// --- Testkit artifacts (packaged from src/test/java/com/tickloom/testkit/**) ---
+
+tasks.register('testkitJar', Jar) {
+    group = 'build'
+    description = 'Jar containing the testkit classes for consumers.'
+    archiveBaseName.set("${project.name}-testkit")
+    from(sourceSets.test.output) {
+        include 'com/tickloom/testkit/**'
+        include 'com/tickloom/util/StubClock*'
+        exclude '**/*Test.class'
+    }
+    dependsOn tasks.named('testClasses')
+}
+
+tasks.register('testkitSourcesJar', Jar) {
+    group = 'build'
+    description = 'Sources jar for the testkit.'
+    archiveBaseName.set("${project.name}-testkit")
+    archiveClassifier.set('sources')
+    from(sourceSets.test.allSource) {
+        include 'com/tickloom/testkit/**'
+        include 'com/tickloom/util/StubClock.java'
+        exclude '**/*Test.java'
+    }
+}
+
+tasks.register('testkitJavadoc', Javadoc) {
+    description = 'Generates Javadoc for the testkit package.'
+    source = sourceSets.test.allJava.matching {
+        include 'com/tickloom/testkit/**'
+        include 'com/tickloom/util/StubClock.java'
+        exclude '**/*Test.java'
+    }
+    classpath = sourceSets.test.compileClasspath + sourceSets.main.output
+    // Use a separate output directory to avoid overlapping with main javadoc
+    destinationDir = layout.buildDirectory.dir('docs/testkitJavadoc').get().asFile
+}
+
+tasks.register('testkitJavadocJar', Jar) {
+    group = 'build'
+    description = 'Javadoc jar for the testkit.'
+    archiveBaseName.set("${project.name}-testkit")
+    archiveClassifier.set('javadoc')
+    from(tasks.named('testkitJavadoc'))
+    dependsOn tasks.named('testkitJavadoc')
 }
 
 // Relax doclint to avoid failing the build on missing Javadoc and minor issues
@@ -219,6 +266,48 @@ publishing {
                 }
             }
         }
+
+        // Separate publication for the testkit
+        mavenTestkit(MavenPublication) {
+            artifactId = "${project.name}-testkit"
+
+            artifact tasks.named('testkitJar')
+            artifact tasks.named('testkitSourcesJar')
+            artifact tasks.named('testkitJavadocJar')
+
+            pom {
+                name = 'TickLoom Testkit'
+                description = 'Testing utilities for TickLoom consumers (use in test scope).'
+                url = 'https://github.com/unmeshjoshi/tickloom'
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'unmeshjoshi'
+                        name = 'Unmesh Joshi'
+                        email = 'unmeshjoshi@gmail.com'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:git://github.com/unmeshjoshi/tickloom.git'
+                    developerConnection = 'scm:git:ssh://github.com/unmeshjoshi/tickloom.git'
+                    url = 'https://github.com/unmeshjoshi/tickloom'
+                }
+                // Ensure consumers pull the main library alongside testkit
+                withXml {
+                    def deps = asNode().appendNode('dependencies')
+                    def dep = deps.appendNode('dependency')
+                    dep.appendNode('groupId', project.group.toString())
+                    dep.appendNode('artifactId', project.name)
+                    dep.appendNode('version', project.version.toString())
+                    dep.appendNode('scope', 'compile')
+                }
+            }
+        }
     }
     repositories {
         maven {
@@ -250,10 +339,10 @@ signing {
     // Only configure signing if keys are present. This avoids failures for local builds.
     if (signingKey && signingPassword) {
         useInMemoryPgpKeys(signingKey.toString(), signingPassword.toString())
-        sign publishing.publications.mavenJava
+        sign publishing.publications
     } else if (findProperty("signing.keyId") && findProperty("signing.password") && findProperty("signing.secretKeyRingFile")) {
         // Fall back to classic keyring-based signing if configured via Gradle properties
-        sign publishing.publications.mavenJava
+        sign publishing.publications
     } else {
         println "Signing disabled: PGP key not configured (set OSSRH_GPG_SECRET_KEY and OSSRH_GPG_SECRET_KEY_PASSWORD or Gradle signingKey/signingPassword)."
     }
@@ -283,6 +372,15 @@ tasks.register('prepareCentralBundle') {
     group = 'distribution'
     description = 'Stages artifacts and signatures into build/central-bundle in Maven repo layout.'
     dependsOn 'assemble', 'sourcesJar', 'javadocJar', 'generatePomFileForMavenJavaPublication'
+    // Testkit artifacts and POM
+    dependsOn 'testkitJar', 'testkitSourcesJar', 'testkitJavadocJar', 'generatePomFileForMavenTestkitPublication'
+    // Ensure signatures exist for both publications if tasks are available
+    if (tasks.findByName('signMavenJavaPublication') != null) {
+        dependsOn 'signMavenJavaPublication'
+    }
+    if (tasks.findByName('signMavenTestkitPublication') != null) {
+        dependsOn 'signMavenTestkitPublication'
+    }
     // If the signing task exists (i.e., signing is configured), ensure signatures are produced
     if (tasks.findByName('signMavenJavaPublication') != null) {
         dependsOn 'signMavenJavaPublication'
@@ -291,11 +389,16 @@ tasks.register('prepareCentralBundle') {
         def artifactId = project.name
         def versionStr = project.version.toString()
         def groupPath = project.group.toString().replace('.', '/')
-        def targetDir = file("${buildDir}/central-bundle/${groupPath}/${artifactId}/${versionStr}")
-        targetDir.mkdirs()
+        def mainTargetDir = file("${buildDir}/central-bundle/${groupPath}/${artifactId}/${versionStr}")
+        mainTargetDir.mkdirs()
+        def testkitArtifactId = "${artifactId}-testkit"
+        def testkitTargetDir = file("${buildDir}/central-bundle/${groupPath}/${testkitArtifactId}/${versionStr}")
+        testkitTargetDir.mkdirs()
 
         def pomSrc = file("${buildDir}/publications/mavenJava/pom-default.xml")
         def pomAscSrc = file("${buildDir}/publications/mavenJava/pom-default.xml.asc")
+        def pomTestkitSrc = file("${buildDir}/publications/mavenTestkit/pom-default.xml")
+        def pomTestkitAscSrc = file("${buildDir}/publications/mavenTestkit/pom-default.xml.asc")
         def jarSrc = tasks.jar.archiveFile.get().asFile
         def sourcesSrc = tasks.sourcesJar.archiveFile.get().asFile
         def javadocSrc = tasks.javadocJar.archiveFile.get().asFile
@@ -313,24 +416,56 @@ tasks.register('prepareCentralBundle') {
                 file("${buildDir}/libs/${artifactId}-${versionStr}-javadoc.jar.asc")
         ]
 
-        copy { from(pomSrc); into(targetDir); rename { "${artifactId}-${versionStr}.pom" } }
-        if (pomAscSrc.exists()) { copy { from(pomAscSrc); into(targetDir); rename { "${artifactId}-${versionStr}.pom.asc" } } }
+        // Main module POM and artifacts
+        copy { from(pomSrc); into(mainTargetDir); rename { "${artifactId}-${versionStr}.pom" } }
+        if (pomAscSrc.exists()) { copy { from(pomAscSrc); into(mainTargetDir); rename { "${artifactId}-${versionStr}.pom.asc" } } }
+        copy { from(jarSrc); into(mainTargetDir) }
+        copy { from(sourcesSrc); into(mainTargetDir) }
+        copy { from(javadocSrc); into(mainTargetDir) }
 
-        copy { from(jarSrc); into(targetDir) }
-        copy { from(sourcesSrc); into(targetDir) }
-        copy { from(javadocSrc); into(targetDir) }
+        // Testkit POM and artifacts
+        copy { from(pomTestkitSrc); into(testkitTargetDir); rename { "${testkitArtifactId}-${versionStr}.pom" } }
+        if (pomTestkitAscSrc.exists()) { copy { from(pomTestkitAscSrc); into(testkitTargetDir); rename { "${testkitArtifactId}-${versionStr}.pom.asc" } } }
+        def testkitJarFile = tasks.named('testkitJar').get().archiveFile.get().asFile
+        def testkitSourcesFile = tasks.named('testkitSourcesJar').get().archiveFile.get().asFile
+        def testkitJavadocFile = tasks.named('testkitJavadocJar').get().archiveFile.get().asFile
+        copy { from(testkitJarFile); into(testkitTargetDir) }
+        copy { from(testkitSourcesFile); into(testkitTargetDir) }
+        copy { from(testkitJavadocFile); into(testkitTargetDir) }
 
         [jarAscCandidates, sourcesAscCandidates, javadocAscCandidates].each { List<File> candidates ->
             def found = candidates.find { it.exists() }
-            if (found) { copy { from(found); into(targetDir) } }
+            if (found) { copy { from(found); into(mainTargetDir) } }
+        }
+
+        // Testkit signatures (prefer publications, fallback to build/libs)
+        def testkitJarAscCandidates = [
+                file("${buildDir}/publications/mavenTestkit/${testkitArtifactId}-${versionStr}.jar.asc"),
+                file("${buildDir}/libs/${testkitArtifactId}-${versionStr}.jar.asc")
+        ]
+        def testkitSourcesAscCandidates = [
+                file("${buildDir}/publications/mavenTestkit/${testkitArtifactId}-${versionStr}-sources.jar.asc"),
+                file("${buildDir}/libs/${testkitArtifactId}-${versionStr}-sources.jar.asc")
+        ]
+        def testkitJavadocAscCandidates = [
+                file("${buildDir}/publications/mavenTestkit/${testkitArtifactId}-${versionStr}-javadoc.jar.asc"),
+                file("${buildDir}/libs/${testkitArtifactId}-${versionStr}-javadoc.jar.asc")
+        ]
+        [testkitJarAscCandidates, testkitSourcesAscCandidates, testkitJavadocAscCandidates].each { List<File> candidates ->
+            def found = candidates.find { it.exists() }
+            if (found) { copy { from(found); into(testkitTargetDir) } }
         }
 
         // Generate MD5 and SHA1 checksums required by Central validation
         def filesNeedingChecksums = [
-                new File(targetDir, "${artifactId}-${versionStr}.pom"),
-                new File(targetDir, "${artifactId}-${versionStr}.jar"),
-                new File(targetDir, "${artifactId}-${versionStr}-sources.jar"),
-                new File(targetDir, "${artifactId}-${versionStr}-javadoc.jar")
+                new File(mainTargetDir, "${artifactId}-${versionStr}.pom"),
+                new File(mainTargetDir, "${artifactId}-${versionStr}.jar"),
+                new File(mainTargetDir, "${artifactId}-${versionStr}-sources.jar"),
+                new File(mainTargetDir, "${artifactId}-${versionStr}-javadoc.jar"),
+                new File(testkitTargetDir, "${testkitArtifactId}-${versionStr}.pom"),
+                new File(testkitTargetDir, "${testkitArtifactId}-${versionStr}.jar"),
+                new File(testkitTargetDir, "${testkitArtifactId}-${versionStr}-sources.jar"),
+                new File(testkitTargetDir, "${testkitArtifactId}-${versionStr}-javadoc.jar")
         ]
 
         def computeDigestHex = { File f, String algo ->
