@@ -91,6 +91,23 @@ Within each process:
 
 This model avoids the unpredictability of real-time timers and makes TickLoom suitable for **highly controlled distributed system testing**.
 
+## Messages and Serialization
+
+In TickLoom, messages are defined as **plain Java records**.  
+This makes them:
+- Simple to declare and read
+- Easy to evolve without special tooling
+- Type-safe and self-documenting
+
+Using plain records avoids the need for an external IDL or code generation step (such as Protocol Buffers or Thrift).  
+Instead, you can define messages directly in Java:
+
+```java
+public record EchoRequest(String message) {}
+public record EchoResponse(String message) {}
+```
+
+Serialization uses JSON by default, but the framework can be extended to support other formats.
 
 ## Installation
 
