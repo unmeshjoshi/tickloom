@@ -31,18 +31,66 @@ TickLoom provides all of these **in a single-threaded deterministic model** — 
 
 ## The Tick Model
 
-All processes run inside a shared **logical clock**.  
-Each call to `tick()` advances time, processes I/O, and delivers messages deterministically.
+In TickLoom, **`tick()`** represents a single *lock step* of execution.  
+Each tick processes pending work in a **fixed, deterministic order**, ensuring reproducibility and predictable behavior across runs.
 
-```
-┌──────────┐       messages       ┌──────────┐
-│ ProcessA │  ─────────────────→  │ ProcessB │
-└──────────┘ ←──────────────────  └──────────┘
-      ▲                                ▲
-      └──────  single threaded ticks ──┘
-```
+### Single Thread of Control
+All components run in a **single main thread** — there are no worker threads.  
+This eliminates race conditions and makes behavior easier to reason about.
+
+### Tick Order
+The core components implement `Tickable` and are invoked **in sequence**:
+
+1. **Network** – delivers pending messages  
+   - **Simulated mode**: `SimulatedNetwork` decides delivery time based on configured delays, partitions, and packet loss. Messages are delivered only when their scheduled delivery tick is reached.  
+   - **Production mode**: `NioNetwork` processes available `SelectionKey`s from Java NIO’s selector in each tick.
+2. **MessageBus** – dispatches delivered messages to the correct target processes.  
+3. **Process** – runs user-defined logic, handles incoming messages, and schedules outgoing ones.  
+4. **Storage** – applies and commits any pending writes.
+
+### Asynchronous Actions in a Synchronous Tick
+While network and storage operations are **asynchronous in nature**, TickLoom models them explicitly within the tick loop:
+- Outgoing network messages are queued and delivered later according to the network model.
+- Storage writes are acknowledged only when committed in a later tick.
+
+### The Driver Loop
+A **driver** calls `tick()` on all components in the defined order: Network → MessageBus → Process → Storage
+
+- In **production**, the driver is the system’s main event loop.  
+- In **tests**, the driver is the test itself, using **Cluster testkit** helpers to:
+  - Advance simulated time
+  - Control message delivery and failures
+  - Validate system state
+
+This enables both realistic production behavior and reproducible simulation, which is easier to test.
+
 
 ---
+
+## Time and Timeouts
+
+TickLoom models time in terms of **ticks**, not real-world milliseconds.  
+Every call to `tick()` advances a **logical tick counter** by one.  
+This makes timing deterministic and reproducible across test runs and simulations.
+
+### Tick-Based Timeouts
+Timeouts are configured in terms of the number of ticks before they expire — similar to the approach used in [etcd](https://etcd.io/) and [TigerBeetle](https://github.com/tigerbeetle/tigerbeetle):
+
+- Example: If a process has a timeout of `5` ticks, and the current tick counter is `100`, the timeout will trigger at tick `105`.
+
+### Advantages
+- **Deterministic** – Same sequence of events produces the same timeout behavior in every run.
+- **Testable** – In tests, you can advance time instantly by calling `tick()` in a loop, without waiting in real time.
+- **Simulation-friendly** – Works seamlessly with the simulated network and storage delays.
+
+### Timeout Handling
+Within each process:
+1. Track the tick count at which the timeout will occur.
+2. On each `tick()`, compare the current tick counter to the scheduled trigger tick.
+3. When the counter reaches or exceeds the target, execute the timeout action.
+
+This model avoids the unpredictability of real-time timers and makes TickLoom suitable for **highly controlled distributed system testing**.
+
 
 ## Installation
 
