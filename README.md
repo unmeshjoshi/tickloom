@@ -315,10 +315,21 @@ cluster.close();
 TickLoom is for you if you:
 - Build distributed algorithms in Java
 - Need deterministic, reproducible tests
-- Want to simulate failures without non-deterministic chaos
-- Prefer single-threaded event loop architecture
+- Want to simulate failures without non-deterministic chaos   using single-threaded event loop architecture
 
 ---
+
+## Next Steps
+
+The current version of TickLoom focuses on providing deterministic primitives, a simulated network, an NIO based network reference implementation, RocksDB based storage backend, and a testkit for building and verifying distributed algorithms. Planned extensions include:
+
+1. **Jepsen-Style History Checkers**  
+   - Tools to record and analyze operation histories from test runs.  
+   - Checkers for safety and liveness properties, similar to those used in [Jepsen](https://jepsen.io/).
+
+2. **Nemesis Module for Live Fault Injection**  
+   - A runtime fault injection system for processes running on a real network and storage backends.  
+  
 
 ## Acknowledgements
 
