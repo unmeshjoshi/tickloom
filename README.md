@@ -3,6 +3,7 @@
 </p>
 
 ## TickLoom
+![Java CI with Gradle](https://github.com/unmeshjoshi/tickloom/actions/workflows/gradle.yml/badge.svg)
 ### A fabric of ticking processes
 
 TickLoom is a lightweight Java framework for building **deterministic, testable distributed systems**.  
