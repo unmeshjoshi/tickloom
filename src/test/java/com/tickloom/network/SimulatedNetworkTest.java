@@ -218,6 +218,24 @@ public class SimulatedNetworkTest {
         assertEquals(1, messageDispatcher.receivedMessages.size());
         assertEquals(messageAtoB, messageDispatcher.receivedMessages.get(0));
     }
+
+    @Test
+    public void shouldDropMessagesOfSpecificType() {
+        ProcessId nodeA = new ProcessId("192.168.1.1");
+        ProcessId nodeB = new ProcessId("192.168.1.2");
+
+        Message getRequest = Message.of(nodeA, nodeB, PeerType.SERVER, new MessageType("CLIENT_GET_REQUEST"), "A->B".getBytes(), "test-correlation-id-11");
+        Message setRequest = Message.of(nodeA, nodeB, PeerType.SERVER, new MessageType("CLIENT_SET_REQUEST"), "A->B".getBytes(), "test-correlation-id-12");
+
+        network.dropMessagesOfType(nodeA, nodeB, new MessageType("CLIENT_GET_REQUEST"));
+        network.send(getRequest);  // Should be blocked
+        network.send(setRequest);  // Should work
+        network.tick();
+
+        // Then - only A->B message should be delivered
+        assertEquals(1, messageDispatcher.receivedMessages.size());
+        assertEquals(setRequest, messageDispatcher.receivedMessages.get(0));
+    }
     
     @Test
     void shouldHealPartitions() {

@@ -2,6 +2,7 @@ package com.tickloom.network;
 
 import com.tickloom.ProcessId;
 import com.tickloom.messaging.Message;
+import com.tickloom.messaging.MessageType;
 
 import java.util.*;
 
@@ -32,6 +33,42 @@ public class SimulatedNetwork extends Network {
     private final Map<NetworkLink, Integer> linkDelays = new HashMap<>();
     private final Map<NetworkLink, Double> linkPacketLoss = new HashMap<>();
 
+    private final Map<NetworkLink, FaultRule> linkFaultRules = new HashMap<>();
+
+    static class FaultRule {
+        NetworkLink link;
+        MessageType messageType;
+        int seenTimes = 0;
+        int nth;
+
+        public FaultRule(NetworkLink link, MessageType messageType) {
+            this(link, messageType, 0);
+        }
+
+        public FaultRule(NetworkLink link, MessageType messageType, int nth) {
+            this.link = link;
+            this.messageType = messageType;
+            this.nth = nth;
+        }
+
+        public boolean matches(Message message) {
+            if (!linkFrom(message).equals(link)) return false;
+            if (!message.messageType().equals(messageType)) return false;
+
+            seenTimes++;
+            return dropAllMatchingMessagesOfType()
+                    || isNthOccurrenceReached();
+        }
+
+        private boolean dropAllMatchingMessagesOfType() {
+            return nth == 0;
+        }
+
+        private boolean isNthOccurrenceReached() {
+            return seenTimes == nth;
+        }
+    }
+
     // Connection establishment state
     private int nextEphemeralPort = 50000; // Start ephemeral ports at 50000
 
@@ -61,12 +98,11 @@ public class SimulatedNetwork extends Network {
         this.defaultPacketLossRate = packetLossRate;
     }
 
-
     public static SimulatedNetwork noLossNetwork(Random random) {
         return new SimulatedNetwork(random, 0, 0);
     }
 
-    public static SimulatedNetwork lossyNetwork(Random random,double packetLossRate) {
+    public static SimulatedNetwork lossyNetwork(Random random, double packetLossRate) {
         return new SimulatedNetwork(random, 0, packetLossRate);
     }
 
@@ -90,6 +126,10 @@ public class SimulatedNetwork extends Network {
             return; // Message dropped due to partition
         }
 
+        if (matchesFaultRule(link, message)) {
+            return; // Message dropped due to fault rule
+        }
+
         if (shouldDropPacket(link)) {
             return; // Message lost due to packet loss
         }
@@ -97,6 +137,15 @@ public class SimulatedNetwork extends Network {
         // Use internal counter to calculate delivery tick (TigerBeetle pattern)
         long deliveryTick = calculateDeliveryTick(link, currentTick);
         queueForDelivery(message, deliveryTick);
+    }
+
+    private boolean matchesFaultRule(NetworkLink link, Message message) {
+        if (!linkFaultRules.containsKey(link)) {
+            return false;
+        }
+
+        FaultRule faultRule = linkFaultRules.get(link);
+        return faultRule.matches(message);
     }
 
     /**
@@ -142,7 +191,7 @@ public class SimulatedNetwork extends Network {
         }
     }
 
-    private NetworkLink linkFrom(Message message) {
+    private static NetworkLink linkFrom(Message message) {
         // TigerBeetle approach: Handle null source addresses gracefully
         if (message.source() == null) {
             // For client messages, use destination-only routing
@@ -186,7 +235,6 @@ public class SimulatedNetwork extends Network {
     }
 
     // Network Partitioning Implementation
-
     public void partition(ProcessId source, ProcessId destination) {
         if (source == null || destination == null) {
             throw new IllegalArgumentException("Source and destination addresses cannot be null");
@@ -214,10 +262,18 @@ public class SimulatedNetwork extends Network {
         if (source == null || destination == null) {
             throw new IllegalArgumentException("Source and destination addresses cannot be null");
         }
+        removePartitionBetween(source, destination);
+    }
 
-        // Remove both directions
-        partitionedLinks.remove(new NetworkLink(source, destination));
-        partitionedLinks.remove(new NetworkLink(destination, source));
+    public void removePartitionBetween(ProcessId a, ProcessId b) {
+        for (NetworkLink link : bothDirections(a, b)) {
+            partitionedLinks.remove(link);
+            linkFaultRules.remove(link);
+        }
+    }
+
+    private static List<NetworkLink> bothDirections(ProcessId a, ProcessId b) {
+        return List.of(new NetworkLink(a, b), new NetworkLink(b, a));
     }
 
     public void setDelay(ProcessId source, ProcessId destination, int delayTicks) {
@@ -242,6 +298,15 @@ public class SimulatedNetwork extends Network {
         linkPacketLoss.put(new NetworkLink(source, destination), lossRate);
     }
 
+    public void dropMessagesOfType(ProcessId source, ProcessId destination, MessageType messageType) {
+        linkFaultRules
+                .computeIfAbsent(new NetworkLink(source, destination), k -> new FaultRule(new NetworkLink(source, destination), messageType));
+    }
+
+    public void dropNthMessagesOfType(ProcessId source, ProcessId destination, MessageType messageType, int nth) {
+        linkFaultRules
+                .computeIfAbsent(new NetworkLink(source, destination), k -> new FaultRule(new NetworkLink(source, destination), messageType, nth));
+    }
 
     /**
      * Returns the most recently delivered message (for testing).
