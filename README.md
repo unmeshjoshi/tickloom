@@ -117,8 +117,8 @@ Artifacts are published to Maven Central under the `io.github.unmeshjoshi` group
 **Gradle (Kotlin DSL)**:
 ```kotlin
 dependencies {
-  implementation("io.github.unmeshjoshi:tickloom:0.1.0-alpha.2")
-  testImplementation("io.github.unmeshjoshi:tickloom-testkit:0.1.0-alpha.2")
+  implementation("io.github.unmeshjoshi:tickloom:0.1.0-alpha.4")
+  testImplementation("io.github.unmeshjoshi:tickloom-testkit:0.1.0-alpha.4")
 }
 ```
 
@@ -127,12 +127,12 @@ dependencies {
 <dependency>
   <groupId>io.github.unmeshjoshi</groupId>
   <artifactId>tickloom</artifactId>
-  <version>0.1.0-alpha.2</version>
+  <version>0.1.0-alpha.4</version>
 </dependency>
 <dependency>
   <groupId>io.github.unmeshjoshi</groupId>
   <artifactId>tickloom-testkit</artifactId>
-  <version>0.1.0-alpha.2</version>
+  <version>0.1.0-alpha.4</version>
   <scope>test</scope>
 </dependency>
 ```

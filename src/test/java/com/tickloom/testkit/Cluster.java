@@ -8,6 +8,7 @@ import com.tickloom.config.ClusterTopology;
 import com.tickloom.config.Config;
 import com.tickloom.config.ProcessConfig;
 import com.tickloom.messaging.MessageBus;
+import com.tickloom.messaging.MessageType;
 import com.tickloom.network.*;
 import com.tickloom.storage.SimulatedStorage;
 import com.tickloom.storage.Storage;
@@ -228,6 +229,15 @@ public class Cluster implements Tickable, AutoCloseable {
         ((SimulatedNetwork) sharedNetwork).partitionOneWay(source, destination);
     }
 
+    public void dropMessagesOfType(ProcessId source, ProcessId destination, MessageType messageType) {
+        ensureSimulatedNetwork();
+        ((SimulatedNetwork) sharedNetwork).dropMessagesOfType(source, destination, messageType);
+    }
+
+    public void dropNthMessagesOfType(ProcessId source, ProcessId destination, MessageType messageType, int nth) {
+        ensureSimulatedNetwork();
+        ((SimulatedNetwork) sharedNetwork).dropNthMessagesOfType(source, destination, messageType, nth);
+    }
 
 
     /**
