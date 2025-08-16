@@ -42,7 +42,7 @@ shadowJar {
     
     // Set the main class for the JAR
     manifest {
-        attributes 'Main-Class': 'com.tickloom.cmd.Server'
+        attributes 'Main-Class': 'com.tickloom.cmd.ServerMain'
     }
 }
 
@@ -68,7 +68,7 @@ task shadowClientJar(type: com.github.jengelman.gradle.plugins.shadow.tasks.Shad
     
     // Set the main class for the client JAR
     manifest {
-        attributes 'Main-Class': 'com.tickloom.cmd.Client'
+        attributes 'Main-Class': 'com.tickloom.cmd.ClientMain'
     }
 }
 

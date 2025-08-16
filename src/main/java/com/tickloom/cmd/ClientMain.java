@@ -16,13 +16,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.util.*;
 
 /**
  * Command-line client to send GET/SET requests to quorum replicas.
  */
-public class Client {
+public class ClientMain {
 
     private static final String OPT_CONFIG = "--config";
     private static final String OPT_ID = "--id"; // client id

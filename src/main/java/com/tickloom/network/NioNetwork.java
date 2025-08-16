@@ -112,11 +112,15 @@ public class NioNetwork extends Network {
         //TODO: replace System.nanotime with clock.nanoTime()
         long startTime = System.nanoTime();
         long endTime = startTime + duration.toNanos();
-        long remainingTime = endTime - startTime;
+        long remainingTime = remainingTime(endTime, startTime);
         while(remainingTime > 0) {
             processSelectedKeys(Duration.ofNanos(remainingTime));
-            remainingTime = endTime - System.nanoTime();
+            remainingTime = remainingTime(endTime, System.nanoTime());
         }
+    }
+
+    private static long remainingTime(long endTime, long startTime) {
+        return endTime - startTime;
     }
 
     public static final Duration MAX_IDLE_MS = Duration.ofMillis(10);

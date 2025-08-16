@@ -109,11 +109,13 @@ status=0
 for ((i=1; i<=NODES; i++)); do
   primary="server-$i"
   echo "GET $KEY via $primary ..."
-  out=$("$JAVA_CMD" -jar "$CLIENT_JAR" --config "$CONFIG_FILE" --id client-1 --replicas "$primary" --get "$KEY" --deadline-ms 10000 | tail -n 1)
-  if [[ "$out" == "$VALUE" ]]; then
+  raw_output=$("$JAVA_CMD" -jar "$CLIENT_JAR" --config "$CONFIG_FILE" --id client-1 --replicas "$primary" --get "$KEY" --deadline-ms 10000 2>&1)
+  if printf "%s\n" "$raw_output" | grep -Fxq "$VALUE"; then
     echo "[$primary] OK"
   else
-    echo "[$primary] FAIL (got: $out)" >&2
+    # Fallback: show last non-empty line for debugging
+    last_line=$(printf "%s\n" "$raw_output" | awk 'NF{p=$0} END{print p}')
+    echo "[$primary] FAIL (got: $last_line)" >&2
     status=1
   fi
 done

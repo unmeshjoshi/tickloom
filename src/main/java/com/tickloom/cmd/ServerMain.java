@@ -17,14 +17,13 @@ import com.tickloom.util.SystemClock;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-public class Server {
+public class ServerMain {
 
     private static final String OPT_CONFIG = "--config";
     private static final String OPT_ID = "--id";
@@ -64,7 +63,7 @@ public class Server {
             Clock clock = new SystemClock();
             Storage storage = new RocksDbStorage(dataDir);
 
-            Replica replica = new QuorumReplica(processId, peerIds, messageBus, codec, storage, clock, timeoutTicks);
+            com.tickloom.Process replica = getReplica(processId, peerIds, messageBus, codec, storage, clock, timeoutTicks);
 
             addShutdownHook(network, storage);
 
@@ -83,7 +82,11 @@ public class Server {
         }
     }
 
-    private static void runEventLoop(NioNetwork network, Replica replica, Storage storage) throws IOException {
+    private static QuorumReplica getReplica(ProcessId processId, List<ProcessId> peerIds, MessageBus messageBus, JsonMessageCodec codec, Storage storage, Clock clock, int timeoutTicks) {
+        return new QuorumReplica(processId, peerIds, messageBus, codec, storage, clock, timeoutTicks);
+    }
+
+    private static void runEventLoop(NioNetwork network, com.tickloom.Process replica, Storage storage) throws IOException {
         while (true) {
             network.runToNanos(NioNetwork.MAX_IDLE_MS);
             replica.tick();
