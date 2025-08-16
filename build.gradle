@@ -42,7 +42,7 @@ shadowJar {
     
     // Set the main class for the JAR
     manifest {
-        attributes 'Main-Class': 'tickloom.cmd.ServerApplication'
+        attributes 'Main-Class': 'com.tickloom.cmd.Server'
     }
 }
 
@@ -68,7 +68,7 @@ task shadowClientJar(type: com.github.jengelman.gradle.plugins.shadow.tasks.Shad
     
     // Set the main class for the client JAR
     manifest {
-        attributes 'Main-Class': 'tickloom.cmd.ClientApplication'
+        attributes 'Main-Class': 'com.tickloom.cmd.Client'
     }
 }
 
@@ -129,7 +129,7 @@ task testIndividualServers(type: Exec) {
     // Make executable
     doFirst {
         exec {
-            commandLine 'chmod', '+x', 'scripts/test-individual-servers.sh'
+            commandLine 'chmod', '+x', 'scripts/test-individual-servers.sh', 'scripts/run-cluster.sh', 'scripts/kill-servers.sh'
         }
     }
     

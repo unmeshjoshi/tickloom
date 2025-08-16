@@ -10,9 +10,11 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * ──────────────────────────────────────────────────────────────────────────────
@@ -27,8 +29,7 @@ import java.util.List;
  *  • Framing is a simple 9‑byte header (4+1+4) + payload.
  *
  *  WHY IT’S OK FOR NOW
- *  • Simpler state machine → faster to reason about and debug.
- *  • Fewer sockets → easier on ephemeral‑port exhaustion in small clusters.
+ *  • Simpler implementation.
  *  • Unit + integration tests exercise the full path without role branches.
  *
  *  ROADMAP (v2+)
@@ -45,11 +46,7 @@ import java.util.List;
  *     – Stream‑id bucket 0‑99 reserved for control/heartbeats (handled first).
  *     – Bulk blobs (>1MB) on dedicated stream range or separate socket.
  *
- *  4. **Security profiles**
- *     – mTLS for clients; lighter shared‑secret TLS for intra‑cluster.
- *     – Optional compression on replica channels only.
- *
- *  5. **Selector sharding**
+ *   5. **Selector sharding**
  *     – clientSelector (latency‑optimised)
  *     – clusterSelector (throughput‑optimised)
  *
@@ -111,10 +108,31 @@ public class NioNetwork extends Network {
         acceptors.add(acceptor);
     }
 
+    public void runToNanos(Duration duration) throws IOException {
+        //TODO: replace System.nanotime with clock.nanoTime()
+        long startTime = System.nanoTime();
+        long endTime = startTime + duration.toNanos();
+        long remainingTime = endTime - startTime;
+        while(remainingTime > 0) {
+            processSelectedKeys(Duration.ofNanos(remainingTime));
+            remainingTime = endTime - System.nanoTime();
+        }
+    }
+
+    public static final Duration MAX_IDLE_MS = Duration.ofMillis(10);
+
+    //Ticks are used only in integration tests.. 
+    //The server main class uses runToNanos to wait for events to happen 
+    //for a given duration.
     @Override
     public void tick() {
+        processSelectedKeys(MAX_IDLE_MS);
+    }
+
+    private void processSelectedKeys(Duration waitTime) {
         try {
-            int noOfAvailableKeys = selector.selectNow();
+            
+            int noOfAvailableKeys = selector.select(waitTime.toMillis());
             if (noOfAvailableKeys <= 0) {
                 return;
             }
