@@ -133,7 +133,7 @@ task testIndividualServers(type: Exec) {
         }
     }
     
-    commandLine './scripts/test-individual-servers.sh'
+    commandLine './scripts/test-individual-servers.sh', '--nodes', '3', '--factory', 'com.tickloom.algorithms.replication.quorum.QuorumReplicaProcessFactory'
 }
 
 // Task to inspect data directory

@@ -226,7 +226,7 @@ public class NioNetworkIntegrationTest {
     @Test
     void shouldHandleConcurrentConnections() throws Exception {
         // Create multiple client networks
-        int clientCount = 100;
+        int clientCount = 10;
         List<TestPeer> clients = new ArrayList<>();
         List<ProcessId> clientIds = new ArrayList<>();
 

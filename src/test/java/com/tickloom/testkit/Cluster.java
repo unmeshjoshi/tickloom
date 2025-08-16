@@ -1,5 +1,6 @@
 package com.tickloom.testkit;
 
+import com.tickloom.ProcessFactory;
 import com.tickloom.ProcessId;
 import com.tickloom.Tickable;
 import com.tickloom.future.ListenableFuture;
@@ -380,10 +381,6 @@ public class Cluster implements Tickable, AutoCloseable {
         return processClocks.get(processId).now();
     }
 
-    public interface ServerProcessFactory<T extends com.tickloom.Process> {
-        T create(ProcessId id, List<ProcessId> peerIds, MessageBus messageBus, MessageCodec messageCodec, Storage storage, Clock clock, int requestTimeoutTicks);
-    }
-
     public interface ClientFactory<T extends ClusterClient> {
         T create(ProcessId clientId, List<ProcessId> replicaEndpoints,
                  MessageBus messageBus, MessageCodec messageCodec,
@@ -518,11 +515,11 @@ public class Cluster implements Tickable, AutoCloseable {
         serverNodes.forEach(Node::tick);
     }
 
-    public <T extends com.tickloom.Process> Cluster build(ServerProcessFactory<T> factory) throws IOException {
+    public <T extends com.tickloom.Process> Cluster build(ProcessFactory factory) throws IOException {
         return build(factory, useSimulatedNetwork);
     }
 
-    public <T extends com.tickloom.Process> Cluster build(ServerProcessFactory<T> factory, boolean withSimulatedNetwork) throws IOException {
+    public <T extends com.tickloom.Process> Cluster build(ProcessFactory factory, boolean withSimulatedNetwork) throws IOException {
         //Seed the random number generator
         random = new Random(seed);
 

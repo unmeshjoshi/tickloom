@@ -27,16 +27,18 @@ BASE_PORT=20080
 SLEEP_START=2
 KEY="indiv-key"
 VALUE="indiv-value"
+FACTORY_FQCN="com.tickloom.algorithms.replication.quorum.QuorumReplicaProcessFactory"
 
 usage() {
   cat <<USAGE
-Usage: $(basename "$0") [--nodes N] [--base-port PORT]
+Usage: $(basename "$0") [--nodes N] [--base-port PORT] [--factory FQCN]
 
 Starts a cluster and verifies GET from each server individually after a SET.
 
 Options:
   --nodes N       Number of servers to start (default: 5)
   --base-port P   Base TCP port for servers (default: 20080)
+  --factory FQCN  Fully qualified ProcessFactory class (default: ${FACTORY_FQCN})
 USAGE
 }
 
@@ -48,11 +50,20 @@ while [[ $# -gt 0 ]]; do
     --base-port)
       BASE_PORT="${2:-}"
       shift 2;;
+    --factory)
+      FACTORY_FQCN="${2:-}"
+      shift 2;;
     -h|--help)
       usage; exit 0;;
     *) echo "Unknown option: $1" >&2; usage; exit 1;;
   esac
 done
+
+# Normalize common shorthand/mistyped factory names to the correct FQCN
+if [[ "$FACTORY_FQCN" == "com.tickloom.QuorumReplicaProcessFactory" || "$FACTORY_FQCN" == "com.tickloom.QuorumProcessFactory" ]]; then
+  echo "[test-individual-servers] Normalizing factory FQCN '$FACTORY_FQCN' -> 'com.tickloom.algorithms.replication.quorum.QuorumReplicaProcessFactory'" >&2
+  FACTORY_FQCN="com.tickloom.algorithms.replication.quorum.QuorumReplicaProcessFactory"
+fi
 
 mkdir -p "$CLUSTER_DIR" "$DATA_DIR"
 rm -f "$PIDS_FILE"
@@ -84,6 +95,7 @@ for ((i=1; i<=NODES; i++)); do
     --id "$id" \
     --data "$datadir" \
     --timeout 10 \
+    --factory "$FACTORY_FQCN" \
     > "$log" 2>&1 & echo $! >> "$PIDS_FILE") &
 done
 

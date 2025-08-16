@@ -8,13 +8,6 @@ DATA_DIR="$BUILD_DIR/demo-data"
 SERVER_JAR="$ROOT_DIR/build/libs/tickloom-server-all.jar"
 CLIENT_JAR="$ROOT_DIR/build/libs/tickloom-client-all.jar"
 JAVA_CMD="java"
-# Prefer macOS JDK 21 if available
-if command -v /usr/libexec/java_home >/dev/null 2>&1; then
-  J21_HOME=$(/usr/libexec/java_home -v 21 2>/dev/null || true)
-  if [[ -n "$J21_HOME" && -x "$J21_HOME/bin/java" ]]; then
-    JAVA_CMD="$J21_HOME/bin/java"
-  fi
-fi
 # Fallback to JAVA_HOME
 if [[ "$JAVA_CMD" == "java" && -n "${JAVA_HOME:-}" && -x "$JAVA_HOME/bin/java" ]]; then
   JAVA_CMD="$JAVA_HOME/bin/java"
@@ -25,16 +18,18 @@ CONFIG_FILE="$CLUSTER_DIR/config.yaml"
 NODES=5
 BASE_PORT=18080
 SLEEP_START=2
+FACTORY_FQCN="com.tickloom.algorithms.replication.quorum.QuorumReplicaProcessFactory"
 
 usage() {
   cat <<USAGE
-Usage: $(basename "$0") [--nodes N] [--base-port PORT]
+Usage: $(basename "$0") [--nodes N] [--base-port PORT] [--factory FQCN]
 
 Starts N quorum replica servers on localhost and runs a demo client SET/GET.
 
 Options:
   --nodes N       Number of servers to start (default: 5)
   --base-port P   Base TCP port for servers (default: 18080)
+  --factory FQCN  Fully qualified ProcessFactory class (default: ${FACTORY_FQCN})
 USAGE
 }
 
@@ -48,6 +43,10 @@ while [[ $# -gt 0 ]]; do
       BASE_PORT="${2:-}"
       shift 2
       ;;
+    --factory)
+      FACTORY_FQCN="${2:-}"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -59,6 +58,12 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# Normalize common shorthand/mistyped factory names to the correct FQCN
+if [[ "$FACTORY_FQCN" == "com.tickloom.QuorumReplicaProcessFactory" || "$FACTORY_FQCN" == "com.tickloom.QuorumProcessFactory" ]]; then
+  echo "[run-cluster] Normalizing factory FQCN '$FACTORY_FQCN' -> 'com.tickloom.algorithms.replication.quorum.QuorumReplicaProcessFactory'" >&2
+  FACTORY_FQCN="com.tickloom.algorithms.replication.quorum.QuorumReplicaProcessFactory"
+fi
 
 mkdir -p "$CLUSTER_DIR" "$DATA_DIR"
 rm -f "$PIDS_FILE"
@@ -94,6 +99,7 @@ for ((i=1; i<=NODES; i++)); do
     --id "$id" \
     --data "$datadir" \
     --timeout 10 \
+    --factory "$FACTORY_FQCN" \
     > "$log" 2>&1 & echo $! >> "$PIDS_FILE") &
 done
 

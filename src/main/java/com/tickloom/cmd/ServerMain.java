@@ -1,7 +1,8 @@
 package com.tickloom.cmd;
 
 import com.tickloom.ProcessId;
-import com.tickloom.Replica;
+import com.tickloom.Process;
+import com.tickloom.ProcessFactory;
 import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.config.ClusterTopology;
 import com.tickloom.config.Config;
@@ -29,6 +30,7 @@ public class ServerMain {
     private static final String OPT_ID = "--id";
     private static final String OPT_DATA = "--data";
     private static final String OPT_TIMEOUT = "--timeout"; // in ticks
+    private static final String OPT_FACTORY = "--factory"; // fully-qualified class name implementing ProcessFactory
 
     public static void main(String[] args) {
         Map<String, String> options = parseArgs(args);
@@ -63,7 +65,7 @@ public class ServerMain {
             Clock clock = new SystemClock();
             Storage storage = new RocksDbStorage(dataDir);
 
-            com.tickloom.Process replica = getReplica(processId, peerIds, messageBus, codec, storage, clock, timeoutTicks);
+            Process replica = createProcess(options.get(OPT_FACTORY), processId, peerIds, messageBus, codec, storage, clock, timeoutTicks);
 
             addShutdownHook(network, storage);
 
@@ -82,8 +84,28 @@ public class ServerMain {
         }
     }
 
-    private static QuorumReplica getReplica(ProcessId processId, List<ProcessId> peerIds, MessageBus messageBus, JsonMessageCodec codec, Storage storage, Clock clock, int timeoutTicks) {
-        return new QuorumReplica(processId, peerIds, messageBus, codec, storage, clock, timeoutTicks);
+    private static Process createProcess(String factoryClassName,
+                                         ProcessId processId,
+                                         List<ProcessId> peerIds,
+                                         MessageBus messageBus,
+                                         JsonMessageCodec codec,
+                                         Storage storage,
+                                         Clock clock,
+                                         int timeoutTicks) {
+        if (factoryClassName == null || factoryClassName.isBlank()) {
+            return new QuorumReplica(processId, peerIds, messageBus, codec, storage, clock, timeoutTicks);
+        }
+        try {
+            Class<?> clazz = Class.forName(factoryClassName);
+            Object instance = clazz.getDeclaredConstructor().newInstance();
+            if (!(instance instanceof ProcessFactory)) {
+                throw new IllegalArgumentException("Factory class does not implement ProcessFactory: " + factoryClassName);
+            }
+            ProcessFactory factory = (ProcessFactory) instance;
+            return factory.create(processId, peerIds, messageBus, codec, storage, clock, timeoutTicks);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to instantiate factory: " + factoryClassName, e);
+        }
     }
 
     private static void runEventLoop(NioNetwork network, com.tickloom.Process replica, Storage storage) throws IOException {
@@ -134,11 +156,12 @@ public class ServerMain {
     }
 
     private static void printUsageAndExit(int code) {
-        System.out.println("Usage: java -cp <jar> com.tickloom.cmd.Server --config <path/to/config.yaml> --id <process-id> [--data <data-dir>] [--timeout <ticks>]");
+        System.out.println("Usage: java -cp <jar> com.tickloom.cmd.ServerMain --config <path/to/config.yaml> --id <process-id> [--data <data-dir>] [--timeout <ticks>] [--factory <fqcn>]");
         System.out.println("  --config   Path to YAML config containing processConfigs");
         System.out.println("  --id       Process id to run (must exist in config)");
         System.out.println("  --data     Directory for RocksDB data (default: build/data/<id>)");
         System.out.println("  --timeout  Request timeout in ticks (default: 10)");
+        System.out.println("  --factory  Fully-qualified class name implementing com.tickloom.ProcessFactory");
         System.exit(code);
     }
 
@@ -155,6 +178,7 @@ public class ServerMain {
                 case OPT_ID:
                 case OPT_DATA:
                 case OPT_TIMEOUT:
+                case OPT_FACTORY:
                     if (i + 1 >= args.length) {
                         System.err.println("Missing value for option: " + arg);
                         printUsageAndExit(1);
