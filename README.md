@@ -1,12 +1,13 @@
 <p align="left">
-  <img src="logo.png" alt="TickLoom Logo" width="200"/>
+  <img src="logo.png" alt="Tickloom Logo" width="200"/>
 </p>
 
-## TickLoom
+## Tickloom
 ![Java CI with Gradle](https://github.com/unmeshjoshi/tickloom/actions/workflows/gradle.yml/badge.svg)
 ### A fabric of ticking processes
 
-TickLoom is a lightweight Java framework for building **deterministic, testable distributed systems**.  
+Tickloom is a lightweight Java framework for building **deterministic, testable distributed systems**.
+
 It gives you:
 
 - A **single-threaded tick loop** for deterministic execution
@@ -17,7 +18,7 @@ It gives you:
 
 ---
 
-## Why TickLoom?
+## Why Tickloom?
 
 Distributed systems share common needs:
 
@@ -26,13 +27,13 @@ Distributed systems share common needs:
 - **Waiting & timeouts** – keep requests pending until quorum/consensus is reached
 - **Testing** – spin up clusters, inject failures, control time, and verify results
 
-TickLoom provides all of these **in a single-threaded deterministic model** — making tests reproducible and easier to debug.
+Tickloom provides all of these **in a single-threaded deterministic model** — making tests reproducible and easier to debug.
 
 ---
 
 ## The Tick Model
 
-In TickLoom, **`tick()`** represents a single *lock step* of execution.  
+In Tickloom, **`tick()`** represents a single *lock step* of execution.  
 Each tick processes pending work in a **fixed, deterministic order**, ensuring reproducibility and predictable behavior across runs.
 
 ### Single Thread of Control
@@ -50,7 +51,7 @@ The core components implement `Tickable` and are invoked **in sequence**:
 4. **Storage** – applies and commits any pending writes.
 
 ### Asynchronous Actions in a Synchronous Tick
-While network and storage operations are **asynchronous in nature**, TickLoom models them explicitly within the tick loop:
+While network and storage operations are **asynchronous in nature**, Tickloom models them explicitly within the tick loop:
 - Outgoing network messages are queued and delivered later according to the network model.
 - Storage writes are acknowledged only when committed in a later tick.
 
@@ -70,7 +71,7 @@ This enables both realistic production behavior and reproducible simulation, whi
 
 ## Time and Timeouts
 
-TickLoom models time in terms of **ticks**, not real-world milliseconds.  
+Tickloom models time in terms of **ticks**, not real-world milliseconds.  
 Every call to `tick()` advances a **logical tick counter** by one.  
 This makes timing deterministic and reproducible across test runs and simulations.
 
@@ -90,11 +91,11 @@ Within each process:
 2. On each `tick()`, compare the current tick counter to the scheduled trigger tick.
 3. When the counter reaches or exceeds the target, execute the timeout action.
 
-This model avoids the unpredictability of real-time timers and makes TickLoom suitable for **highly controlled distributed system testing**.
+This model avoids the unpredictability of real-time timers and makes Tickloom suitable for **highly controlled distributed system testing**.
 
 ## Messages and Serialization
 
-In TickLoom, messages are defined as **plain Java records**.  
+In Tickloom, messages are defined as **plain Java records**.  
 This makes them:
 - Simple to declare and read
 - Easy to evolve without special tooling
@@ -144,7 +145,7 @@ dependencies {
 
 ## Quick Start
 
-Below is a minimal Echo example that shows how to build on TickLoom’s primitives:
+Below is a minimal Echo example that shows how to build on Tickloom’s primitives:
 - `EchoServer` extends `Process`
 - `EchoClient` extends `ClusterClient`
 - A JUnit test uses the `Cluster` testkit and `assertEventually`
@@ -311,9 +312,9 @@ cluster.close();
 
 ---
 
-## Who Should Use TickLoom?
+## Who Should Use Tickloom?
 
-TickLoom is for you if you:
+Tickloom is for you if you:
 - Build distributed algorithms in Java
 - Need deterministic, reproducible tests
 - Want to simulate failures without non-deterministic chaos   using single-threaded event loop architecture
@@ -322,7 +323,7 @@ TickLoom is for you if you:
 
 ## Next Steps
 
-The current version of TickLoom focuses on providing deterministic primitives, a simulated network, an NIO based network reference implementation, RocksDB based storage backend, and a testkit for building and verifying distributed algorithms. Planned extensions include:
+The current version of Tickloom focuses on providing deterministic primitives, a simulated network, an NIO based network reference implementation, RocksDB based storage backend, and a testkit for building and verifying distributed algorithms. Planned extensions include:
 
 1. **Jepsen-Style History Checkers**  
    - Tools to record and analyze operation histories from test runs.  
@@ -333,10 +334,10 @@ The current version of TickLoom focuses on providing deterministic primitives, a
   
 
 ## Acknowledgements
-
-#TickLoom’s tick model and deterministic simulation approach are inspired by the excellent [TigerBeetle](https://github.com/tigerbeetle/tigerbeetle) project.
-#ChatGPT-5 was used to brainstorm some ideas and generate some parts of this code.
-
+- Tickloom’s tick model and deterministic simulation approach are inspired by the excellent [TigerBeetle](https://github.com/tigerbeetle/tigerbeetle) project.
+- [![AI assisted](https://img.shields.io/badge/AI%20assisted-ChatGPT--5-blueviolet)](https://openai.com)
+  ChatGPT-5 was used to brainstorm some ideas and generate some parts of this code.
+  
 ---
 
 ## License

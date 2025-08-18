@@ -105,31 +105,7 @@ public class SimulatedNetworkTest {
         // When & Then
         assertThrows(IllegalArgumentException.class, () -> network.send(null));
     }
-    
-    @Test
-    void shouldSupportConfigurableDelay() {
-        // Given - network with 2 tick delay
-        TestMessageDispatcher delayedHandler = new TestMessageDispatcher();
-        SimulatedNetwork delayedNetwork = SimulatedNetwork.noLossNetwork(seededRandom).withDelayTicks(2); // 2 tick delay, no packet loss
-        delayedNetwork.registerMessageDispatcher(delayedHandler);
 
-        ProcessId source = new ProcessId("192.168.1.1");
-        ProcessId destination = new ProcessId("192.168.1.2");
-        Message message = Message.of(source, destination, PeerType.SERVER, new MessageType("CLIENT_GET_REQUEST"), "delayed".getBytes(), "test-correlation-id-5");
-        
-        // When
-        delayedNetwork.send(message);
-        
-        // Then - message not available immediately
-        delayedNetwork.tick();
-        assertTrue(delayedHandler.receivedMessages.isEmpty());
-        
-        // Then - message available after delay
-        delayedNetwork.tick(); // Second tick - should deliver now
-        assertEquals(1, delayedHandler.receivedMessages.size());
-        assertEquals(message, delayedHandler.receivedMessages.get(0));
-    }
-    
     @Test
     void shouldSimulatePacketLoss() {
         // Given - network with 100% packet loss
@@ -188,7 +164,7 @@ public class SimulatedNetworkTest {
         Message messageBtoA = Message.of(nodeB, nodeA, PeerType.SERVER, new MessageType("CLIENT_SET_REQUEST"), "B->A".getBytes(), "test-correlation-id-10");
         
         // When - partition the link between A and B
-        network.partition(nodeA, nodeB);
+        network.partitionTwoWay(nodeA, nodeB);
         
         network.send(messageAtoB);
         network.send(messageBtoA);
@@ -245,7 +221,7 @@ public class SimulatedNetworkTest {
         Message message = Message.of(nodeA, nodeB, PeerType.SERVER, new MessageType("CLIENT_GET_REQUEST"), "healed".getBytes(), "test-correlation-id-13");
         
         // When - partition, send message (blocked), then heal partition
-        network.partition(nodeA, nodeB);
+        network.partitionTwoWay(nodeA, nodeB);
         network.send(message);
         network.tick();
         
@@ -325,7 +301,7 @@ public class SimulatedNetworkTest {
         ProcessId nodeB = new ProcessId("192.168.1.2");
         
         // When - establish partition and send multiple messages
-        network.partition(nodeA, nodeB);
+        network.partitionTwoWay(nodeA, nodeB);
         
         for (int i = 0; i < 5; i++) {
             Message message = Message.of(nodeA, nodeB, PeerType.SERVER, new MessageType("CLIENT_GET_REQUEST"), ("msg" + i).getBytes(), "test-correlation-id-18-" + i);

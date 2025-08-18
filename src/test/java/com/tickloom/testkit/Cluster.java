@@ -204,14 +204,14 @@ public class Cluster implements Tickable, AutoCloseable {
      */
     public void partitionNodes(ProcessId process1, ProcessId process2) {
         ensureSimulatedNetwork();
-        ((SimulatedNetwork) sharedNetwork).partition(process1, process2);
+        ((SimulatedNetwork) sharedNetwork).partitionTwoWay(process1, process2);
     }
 
     public void partitionNodes(NodeGroup from, NodeGroup to) {
         ensureSimulatedNetwork();
         for (ProcessId toProcess : to.processIds()) {
             for (ProcessId fromProcess : from.processIds()) {
-                ((SimulatedNetwork) sharedNetwork).partition(fromProcess, toProcess);
+                ((SimulatedNetwork) sharedNetwork).partitionTwoWay(fromProcess, toProcess);
             }
         }
     }
@@ -381,6 +381,10 @@ public class Cluster implements Tickable, AutoCloseable {
         return processClocks.get(processId).now();
     }
 
+    public Random getRandom() {
+        return random;
+    }
+
     public interface ClientFactory<T extends ClusterClient> {
         T create(ProcessId clientId, List<ProcessId> replicaEndpoints,
                  MessageBus messageBus, MessageCodec messageCodec,
@@ -435,7 +439,7 @@ public class Cluster implements Tickable, AutoCloseable {
 
     private Network createNetwork(MessageCodec messageCodec) throws IOException {
         //as of now creating simulated network with no packet loss or delay
-        return useSimulatedNetwork? SimulatedNetwork.noLossNetwork(random)
+        return useSimulatedNetwork? SimulatedNetwork.lossyNetwork(random, 0)
                 :NioNetwork.create(topo, messageCodec);
     }
 

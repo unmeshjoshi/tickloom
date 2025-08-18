@@ -3,6 +3,7 @@ package com.tickloom.network;
 import com.tickloom.ProcessId;
 import com.tickloom.messaging.Message;
 import com.tickloom.messaging.MessageType;
+import com.tickloom.testkit.NodeGroup;
 
 import java.util.*;
 
@@ -12,13 +13,12 @@ import java.util.*;
  * <p>
  * This implementation follows the Service Layer reactive tick() pattern:
  * - send() queues messages for future delivery
- * - tick() processes queued messages and makes them available for receive()
- * - receive() retrieves messages that have been delivered
+ * - tick() processes queued messages and delivers them.
  */
 public class SimulatedNetwork extends Network {
 
     private final Random random;
-    private int defaultDelayTicks;
+    private long defaultDelayTicks;
     private double defaultPacketLossRate;
 
     private final PriorityQueue<QueuedMessage> pendingMessages = new PriorityQueue<>();
@@ -30,10 +30,31 @@ public class SimulatedNetwork extends Network {
     private final Set<NetworkLink> partitionedLinks = new HashSet<>();
 
     // Per-link configuration
-    private final Map<NetworkLink, Integer> linkDelays = new HashMap<>();
     private final Map<NetworkLink, Double> linkPacketLoss = new HashMap<>();
-
+    private final Map<NetworkLink, Long> cloggedUntilTick = new HashMap<>();
     private final Map<NetworkLink, FaultRule> linkFaultRules = new HashMap<>();
+    //Should use LinkedHashset for determinstic ordering while iterating for introducing
+    //network partitions
+    private LinkedHashSet<ProcessId> knownNodes = new LinkedHashSet<>();
+
+    private boolean isClogged(NetworkLink link) {
+        return cloggedUntilTick.getOrDefault(link, 0L) > currentTick;
+    }
+
+    private void clogFor(NetworkLink link, long durationTicks) {
+        if (durationTicks <= 0) return;
+        long until = currentTick + durationTicks;
+        cloggedUntilTick.merge(link, until, Math::max); // extend if already clogged
+    }
+
+    private boolean shouldClog() {
+        return options.pathClogProb > 0 && random.nextDouble() < options.pathClogProb;
+    }
+
+    public SimulatedNetwork withCloggingProbability(double v) {
+        this.options.pathClogProb = v;
+        return this;
+    }
 
     static class FaultRule {
         NetworkLink link;
@@ -69,9 +90,6 @@ public class SimulatedNetwork extends Network {
         }
     }
 
-    // Connection establishment state
-    private int nextEphemeralPort = 50000; // Start ephemeral ports at 50000
-
     private Message lastDeliveredMessage;
 
 
@@ -82,7 +100,7 @@ public class SimulatedNetwork extends Network {
      * @param delayTicks     number of ticks to delay message delivery (0 = immediate)
      * @param packetLossRate probability [0.0-1.0] that a message will be lost
      */
-    private SimulatedNetwork(Random random, int delayTicks, double packetLossRate) {
+    private SimulatedNetwork(Random random, int delayTicks, double packetLossRate, NetworkOptions options) {
         if (random == null) {
             throw new IllegalArgumentException("Random cannot be null");
         }
@@ -96,14 +114,15 @@ public class SimulatedNetwork extends Network {
         this.random = random;
         this.defaultDelayTicks = delayTicks;
         this.defaultPacketLossRate = packetLossRate;
+        this.options = options;
     }
 
     public static SimulatedNetwork noLossNetwork(Random random) {
-        return new SimulatedNetwork(random, 0, 0);
+        return new SimulatedNetwork(random, 0, 0, NetworkOptions.noLoss());
     }
 
     public static SimulatedNetwork lossyNetwork(Random random, double packetLossRate) {
-        return new SimulatedNetwork(random, 0, packetLossRate);
+        return new SimulatedNetwork(random, 0, packetLossRate, NetworkOptions.create());
     }
 
     public SimulatedNetwork withDelayTicks(int delayTicks) {
@@ -119,6 +138,8 @@ public class SimulatedNetwork extends Network {
     @Override
     public void send(Message message) {
         validateMessage(message);
+
+        addKnownProcessIds(message);
 
         NetworkLink link = linkFrom(message);
 
@@ -138,6 +159,177 @@ public class SimulatedNetwork extends Network {
         long deliveryTick = calculateDeliveryTick(link, currentTick);
         queueForDelivery(message, deliveryTick);
     }
+
+    private void addKnownProcessIds(Message message) {
+        addIfAbsent(message.destination());
+        addIfAbsent(message.source());
+    }
+
+    private void addIfAbsent(ProcessId message) {
+        if (!knownNodes.contains(message)) {
+            knownNodes.add(message);
+        }
+    }
+
+    private void maybeClogPaths() {
+        if (shouldClog()) {
+            //create network links for all known nodes.
+            List<NetworkLink> links = new ArrayList<>();
+            for (ProcessId source : knownNodes) {
+                for (ProcessId destination : knownNodes) {
+                    if (source != destination) {
+                        NetworkLink link = new NetworkLink(source, destination);
+                        links.add(link);
+                    }
+                }
+            }
+            for (NetworkLink link : links) {
+                if (shouldClog()) {
+                    long duration = sampleExpTicks(random, options.pathClogMeanTicks);
+                    clogFor(link, duration);
+                }
+            }
+        }
+    }
+
+    static long sampleExpTicks(Random rng, long meanTicks) {
+        if (meanTicks <= 0) return 0L;
+        // Exp(1): -ln(U), U ~ Uniform(0,1)
+        double u = rng.nextDouble();
+        // Guard against u=0 producing +Inf; nextDouble() is (0,1), but be defensive:
+        if (u == 0.0) u = Double.MIN_VALUE;
+        double x = -Math.log(u);    // Exp(1)
+        double d = x * meanTicks;   // mean = meanTicks
+        if (d >= Long.MAX_VALUE) return Long.MAX_VALUE;
+        long ns = (long) d;         // truncation is fine here; you can also Math.round
+        return ns;
+    }
+
+    static class NetworkOptions {
+        public final PartitionMode partitionMode;
+        public final double  unpartitionProb;  // 7%/tick to heal once partitioned
+        public final int     unpartitionStabilityTicks;    // stay healthy at least 20 ticks
+        public final double  partitionProb;  // 2%/tick to create a partition
+        public final boolean partitionSymmetry;  // cut both directions by default
+        public final int     partitionStabilityTicks;    // once partitioned, hold it ≥150 ticks
+        public double pathClogProb; //1% probability
+        public final int pathClogMeanTicks;
+
+        public NetworkOptions(PartitionMode partitionMode, double v, int i, double v1, boolean b, int i1, double v2, int i3) {
+
+            this.partitionMode = partitionMode;
+            this.unpartitionProb = v;
+            this.unpartitionStabilityTicks = i;
+            this.partitionProb = v1;
+            this.partitionSymmetry = b;
+            this.partitionStabilityTicks = i1;
+            this.pathClogProb = v2;
+            this.pathClogMeanTicks = i3;
+        }
+
+        public static NetworkOptions create() {
+            NetworkOptions networkOptions = new NetworkOptions(
+                    PartitionMode.HALF_HALF,
+                    0.07,
+                    20,
+                    0.02,
+                    true,
+                    150, 1/100, 2000);
+            return networkOptions;
+        }
+
+        public static NetworkOptions noLoss() {
+            return new NetworkOptions(PartitionMode.NONE, 0.0, 0, 0.0, true,  0, 0.0, 0);
+        }
+    }
+
+    enum PartitionMode {
+        NONE,
+        RANDOM,
+        HALF_HALF
+    }
+    int autoPartitionStability = 0;
+    boolean autoPartitionActive = false;
+    NetworkOptions options;
+    private void maybeFlipPartitions() {
+        // No auto-partitioning configured?
+        if (options.partitionMode == PartitionMode.NONE) return;
+
+        // Respect min-stability timers
+        if (autoPartitionStability > 0) {
+            autoPartitionStability--;
+            return;
+        }
+
+        // If a partition is active, maybe heal it:
+        if (autoPartitionActive) {
+            if (random.nextDouble() < options.unpartitionProb) {
+                healAllPartitions();
+                autoPartitionActive = false;
+                autoPartitionStability = options.unpartitionStabilityTicks;
+            }
+            return;
+        }
+
+        // Otherwise maybe create a new partition:
+        if (knownNodes.size() < 2) return; // nothing to split
+        if (random.nextDouble() >= options.partitionProb) return;
+
+        // Build a randomized list of nodes to split
+        List<ProcessId> nodes = new ArrayList<>(knownNodes);
+
+        int sizeA;
+        switch (options.partitionMode) {
+            case RANDOM:
+                // 1..n-1
+                sizeA = 1 + random.nextInt(Math.max(1, nodes.size() - 1));
+                break;
+            case HALF_HALF:
+                sizeA = Math.max(1, nodes.size() / 2);
+                break;
+            default: // NONE already returned above
+                return;
+        }
+
+        NodeGroup A = new NodeGroup(new LinkedHashSet<>(nodes.subList(0, sizeA)));
+        NodeGroup B = new NodeGroup(new LinkedHashSet<>(nodes.subList(sizeA, nodes.size())));
+
+        // Start fresh: clear old partitions first
+        healAllPartitions();
+
+        // Apply the partition cut
+        boolean symmetric = options.partitionSymmetry;
+        if (symmetric) {
+            partitionTwoWay(A, B);
+        } else {
+            partitionOneWay(A, B);
+        }
+
+        autoPartitionActive = true;
+        autoPartitionStability = options.partitionStabilityTicks;
+    }
+
+    private void partitionOneWay(NodeGroup A, NodeGroup B) {
+        for (ProcessId a : A.processIds()) {
+            for (ProcessId b : B.processIds()) {
+                    // asymmetric: block only one direction, chosen randomly
+                    if (random.nextBoolean()) {
+                        partitionOneWay(a, b);
+                    } else {
+                        partitionOneWay(b, a);
+                    }
+            }
+        }
+    }
+
+    private void partitionTwoWay(NodeGroup A, NodeGroup B) {
+        for (ProcessId a : A.processIds()) {
+            for (ProcessId b : B.processIds()) {
+                partitionTwoWay(a, b);
+            }
+        }
+    }
+
 
     private boolean matchesFaultRule(NetworkLink link, Message message) {
         if (!linkFaultRules.containsKey(link)) {
@@ -180,6 +372,8 @@ public class SimulatedNetwork extends Network {
     @Override
     public void tick() {
         currentTick++; // Increment internal counter (TigerBeetle pattern)
+        maybeFlipPartitions();
+        maybeClogPaths();
         deliverPendingMessagesFor(currentTick);
     }
 
@@ -210,8 +404,15 @@ public class SimulatedNetwork extends Network {
     }
 
     private long calculateDeliveryTick(NetworkLink link, long currentTick) {
-        int effectiveDelay = linkDelays.getOrDefault(link, defaultDelayTicks);
-        return currentTick + effectiveDelay;
+        // If the path is clogged now, delay to cloggedUntil and requeue.
+        long scheduleAtTick = currentTick + 1;
+        if (isClogged(link)) {
+            scheduleAtTick =
+                    currentTick + cloggedUntilTick.getOrDefault(link, defaultDelayTicks);
+
+
+        }
+        return scheduleAtTick;
     }
 
     private void queueForDelivery(Message message, long deliveryTick) {
@@ -235,7 +436,7 @@ public class SimulatedNetwork extends Network {
     }
 
     // Network Partitioning Implementation
-    public void partition(ProcessId source, ProcessId destination) {
+    public void partitionTwoWay(ProcessId source, ProcessId destination) {
         if (source == null || destination == null) {
             throw new IllegalArgumentException("Source and destination addresses cannot be null");
         }
@@ -276,7 +477,7 @@ public class SimulatedNetwork extends Network {
         return List.of(new NetworkLink(a, b), new NetworkLink(b, a));
     }
 
-    public void setDelay(ProcessId source, ProcessId destination, int delayTicks) {
+    public void setDelay(ProcessId source, ProcessId destination, long delayTicks) {
         if (source == null || destination == null) {
             throw new IllegalArgumentException("Source and destination addresses cannot be null");
         }
@@ -284,7 +485,7 @@ public class SimulatedNetwork extends Network {
             throw new IllegalArgumentException("Delay ticks cannot be negative");
         }
 
-        linkDelays.put(new NetworkLink(source, destination), delayTicks);
+        cloggedUntilTick.put(new NetworkLink(source, destination), delayTicks);
     }
 
     public void setPacketLoss(ProcessId source, ProcessId destination, double lossRate) {
