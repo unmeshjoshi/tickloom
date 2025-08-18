@@ -439,7 +439,7 @@ public class Cluster implements Tickable, AutoCloseable {
 
     private Network createNetwork(MessageCodec messageCodec) throws IOException {
         //as of now creating simulated network with no packet loss or delay
-        return useSimulatedNetwork? SimulatedNetwork.lossyNetwork(random, 0)
+        return useSimulatedNetwork? SimulatedNetwork.noLossNetwork(random)
                 :NioNetwork.create(topo, messageCodec);
     }
 

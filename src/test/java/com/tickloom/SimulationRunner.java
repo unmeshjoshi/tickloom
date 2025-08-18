@@ -34,7 +34,7 @@ public class SimulationRunner {
     }
 
     public static void main(String[] args) throws IOException {
-        SimulationRunner simulationRunner = new SimulationRunner(Duration.ofSeconds(60), 999999);
+        SimulationRunner simulationRunner = new SimulationRunner(Duration.ofSeconds(60), 111111);
         simulationRunner.run();
     }
 
