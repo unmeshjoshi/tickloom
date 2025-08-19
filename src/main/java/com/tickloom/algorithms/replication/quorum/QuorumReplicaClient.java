@@ -20,14 +20,14 @@ public class QuorumReplicaClient extends ClusterClient {
     
     public ListenableFuture<GetResponse> get(byte[] key) {
         GetRequest request = new GetRequest(key);
-        ProcessId primaryReplica = getPrimaryReplica();
+        ProcessId primaryReplica = firstReplica();
         
         return sendRequest(request, primaryReplica, QuorumMessageTypes.CLIENT_GET_REQUEST);
     }
     
     public ListenableFuture<SetResponse> set(byte[] key, byte[] value) {
         SetRequest request = new SetRequest(key, value);
-        ProcessId primaryReplica = getPrimaryReplica();
+        ProcessId primaryReplica = firstReplica();
         
         return sendRequest(request, primaryReplica, QuorumMessageTypes.CLIENT_SET_REQUEST);
     }
@@ -51,7 +51,7 @@ public class QuorumReplicaClient extends ClusterClient {
 
     }
 
-    private ProcessId getPrimaryReplica() {
+    private ProcessId firstReplica() {
         return replicaEndpoints.get(0);
     }
 }
