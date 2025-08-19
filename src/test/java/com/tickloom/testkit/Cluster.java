@@ -56,6 +56,7 @@ public class Cluster implements Tickable, AutoCloseable {
     private MessageCodec messageCodec = new JsonMessageCodec();
     private Network sharedNetwork;
     private MessageBus sharedMessageBus;
+    private boolean useLossyNetwork = false;
 
     public Cluster withNumProcesses(int numProcesses) {
         this.numProcesses = numProcesses;
@@ -68,7 +69,18 @@ public class Cluster implements Tickable, AutoCloseable {
     }
 
     public Cluster useSimulatedNetwork() {
+        useSimulatedNetwork(false);
+        return this;
+    }
+
+    private Cluster useSimulatedNetwork(boolean isLossy) {
         this.useSimulatedNetwork = true;
+        this.useLossyNetwork = isLossy;
+        return this;
+    }
+
+    public Cluster withLossySimulatedNetwork() {
+        useSimulatedNetwork(true);
         return this;
     }
 
@@ -437,10 +449,20 @@ public class Cluster implements Tickable, AutoCloseable {
         return clusterClient;
     }
 
+    public Cluster withLossyNetwork() {
+        useLossyNetwork = true;
+        return this;
+    }
+
     private Network createNetwork(MessageCodec messageCodec) throws IOException {
         //as of now creating simulated network with no packet loss or delay
-        return useSimulatedNetwork? SimulatedNetwork.noLossNetwork(random)
+        return useSimulatedNetwork? createSimulatedNetwork()
                 :NioNetwork.create(topo, messageCodec);
+    }
+
+    private SimulatedNetwork createSimulatedNetwork() {
+        //Packet loss rate needs to be moved to NetworkOptions.
+        return useLossyNetwork? SimulatedNetwork.lossyNetwork(random, 0) : SimulatedNetwork.noLossNetwork(random);
     }
 
     private List<ProcessId> serverProcessIds() {

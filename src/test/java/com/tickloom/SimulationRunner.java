@@ -11,7 +11,6 @@ import com.tickloom.testkit.Cluster;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeoutException;
 
@@ -24,7 +23,7 @@ public class SimulationRunner {
         this.cluster = new Cluster()
                 .withSeed(randomSeed)
                 .withNumProcesses(3)
-                .useSimulatedNetwork()
+                .withLossySimulatedNetwork()
                 .build(QuorumReplica::new);
         this.clients = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
