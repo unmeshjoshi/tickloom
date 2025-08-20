@@ -76,7 +76,6 @@ public abstract class SimulationRunner {
         String edn = history.toEdn();
         boolean isLinearizable = knossos.checkLinearizableRegister(edn);
         System.out.println("The history is " + (isLinearizable ? "linearizable" : "not linearizable") + " = " + isLinearizable);
-
     }
 
     private boolean hasPendingRequests() {
