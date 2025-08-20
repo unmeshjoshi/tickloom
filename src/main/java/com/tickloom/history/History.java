@@ -1,9 +1,7 @@
-package com.tickloom;
+package com.tickloom.history;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
-
-enum Op { READ, WRITE }
 
 public class History {
     public void invoke(String name, Op op, byte[] key, byte[] value, long tick) {
@@ -67,7 +65,7 @@ public class History {
     }
 
 
-    // ----- Simple adapter: com.tickloom.History -> EDN vector of op maps -----
+    // ----- Simple adapter: com.tickloom.history.History -> EDN vector of op maps -----
     public String toEdn() {
         List<History.Event> evs = new ArrayList<>(all());
         if (evs.isEmpty()) return "[]";

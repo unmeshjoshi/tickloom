@@ -1,11 +1,10 @@
 package com.tickloom;
 
 import com.tickloom.algorithms.replication.ClusterClient;
-import com.tickloom.algorithms.replication.quorum.GetResponse;
-import com.tickloom.algorithms.replication.quorum.QuorumReplica;
-import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
-import com.tickloom.algorithms.replication.quorum.SetResponse;
+import com.tickloom.algorithms.replication.quorum.*;
 import com.tickloom.future.ListenableFuture;
+import com.tickloom.history.History;
+import com.tickloom.history.Op;
 import com.tickloom.testkit.Cluster;
 
 import java.io.BufferedWriter;
@@ -41,7 +40,7 @@ public abstract class SimulationRunner {
         simulationRunner.run();
     }
 
-    History history = new History();
+    protected History history = new History();
 
     public void run() {
         long tickDuration = 100000;
@@ -100,14 +99,14 @@ public abstract class SimulationRunner {
         return !bufferedRequests.values().stream().allMatch(Collection::isEmpty);
     }
 
-    protected <T> void wrapFutureForRecording(long finalTick,
-                                              QuorumReplicaClient quorumReplicaClient,
-                                              ListenableFuture<T> set,
-                                              Op op,
-                                              byte[] key,
-                                              byte[] value,
-                                              Function<T, byte[]> valueSupplier) {
-        new FutureHistoryRecorder(this,
+    protected <T> ListenableFuture<T> wrapFutureForRecording(long finalTick,
+                                                               QuorumReplicaClient quorumReplicaClient,
+                                                               ListenableFuture<T> set,
+                                                               Op op,
+                                                               byte[] key,
+                                                               byte[] value,
+                                                               Function<T, byte[]> valueSupplier) {
+        return new FutureHistoryRecorder(
                 quorumReplicaClient.id,
                 history,
                 new FutureHistoryRecorder.Operation(op, key, value, finalTick),
@@ -118,11 +117,26 @@ public abstract class SimulationRunner {
     protected abstract void issueRequest(ClusterClient client, Random clusterSeededRandom, long tick);
 
 
-    protected class FutureHistoryRecorder<T> {
+    protected class FutureHistoryRecorder<T> extends ListenableFuture<T> {
+        private final ProcessId processId;
+        private final History history;
+        private final Operation operation;
+        private final ListenableFuture<T> future;
+        private final Function<T, byte[]> valueSupplier;
+
         static record Operation(Op op, byte[] key, byte[] value, long tick) {
         }
 
-        public FutureHistoryRecorder(SimulationRunner simulationRunner, ProcessId processId, History history, Operation operation, ListenableFuture<T> future, Function<T, byte[]> valueSupplier) {
+        public FutureHistoryRecorder(ProcessId processId, History history, Operation operation, ListenableFuture<T> future, Function<T, byte[]> valueSupplier) {
+            this.processId = processId;
+            this.history = history;
+            this.operation = operation;
+            this.future = future;
+            this.valueSupplier = valueSupplier;
+        }
+
+        @Override
+        public ListenableFuture<T> handle(BiConsumer<T, Throwable> handler) {
             future.handle(new BiConsumer<T, Throwable>() {
                 @Override
                 public void accept(T setResponse, Throwable exception) {
@@ -135,19 +149,20 @@ public abstract class SimulationRunner {
                         }
                         history.fail(processId.name(), operation.op, operation.key, operation.value, operation.tick);
                     }
-                    pendingRequests.put(processId, false);
-                    simulationRunner.issueNextRequest(processId);
+                    handler.accept(setResponse, exception);
+
                 }
             });
+            return this;
         }
     }
 
 
     //We can probably use only buffered requests to figure out if there are any pending requests
-    Map<ProcessId, Boolean> pendingRequests = new HashMap<>();
-    Map<ProcessId, Queue<Runnable>> bufferedRequests = new HashMap<>();
+   protected Map<ProcessId, Boolean> pendingRequests = new HashMap<>();
+    protected Map<ProcessId, Queue<Runnable>> bufferedRequests = new HashMap<>();
 
-    private void issueNextRequest(ProcessId processId) {
+    protected void issueNextRequest(ProcessId processId) {
         if (bufferedRequests.containsKey(processId)) {
             pendingRequests.put(processId, true);
             Queue<Runnable> runnables = bufferedRequests.get(processId);
@@ -172,11 +187,11 @@ public abstract class SimulationRunner {
         }
     }
 
-    String randomValue() {
+    protected String randomValue() {
         return "Value-" + cluster.getRandom().nextInt();
     }
 
-    String randomKey() {
+    protected String randomKey() {
         return "Key-" + cluster.getRandom().nextInt();
     }
 
@@ -186,49 +201,3 @@ public abstract class SimulationRunner {
 }
 
 
-class QuorumSimulationRunner extends SimulationRunner {
-
-    public QuorumSimulationRunner(Duration runForDuration, long randomSeed) throws IOException {
-        super(runForDuration, randomSeed);
-    }
-
-
-    @Override
-    protected void issueRequest(ClusterClient client, Random clusterSeededRandom, long tick) {
-        String key = randomKey();
-        String value = randomValue();
-        if (pendingRequests.containsKey(client.id) && pendingRequests.get(client.id)) {
-            //buffer the request.
-            bufferedRequests.computeIfAbsent(client.id, k -> new ArrayDeque<>()).add(() -> sendClientRequest((QuorumReplicaClient) client, clusterSeededRandom, tick, key, value));
-            return;
-        }
-
-        pendingRequests.put(client.id, true);
-        sendClientRequest((QuorumReplicaClient) client, clusterSeededRandom, tick, key, value);
-    }
-
-
-    private void sendClientRequest(QuorumReplicaClient client, Random clusterSeededRandom, long tick, String key, String value) {
-        // Pick operation.
-        boolean doSet = clusterSeededRandom.nextBoolean();
-
-        if (doSet) {
-
-            QuorumReplicaClient quorumReplicaClient = client;
-            ListenableFuture<SetResponse> setFuture = quorumReplicaClient.set(key.getBytes(), value.getBytes());//clients.get(0)
-            history.invoke(quorumReplicaClient.id.name(), Op.WRITE, key.getBytes(), value.getBytes(), tick);
-            wrapFutureForRecording(tick, quorumReplicaClient, setFuture, Op.WRITE, key.getBytes(), value.getBytes(),
-                    (setResponse) -> value.getBytes());
-
-
-        } else {
-            QuorumReplicaClient quorumReplicaClient = client;
-            ListenableFuture<GetResponse> getFuture = quorumReplicaClient.get(key.getBytes());//clients.get(0)
-            history.invoke(quorumReplicaClient.id.name(), Op.READ, key.getBytes(), null, tick);
-            wrapFutureForRecording(tick, quorumReplicaClient,
-                    getFuture, Op.READ, key.getBytes(), null,
-                    (getResponse) -> getResponse.value());
-        }
-    }
-
-}

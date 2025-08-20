@@ -1,5 +1,7 @@
 package com.tickloom;
 
+import com.tickloom.history.History;
+import com.tickloom.history.Op;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
