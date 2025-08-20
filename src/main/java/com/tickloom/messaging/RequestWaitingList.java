@@ -3,7 +3,6 @@ package com.tickloom.messaging;
 import com.tickloom.ProcessId;
 import com.tickloom.util.Timeout;
 
-import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

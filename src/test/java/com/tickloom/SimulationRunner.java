@@ -13,7 +13,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -45,7 +44,7 @@ public abstract class SimulationRunner {
     History history = new History();
 
     public void run() {
-        long tickDuration = 100;
+        long tickDuration = 100000;
         double issueProbabilityPerTick = 0.4; //40% ticks will issue a client request.
         long tick = 0;
         Random clusterSeededRandom = cluster.getRandom();
@@ -63,7 +62,7 @@ public abstract class SimulationRunner {
             issueRequest(client, clusterSeededRandom, tick);
         }
 
-        //wait for all requests to finish
+//        //wait for all requests to finish
         while (hasPendingRequests()) {
             for (ClusterClient client : clients) {
                 client.tick();
@@ -73,6 +72,11 @@ public abstract class SimulationRunner {
 
         writeHistory();
 
+        Knossos knossos = new Knossos();
+        String edn = history.toEdn();
+        boolean isLinearizable = knossos.checkLinearizableRegister(edn);
+        System.out.println("The history is " + (isLinearizable ? "linearizable" : "not linearizable") + " = " + isLinearizable);
+
     }
 
     private boolean hasPendingRequests() {
@@ -80,16 +84,16 @@ public abstract class SimulationRunner {
     }
 
     protected <T> void wrapFutureForRecording(long finalTick,
-                                            QuorumReplicaClient quorumReplicaClient,
-                                            ListenableFuture<T> set,
-                                            Op op,
-                                            byte[] key,
-                                            byte[] value,
-                                            Function<T, byte[]> valueSupplier) {
+                                              QuorumReplicaClient quorumReplicaClient,
+                                              ListenableFuture<T> set,
+                                              Op op,
+                                              byte[] key,
+                                              byte[] value,
+                                              Function<T, byte[]> valueSupplier) {
         new FutureHistoryRecorder(this,
                 quorumReplicaClient.id,
                 history,
-                new FutureHistoryRecorder.Operation(op, key, value,finalTick),
+                new FutureHistoryRecorder.Operation(op, key, value, finalTick),
                 set,
                 valueSupplier);
     }
@@ -100,12 +104,13 @@ public abstract class SimulationRunner {
     protected class FutureHistoryRecorder<T> {
         static record Operation(Op op, byte[] key, byte[] value, long tick) {
         }
+
         public FutureHistoryRecorder(SimulationRunner simulationRunner, ProcessId processId, History history, Operation operation, ListenableFuture<T> future, Function<T, byte[]> valueSupplier) {
             future.handle(new BiConsumer<T, Throwable>() {
                 @Override
                 public void accept(T setResponse, Throwable exception) {
                     if (exception == null) {
-                        byte[]  value = valueSupplier.apply(setResponse);
+                        byte[] value = valueSupplier.apply(setResponse);
                         history.ok(processId.name(), operation.op, operation.key, value, operation.tick);
                     } else {
                         if (exception instanceof TimeoutException) {
@@ -121,6 +126,7 @@ public abstract class SimulationRunner {
     }
 
 
+    //We can probably use only buffered requests to figure out if there are any pending requests
     Map<ProcessId, Boolean> pendingRequests = new HashMap<>();
     Map<ProcessId, Queue<Runnable>> bufferedRequests = new HashMap<>();
 
@@ -174,7 +180,7 @@ class QuorumSimulationRunner extends SimulationRunner {
     protected void issueRequest(ClusterClient client, Random clusterSeededRandom, long tick) {
         String key = randomKey();
         String value = randomValue();
-        if (pendingRequests.containsKey(client.id)) {
+        if (pendingRequests.containsKey(client.id) && pendingRequests.get(client.id)) {
             //buffer the request.
             bufferedRequests.computeIfAbsent(client.id, k -> new ArrayDeque<>()).add(() -> sendClientRequest((QuorumReplicaClient) client, clusterSeededRandom, tick, key, value));
             return;
@@ -195,7 +201,7 @@ class QuorumSimulationRunner extends SimulationRunner {
             ListenableFuture<SetResponse> setFuture = quorumReplicaClient.set(key.getBytes(), value.getBytes());//clients.get(0)
             history.invoke(quorumReplicaClient.id.name(), Op.WRITE, key.getBytes(), value.getBytes(), tick);
             wrapFutureForRecording(tick, quorumReplicaClient, setFuture, Op.WRITE, key.getBytes(), value.getBytes(),
-                    (setResponse) -> value.getBytes() );
+                    (setResponse) -> value.getBytes());
 
 
         } else {

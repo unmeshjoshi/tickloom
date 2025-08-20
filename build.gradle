@@ -12,6 +12,7 @@ version = '0.1.0-alpha.4'
 
 repositories {
     mavenCentral()
+    maven { url 'https://repo.clojars.org' } // Knossos is published on Clojars
 }
 
 dependencies {
@@ -21,7 +22,9 @@ dependencies {
     
     // Production-ready storage
     implementation 'org.rocksdb:rocksdbjni:9.7.3'
-    
+
+    // Knossos pulls org.clojure:clojure transitively (currently 1.12.0)
+    testImplementation 'knossos:knossos:0.3.12'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testImplementation 'org.mockito:mockito-core:5.11.0'
 }
