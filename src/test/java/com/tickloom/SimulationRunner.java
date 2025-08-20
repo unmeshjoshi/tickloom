@@ -45,6 +45,22 @@ public abstract class SimulationRunner {
 
     public void run() {
         long tickDuration = 100000;
+        runClusterFor(tickDuration);
+
+        waitForPendingRequests();
+
+        writeHistory();
+
+        checkLinearizability();
+
+        shutdownClojureAgents();
+    }
+
+    private static void shutdownClojureAgents() {
+        Knossos.shutdownAgents();
+    }
+
+    private void runClusterFor(long tickDuration) {
         double issueProbabilityPerTick = 0.4; //40% ticks will issue a client request.
         long tick = 0;
         Random clusterSeededRandom = cluster.getRandom();
@@ -61,17 +77,19 @@ public abstract class SimulationRunner {
             ClusterClient client = clients.get(clusterSeededRandom.nextInt(clients.size()));
             issueRequest(client, clusterSeededRandom, tick);
         }
+    }
 
-//        //wait for all requests to finish
+    private void waitForPendingRequests() {
+        //        //wait for all requests to finish
         while (hasPendingRequests()) {
             for (ClusterClient client : clients) {
                 client.tick();
             }
             cluster.tick();
         }
+    }
 
-        writeHistory();
-
+    private void checkLinearizability() {
         Knossos knossos = new Knossos();
         String edn = history.toEdn();
         boolean isLinearizable = knossos.checkLinearizableRegister(edn);

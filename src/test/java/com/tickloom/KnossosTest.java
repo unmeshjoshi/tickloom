@@ -1,5 +1,6 @@
 package com.tickloom;
 
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -8,6 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class KnossosTest {
+    @AfterAll
+    public static void shutDownAgents() {
+        Knossos.shutdownAgents();
+    }
+
     @Test
     void shouldBeLinearizable_register() {
         // Process p0 writes "3", p1 reads "3" -> linearizable

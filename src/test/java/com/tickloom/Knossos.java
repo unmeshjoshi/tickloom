@@ -17,24 +17,24 @@ public class Knossos {
         REQUIRE.invoke(Clojure.read("clojure.edn"));
         REQUIRE.invoke(Clojure.read("knossos.model"));
         REQUIRE.invoke(Clojure.read("knossos.competition"));
-        READ_STRING   = Clojure.var("clojure.edn", "read-string");
-        MODEL_REGISTER= Clojure.var("knossos.model", "register");
-        ANALYSIS      = Clojure.var("knossos.competition", "analysis");
-        GET           = Clojure.var("clojure.core", "get");
+        READ_STRING = Clojure.var("clojure.edn", "read-string");
+        MODEL_REGISTER = Clojure.var("knossos.model", "register");
+        ANALYSIS = Clojure.var("knossos.competition", "analysis");
+        GET = Clojure.var("clojure.core", "get");
         SHUTDOWN_AGENTS = Clojure.var("clojure.core", "shutdown-agents");
 
     }
 
     static boolean checkLinearizableRegister(String edn) {
-        try {
-            Object history = READ_STRING.invoke(edn);
-            Object model = MODEL_REGISTER.invoke();
-            Object opts = Clojure.read("{:time-limit 60000}"); // 60s cap
-            Object result = ANALYSIS.invoke(model, history, opts);
-            Object valid = ((IFn) GET).invoke(result, Keyword.intern(null, "valid?"));
-            return Boolean.TRUE.equals(valid);
-        } finally {
-            SHUTDOWN_AGENTS.invoke();
-        }
+        Object history = READ_STRING.invoke(edn);
+        Object model = MODEL_REGISTER.invoke();
+        Object opts = Clojure.read("{:time-limit 60000}"); // 60s cap
+        Object result = ANALYSIS.invoke(model, history, opts);
+        Object valid = ((IFn) GET).invoke(result, Keyword.intern(null, "valid?"));
+        return Boolean.TRUE.equals(valid);
+    }
+
+    static void shutdownAgents() {
+        SHUTDOWN_AGENTS.invoke();
     }
 }
