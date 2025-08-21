@@ -19,33 +19,34 @@ import java.util.function.Function;
 
 public abstract class SimulationRunner {
     private final ArrayList<com.tickloom.SingleRequestIssuer<ClusterClient>> clients;
-    private final Duration runForDuration;
     private Cluster cluster;
+    long tickDuration = 100000;
 
-    public SimulationRunner(Duration runForDuration, long randomSeed) throws IOException {
-        this.runForDuration = runForDuration;
+    public SimulationRunner(long tickDuration, long randomSeed, ProcessFactory processFactory, Cluster.ClientFactory<QuorumReplicaClient> clientFactory) throws IOException {
+        this.tickDuration = tickDuration;
         this.cluster = new Cluster()
                 .withSeed(randomSeed)
                 .withNumProcesses(3)
                 .withLossySimulatedNetwork()
-                .build(QuorumReplica::new);
+                .build(processFactory);
         Random clusterSeedRandom = cluster.getRandom();
         this.clients = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
-            ClusterClient clusterClient  = cluster.newClient(ProcessId.of("client-" + i), QuorumReplicaClient::new);
+            ClusterClient clusterClient  = cluster.newClient(ProcessId.of("client-" + i), clientFactory);
             clients.add(new SingleRequestIssuer<>(this, clusterClient, clusterSeedRandom));
         }
     }
 
     public static void main(String[] args) throws IOException {
-        SimulationRunner simulationRunner = new QuorumSimulationRunner(Duration.ofSeconds(60), 111111);
+        int randomSeed = 111111;
+        int runForTicks = 10000;
+        SimulationRunner simulationRunner = new QuorumSimulationRunner(runForTicks, randomSeed);
         simulationRunner.run();
     }
 
     protected History history = new History();
 
     public void run() {
-        long tickDuration = 100000;
         runClusterFor(tickDuration);
 
         waitForPendingRequests();
@@ -91,21 +92,29 @@ public abstract class SimulationRunner {
         System.out.println("The history is " + (isLinearizable ? "linearizable" : "not linearizable") + " = " + isLinearizable);
     }
 
+    //history recording for get calls, with only key.
+    protected <T> ListenableFuture<T> recordReadResponse(ListenableFuture<T> future,
+                                                         Op op,
+                                                         byte[] key,
+                                                         Function<T, byte[]> valueFromResponse, ProcessId processId) {
+        return recordResponse(future, op, key, null, valueFromResponse, processId);
+    }
 
-    protected <T> ListenableFuture<T> wrapFutureForRecording(ListenableFuture<T> future,
-                                                             Op op,
-                                                             byte[] key,
-                                                             byte[] value,
-                                                             Function<T, byte[]> valueSupplier, ProcessId processId) {
+    //history recording for set calls which have both key and a writtenValue.
+    protected <T> ListenableFuture<T> recordResponse(ListenableFuture<T> future,
+                                                     Op op,
+                                                     byte[] key,
+                                                     byte[] writtenValue,
+                                                     Function<T, byte[]> valueFromResponse, ProcessId processId) {
         return future.andThen((setResponse, exception) -> {
             if (exception == null) {
-                byte[] responseValue = valueSupplier.apply(setResponse);
+                byte[] responseValue = valueFromResponse.apply(setResponse);
                 history.ok(processId.name(), op, key, responseValue);
             } else {
                 if (exception instanceof TimeoutException) {
-                    history.timeout(processId.name(), op, key, value);
+                    history.timeout(processId.name(), op, key, writtenValue);
                 }
-                history.fail(processId.name(), op, key, value);
+                history.fail(processId.name(), op, key, writtenValue);
             }
         });
     }

@@ -11,8 +11,8 @@ import java.util.Random;
 
 public class QuorumSimulationRunner extends SimulationRunner {
 
-    public QuorumSimulationRunner(Duration runForDuration, long randomSeed) throws IOException {
-        super(runForDuration, randomSeed);
+    public QuorumSimulationRunner(long tickDuration, long randomSeed) throws IOException {
+        super(tickDuration, randomSeed, QuorumReplica::new, QuorumReplicaClient::new);
     }
 
     @Override
@@ -28,7 +28,7 @@ public class QuorumSimulationRunner extends SimulationRunner {
             QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;
             ListenableFuture<SetResponse> setFuture = quorumReplicaClient.set(key.getBytes(), value.getBytes());//clients.get(0)
             history.invoke(quorumReplicaClient.id.name(), Op.WRITE, key.getBytes(), value.getBytes());
-            opFuture = wrapFutureForRecording(setFuture, Op.WRITE, key.getBytes(), value.getBytes(),
+            opFuture = recordResponse(setFuture, Op.WRITE, key.getBytes(), value.getBytes(),
                     (setResponse) -> value.getBytes(), quorumReplicaClient.id);
 
 
@@ -36,8 +36,8 @@ public class QuorumSimulationRunner extends SimulationRunner {
             QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;
             ListenableFuture<GetResponse> getFuture = quorumReplicaClient.get(key.getBytes());//clients.get(0)
             history.invoke(quorumReplicaClient.id.name(), Op.READ, key.getBytes(), null);
-            opFuture = wrapFutureForRecording(
-                    getFuture, Op.READ, key.getBytes(), null,
+            opFuture = recordReadResponse(
+                    getFuture, Op.READ, key.getBytes(),
                     (getResponse) -> getResponse.value(), quorumReplicaClient.id);
         }
 
