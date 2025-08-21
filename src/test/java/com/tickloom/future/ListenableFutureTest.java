@@ -342,4 +342,26 @@ class ListenableFutureTest {
         assertNull(receivedResult.get(), "Callback should receive null result for failure");
         assertEquals(expectedException, receivedException.get(), "Callback should receive the exception");
     }
+
+
+    @Test
+    public void shouldSupportCompositionWithAndThen() {
+        AtomicReference<String> firstHandleResult = new AtomicReference<>("");
+        AtomicReference<String> secondHandleResult = new AtomicReference<>("");
+        ListenableFuture<String> future = new ListenableFuture<>();
+        //Each handle call puts a new callback
+        future.handle((result, exception) -> {
+            firstHandleResult.set(result);
+        });
+        //andThen creates a new future which can be then separately handled
+        //But also creates a new callback on the original future which
+        //invokes the function passed to andThen
+        future.andThen((result, exception) -> {
+            secondHandleResult.set(result);
+        });
+        future.complete("TestResult");
+
+        assertEquals("TestResult", firstHandleResult.get());
+        assertEquals("TestResult", secondHandleResult.get());
+    }
 }

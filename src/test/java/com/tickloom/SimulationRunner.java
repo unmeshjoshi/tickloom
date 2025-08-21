@@ -65,25 +65,19 @@ public abstract class SimulationRunner {
         Random clusterSeededRandom = cluster.getRandom();
         while (tickDuration > tick) {
             tick++;
-            for (ClusterClient client : clients) {
-                client.tick();
-            }
             cluster.tick();
 
             // Decide whether to issue client request this tick.
             if (clusterSeededRandom.nextDouble() > issueProbabilityPerTick) continue;
 
             ClusterClient client = clients.get(clusterSeededRandom.nextInt(clients.size()));
-            issueRequest(client, clusterSeededRandom, tick);
+            issueSingleRequest(client, clusterSeededRandom, tick);
         }
     }
 
     private void waitForPendingRequests() {
-        //        //wait for all requests to finish
+        //wait for all requests to finish
         while (hasPendingRequests()) {
-            for (ClusterClient client : clients) {
-                client.tick();
-            }
             cluster.tick();
         }
     }
@@ -100,21 +94,47 @@ public abstract class SimulationRunner {
     }
 
     protected <T> ListenableFuture<T> wrapFutureForRecording(long finalTick,
-                                                               QuorumReplicaClient quorumReplicaClient,
-                                                               ListenableFuture<T> set,
-                                                               Op op,
-                                                               byte[] key,
-                                                               byte[] value,
-                                                               Function<T, byte[]> valueSupplier) {
-        return new FutureHistoryRecorder(
-                quorumReplicaClient.id,
-                history,
-                new FutureHistoryRecorder.Operation(op, key, value, finalTick),
-                set,
-                valueSupplier);
+                                                             ListenableFuture<T> future,
+                                                             Op op,
+                                                             byte[] key,
+                                                             byte[] value,
+                                                             Function<T, byte[]> valueSupplier, ProcessId processId) {
+        return future.andThen((setResponse, exception) -> {
+            if (exception == null) {
+                byte[] value1 = valueSupplier.apply(setResponse);
+                history.ok(processId.name(), op, key, value1, finalTick);
+            } else {
+                if (exception instanceof TimeoutException) {
+                    history.timeout(processId.name(), op, key, value, finalTick);
+                }
+                history.fail(processId.name(), op, key, value, finalTick);
+            }
+        });
     }
 
-    protected abstract void issueRequest(ClusterClient client, Random clusterSeededRandom, long tick);
+
+
+    private void issueSingleRequest(ClusterClient client, Random clusterSeededRandom, long tick) {
+        if (pendingRequests.containsKey(client.id) && pendingRequests.get(client.id)) {
+            //buffer the request.
+            bufferedRequests.computeIfAbsent(client.id, k -> new ArrayDeque<>()).add(() -> sendClientRequest(client, clusterSeededRandom, tick));
+            return;
+        }
+        pendingRequests.put(client.id, true);
+
+        sendClientRequest(client, clusterSeededRandom, tick);
+    }
+
+    private void sendClientRequest(ClusterClient client, Random clusterSeededRandom, long tick) {
+        ListenableFuture opFuture = issueRequest(client, clusterSeededRandom, tick);
+        var processId = client.id;
+        opFuture.andThen((result, exception) -> {
+            pendingRequests.put(processId, false);
+            issueNextRequest(processId);
+        });
+    }
+
+    protected abstract ListenableFuture issueRequest(ClusterClient client, Random clusterSeededRandom, long tick);
 
 
     protected class FutureHistoryRecorder<T> extends ListenableFuture<T> {
@@ -137,22 +157,7 @@ public abstract class SimulationRunner {
 
         @Override
         public ListenableFuture<T> handle(BiConsumer<T, Throwable> handler) {
-            future.handle(new BiConsumer<T, Throwable>() {
-                @Override
-                public void accept(T setResponse, Throwable exception) {
-                    if (exception == null) {
-                        byte[] value = valueSupplier.apply(setResponse);
-                        history.ok(processId.name(), operation.op, operation.key, value, operation.tick);
-                    } else {
-                        if (exception instanceof TimeoutException) {
-                            history.timeout(processId.name(), operation.op, operation.key, operation.value, operation.tick);
-                        }
-                        history.fail(processId.name(), operation.op, operation.key, operation.value, operation.tick);
-                    }
-                    handler.accept(setResponse, exception);
 
-                }
-            });
             return this;
         }
     }
@@ -195,6 +200,7 @@ public abstract class SimulationRunner {
         return "Key-" + cluster.getRandom().nextInt();
     }
 
+    //TODO: See if we can run the simulation for durations instead of specified ticks.
     private static long elapsedTime(long start) {
         return System.nanoTime() - start;
     }

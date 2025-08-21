@@ -7,7 +7,6 @@ import com.tickloom.future.ListenableFuture;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.ArrayDeque;
 import java.util.Random;
 
 public class QuorumSimulationRunner extends SimulationRunner {
@@ -16,48 +15,33 @@ public class QuorumSimulationRunner extends SimulationRunner {
         super(runForDuration, randomSeed);
     }
 
-
     @Override
-    protected void issueRequest(ClusterClient client, Random clusterSeededRandom, long tick) {
+    protected ListenableFuture issueRequest(ClusterClient client, Random clusterSeededRandom, long tick) {
         String key = randomKey();
         String value = randomValue();
-        if (pendingRequests.containsKey(client.id) && pendingRequests.get(client.id)) {
-            //buffer the request.
-            bufferedRequests.computeIfAbsent(client.id, k -> new ArrayDeque<>()).add(() -> sendClientRequest((QuorumReplicaClient) client, clusterSeededRandom, tick, key, value));
-            return;
-        }
 
-        pendingRequests.put(client.id, true);
-        sendClientRequest((QuorumReplicaClient) client, clusterSeededRandom, tick, key, value);
-    }
-
-    private void sendClientRequest(QuorumReplicaClient client, Random clusterSeededRandom, long tick, String key, String value) {
         // Pick operation.
         boolean doSet = clusterSeededRandom.nextBoolean();
         ListenableFuture opFuture = null;
         if (doSet) {
 
-            QuorumReplicaClient quorumReplicaClient = client;
+            QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;
             ListenableFuture<SetResponse> setFuture = quorumReplicaClient.set(key.getBytes(), value.getBytes());//clients.get(0)
             history.invoke(quorumReplicaClient.id.name(), Op.WRITE, key.getBytes(), value.getBytes(), tick);
-            opFuture = wrapFutureForRecording(tick, quorumReplicaClient, setFuture, Op.WRITE, key.getBytes(), value.getBytes(),
-                    (setResponse) -> value.getBytes());
+            opFuture = wrapFutureForRecording(tick, setFuture, Op.WRITE, key.getBytes(), value.getBytes(),
+                    (setResponse) -> value.getBytes(), quorumReplicaClient.id);
 
 
         } else {
-            QuorumReplicaClient quorumReplicaClient = client;
+            QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;
             ListenableFuture<GetResponse> getFuture = quorumReplicaClient.get(key.getBytes());//clients.get(0)
             history.invoke(quorumReplicaClient.id.name(), Op.READ, key.getBytes(), null, tick);
-            opFuture = wrapFutureForRecording(tick, quorumReplicaClient,
+            opFuture = wrapFutureForRecording(tick,
                     getFuture, Op.READ, key.getBytes(), null,
-                    (getResponse) -> getResponse.value());
+                    (getResponse) -> getResponse.value(), quorumReplicaClient.id);
         }
 
-        var processId = client.id;
-        opFuture.handle((result, exception) -> {
-            pendingRequests.put(processId, false);
-            issueNextRequest(processId);
-        });
+        return opFuture;
     }
 
 }

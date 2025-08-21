@@ -14,6 +14,27 @@ import java.util.function.BiConsumer;
 
 public class ListenableFuture<T> {
 
+    public ListenableFuture<T> andThen(BiConsumer<T, Throwable> callback) {
+        ListenableFuture<T> nextStage = new ListenableFuture<>();
+        //add handler on this future to invoke the provided callback
+        this.handle((T result, Throwable exception)->{
+            try {
+                callback.accept(result, exception);
+            } catch (Exception e) {
+                nextStage.fail(e);
+                return;
+            }
+            //forward the result to the next stage, so that the callback handlers set
+            //on the next stage are invoked
+            if (exception == null) {
+                nextStage.complete(result);
+            } else {
+                nextStage.fail(exception);
+            }
+        });
+        return this;
+    }
+
     private enum State {
         PENDING,
         COMPLETED,
