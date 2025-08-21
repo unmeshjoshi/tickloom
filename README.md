@@ -288,6 +288,61 @@ cluster.close();
 
 ---
 
+## Simulation Runner and Jepsen-Style Checking
+
+TickLoom includes a small simulation harness to drive repeatable workloads and verify correctness:
+
+- **`SimulationRunner`**: base class that runs a cluster for N ticks, issues client requests deterministically (by seed), and records a history.
+- **`QuorumSimulationRunner`**: concrete runner for the quorum key-value example (issues GET/SET).
+- **`Knossos`** integration: converts history to EDN and checks linearizability using the Jepsen Knossos model checker.
+
+### Example: Run a simulation
+
+```java
+long seed = 111_111L;
+long ticks = 10_000L;
+
+var runner = new com.tickloom.algorithms.replication.quorum.QuorumSimulationRunner(seed);
+runner.runForTicks(ticks); // writes EDN to build/history_*.edn and runs Knossos
+```
+
+### Determinism by seed
+
+Two runs with the same seed produce identical histories; different seeds generally differ.
+
+```java
+var r1 = new QuorumSimulationRunner(42L);
+var r2 = new QuorumSimulationRunner(42L);
+
+var h1 = r1.runAndGetHistory(5_000);
+var h2 = r2.runAndGetHistory(5_000);
+
+assert h1.equals(h2); // same seed -> same history
+```
+
+See `src/test/java/com/tickloom/SimulationRunnerTest.java` for determinism tests.
+
+### Linearizability check (Jepsen/Knossos)
+
+`SimulationRunner` uses `Knossos` to validate a register model. You can also call it directly:
+
+```java
+var runner = new QuorumSimulationRunner(123L);
+var history = runner.runAndGetHistory(5_000);
+
+var knossos = new com.tickloom.Knossos();
+boolean ok = knossos.checkLinearizableRegister(history.toEdn());
+System.out.println("Linearizable = " + ok);
+```
+
+Notes:
+- The simulation uses a single-threaded tick model; randomness is fully controlled by the seed for reproducibility.
+- EDN histories are stable and suitable for external analysis tools.
+
+For more examples of using Knossos, see `src/test/java/com/tickloom/KnossosTest.java`.
+
+---
+
 ## Key Concepts
 
 - **Process** – deterministic event-driven unit of logic (`tick()` loop)
@@ -321,16 +376,6 @@ Tickloom is for you if you:
 
 ---
 
-## Next Steps
-
-The current version of Tickloom focuses on providing deterministic primitives, a simulated network, an NIO based network reference implementation, RocksDB based storage backend, and a testkit for building and verifying distributed algorithms. Planned extensions include:
-
-1. **Jepsen-Style History Checkers**  
-   - Tools to record and analyze operation histories from test runs.  
-   - Checkers for safety and liveness properties, similar to those used in [Jepsen](https://jepsen.io/).
-
-2. **Nemesis Module for Live Fault Injection**  
-   - A runtime fault injection system for processes running on a real network and storage backends.  
   
 
 ## Acknowledgements
