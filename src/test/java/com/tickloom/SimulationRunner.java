@@ -11,13 +11,14 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 
 
 public abstract class SimulationRunner {
-    private final ArrayList<ClusterClient> clients;
+    private final ArrayList<com.tickloom.SingleRequestIssuer<ClusterClient>> clients;
     private final Duration runForDuration;
     private Cluster cluster;
 
@@ -28,9 +29,11 @@ public abstract class SimulationRunner {
                 .withNumProcesses(3)
                 .withLossySimulatedNetwork()
                 .build(QuorumReplica::new);
+        Random clusterSeedRandom = cluster.getRandom();
         this.clients = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
-            clients.add(cluster.newClient(ProcessId.of("client-" + i), QuorumReplicaClient::new));
+            ClusterClient clusterClient  = cluster.newClient(ProcessId.of("client-" + i), QuorumReplicaClient::new);
+            clients.add(new SingleRequestIssuer<>(this, clusterClient, clusterSeedRandom));
         }
     }
 
@@ -69,14 +72,14 @@ public abstract class SimulationRunner {
             // Decide whether to issue client request this tick.
             if (clusterSeededRandom.nextDouble() > issueProbabilityPerTick) continue;
 
-            ClusterClient client = clients.get(clusterSeededRandom.nextInt(clients.size()));
-            issueSingleRequest(client, clusterSeededRandom);
+            SingleRequestIssuer<ClusterClient> client = clients.get(clusterSeededRandom.nextInt(clients.size()));
+            client.issueRequest();
         }
     }
 
     private void waitForPendingRequests() {
         //wait for all requests to finish
-        while (hasPendingRequests()) {
+        while (clients.stream().anyMatch(SingleRequestIssuer::hasPendingRequests)) {
             cluster.tick();
         }
     }
@@ -88,9 +91,6 @@ public abstract class SimulationRunner {
         System.out.println("The history is " + (isLinearizable ? "linearizable" : "not linearizable") + " = " + isLinearizable);
     }
 
-    private boolean hasPendingRequests() {
-        return !bufferedRequests.values().stream().allMatch(Collection::isEmpty);
-    }
 
     protected <T> ListenableFuture<T> wrapFutureForRecording(ListenableFuture<T> future,
                                                              Op op,
@@ -110,59 +110,11 @@ public abstract class SimulationRunner {
         });
     }
 
-
-
-    private void issueSingleRequest(ClusterClient client, Random clusterSeededRandom) {
-        if (pendingRequests.containsKey(client.id) && pendingRequests.get(client.id)) {
-            //buffer the request.
-            bufferedRequests.computeIfAbsent(client.id, k -> new ArrayDeque<>()).add(() -> sendClientRequest(client, clusterSeededRandom));
-            return;
-        }
-        pendingRequests.put(client.id, true);
-
-        sendClientRequest(client, clusterSeededRandom);
-    }
-
-    static class SingleRequestIssuer {
-        ClusterClient client;
-        public SingleRequestIssuer(ClusterClient client) {
-            this.client = client;
-        }
-
-    }
-
-    private void sendClientRequest(ClusterClient client, Random clusterSeededRandom) {
-        ListenableFuture opFuture = issueRequest(client, clusterSeededRandom);
-        var processId = client.id;
-        opFuture.andThen((result, exception) -> {
-            pendingRequests.put(processId, false);
-            issueNextRequest(processId);
-        });
-    }
-
     protected abstract ListenableFuture issueRequest(ClusterClient client, Random clusterSeededRandom);
-
-
-
-    //We can probably use only buffered requests to figure out if there are any pending requests
-   protected Map<ProcessId, Boolean> pendingRequests = new HashMap<>();
-    protected Map<ProcessId, Queue<Runnable>> bufferedRequests = new HashMap<>();
-
-    protected void issueNextRequest(ProcessId processId) {
-        if (bufferedRequests.containsKey(processId)) {
-            pendingRequests.put(processId, true);
-            Queue<Runnable> runnables = bufferedRequests.get(processId);
-            System.out.println("runnables for " + processId + " = " + runnables.size());
-            Runnable poll = runnables.poll();
-            if (poll != null) {
-                poll.run();
-            }
-        }
-    }
 
     private void writeHistory() {
         String buildDir = "build";
-        String historyFile = buildDir + "/history.edn";
+        String historyFile = buildDir + "/history_" + Instant.now() + ".edn";
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(historyFile))) {
             String edn = history.toEdn();
             writer.write(edn);
@@ -179,11 +131,6 @@ public abstract class SimulationRunner {
 
     protected String randomKey() {
         return "Key-" + cluster.getRandom().nextInt();
-    }
-
-    //TODO: See if we can run the simulation for durations instead of specified ticks.
-    private static long elapsedTime(long start) {
-        return System.nanoTime() - start;
     }
 }
 
