@@ -4,20 +4,20 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class History {
-    public void invoke(String name, Op op, byte[] key, byte[] value, long tick) {
-        record(name, EventType.INVOKE, op, key, value, tick);
+    public void invoke(String name, Op op, byte[] key, byte[] value) {
+        record(name, EventType.INVOKE, op, key, value);
     }
 
-    public void ok(String name, Op op, byte[] key, byte[] value, long tick) {
-        record(name, EventType.OK, op, key, value, tick);
+    public void ok(String name, Op op, byte[] key, byte[] value) {
+        record(name, EventType.OK, op, key, value);
     }
 
-    public void timeout(String name, Op op, byte[] key, byte[] value, long tick) {
-        record(name, EventType.TIMEOUT, op, key, value, tick);
+    public void timeout(String name, Op op, byte[] key, byte[] value) {
+        record(name, EventType.TIMEOUT, op, key, value);
     }
 
-    public void fail(String name, Op op, byte[] key, byte[] value, long tick) {
-        record(name, EventType.FAIL, op, key, value, tick);
+    public void fail(String name, Op op, byte[] key, byte[] value) {
+        record(name, EventType.FAIL, op, key, value);
     }
 
     enum EventType { INVOKE, OK, FAIL, TIMEOUT }
@@ -29,17 +29,15 @@ public class History {
         final Op op;
         final byte[] key;
         final byte[] value; // e.g., "Write(k,v)" or "Read(k)"
-        final long tick;
         final long nanoTime;
 
-        Event(long id, String client, EventType type, Op op, byte[] key, byte[] value, long tick) {
+        Event(long id, String client, EventType type, Op op, byte[] key, byte[] value) {
             this.id = id;
             this.client = client;
             this.op = op;
             this.key = key;
             this.value = value;
             this.type = type;
-            this.tick = tick;
             this.nanoTime = System.nanoTime();
         }
 
@@ -51,7 +49,6 @@ public class History {
                     ", op=" + op +
                     ", key=" + (key == null ? "" : new String(key)) +
                     ", value=" + (value == null ? "" : new String(value)) +
-                    ", tick=" + tick +
                     ", nanoTime=" + nanoTime +
                     "}";
         }
@@ -60,8 +57,8 @@ public class History {
     private final List<Event> events = new ArrayList<>();
     private final AtomicLong ids = new AtomicLong(0);
 
-    public void record(String client, EventType type, Op op, byte[]key, byte[] value, long tick) {
-        events.add(new Event(ids.incrementAndGet(), client, type, op, key, value, tick));
+    public void record(String client, EventType type, Op op, byte[]key, byte[] value) {
+        events.add(new Event(ids.incrementAndGet(), client, type, op, key, value));
     }
 
 

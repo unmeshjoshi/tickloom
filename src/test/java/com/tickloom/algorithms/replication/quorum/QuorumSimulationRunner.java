@@ -16,7 +16,7 @@ public class QuorumSimulationRunner extends SimulationRunner {
     }
 
     @Override
-    protected ListenableFuture issueRequest(ClusterClient client, Random clusterSeededRandom, long tick) {
+    protected ListenableFuture issueRequest(ClusterClient client, Random clusterSeededRandom) {
         String key = randomKey();
         String value = randomValue();
 
@@ -27,16 +27,16 @@ public class QuorumSimulationRunner extends SimulationRunner {
 
             QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;
             ListenableFuture<SetResponse> setFuture = quorumReplicaClient.set(key.getBytes(), value.getBytes());//clients.get(0)
-            history.invoke(quorumReplicaClient.id.name(), Op.WRITE, key.getBytes(), value.getBytes(), tick);
-            opFuture = wrapFutureForRecording(tick, setFuture, Op.WRITE, key.getBytes(), value.getBytes(),
+            history.invoke(quorumReplicaClient.id.name(), Op.WRITE, key.getBytes(), value.getBytes());
+            opFuture = wrapFutureForRecording(setFuture, Op.WRITE, key.getBytes(), value.getBytes(),
                     (setResponse) -> value.getBytes(), quorumReplicaClient.id);
 
 
         } else {
             QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;
             ListenableFuture<GetResponse> getFuture = quorumReplicaClient.get(key.getBytes());//clients.get(0)
-            history.invoke(quorumReplicaClient.id.name(), Op.READ, key.getBytes(), null, tick);
-            opFuture = wrapFutureForRecording(tick,
+            history.invoke(quorumReplicaClient.id.name(), Op.READ, key.getBytes(), null);
+            opFuture = wrapFutureForRecording(
                     getFuture, Op.READ, key.getBytes(), null,
                     (getResponse) -> getResponse.value(), quorumReplicaClient.id);
         }

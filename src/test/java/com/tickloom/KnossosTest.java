@@ -23,11 +23,11 @@ class KnossosTest {
         byte[] k = "k".getBytes(StandardCharsets.UTF_8);
         byte[] v3 = "3".getBytes(StandardCharsets.UTF_8);
 
-        h.invoke("p0", Op.WRITE, k, v3, 1);
-        h.ok    ("p0", Op.WRITE, k, v3, 2);
+        h.invoke("p0", Op.WRITE, k, v3);
+        h.ok    ("p0", Op.WRITE, k, v3);
 
-        h.invoke("p1", Op.READ,  k, null, 3);
-        h.ok    ("p1", Op.READ,  k, v3,   4);
+        h.invoke("p1", Op.READ,  k, null);
+        h.ok    ("p1", Op.READ,  k, v3);
 
         String edn = h.toEdn();
         boolean ok = Knossos.checkLinearizableRegister(edn);
@@ -42,11 +42,11 @@ class KnossosTest {
         byte[] v1 = "1".getBytes(StandardCharsets.UTF_8);
         byte[] v2 = "2".getBytes(StandardCharsets.UTF_8);
 
-        h.invoke("p0", Op.WRITE, k, v1, 1);
-        h.ok    ("p0", Op.WRITE, k, v1, 2);
+        h.invoke("p0", Op.WRITE, k, v1);
+        h.ok    ("p0", Op.WRITE, k, v1);
 
-        h.invoke("p1", Op.READ,  k, null, 3);
-        h.ok    ("p1", Op.READ,  k, v2,   4);
+        h.invoke("p1", Op.READ,  k, null);
+        h.ok    ("p1", Op.READ,  k, v2);
 
         String edn = h.toEdn();
         boolean ok = Knossos.checkLinearizableRegister(edn);

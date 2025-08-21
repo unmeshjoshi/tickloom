@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.TimeoutException;
-import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 
@@ -71,7 +70,7 @@ public abstract class SimulationRunner {
             if (clusterSeededRandom.nextDouble() > issueProbabilityPerTick) continue;
 
             ClusterClient client = clients.get(clusterSeededRandom.nextInt(clients.size()));
-            issueSingleRequest(client, clusterSeededRandom, tick);
+            issueSingleRequest(client, clusterSeededRandom);
         }
     }
 
@@ -93,40 +92,47 @@ public abstract class SimulationRunner {
         return !bufferedRequests.values().stream().allMatch(Collection::isEmpty);
     }
 
-    protected <T> ListenableFuture<T> wrapFutureForRecording(long finalTick,
-                                                             ListenableFuture<T> future,
+    protected <T> ListenableFuture<T> wrapFutureForRecording(ListenableFuture<T> future,
                                                              Op op,
                                                              byte[] key,
                                                              byte[] value,
                                                              Function<T, byte[]> valueSupplier, ProcessId processId) {
         return future.andThen((setResponse, exception) -> {
             if (exception == null) {
-                byte[] value1 = valueSupplier.apply(setResponse);
-                history.ok(processId.name(), op, key, value1, finalTick);
+                byte[] responseValue = valueSupplier.apply(setResponse);
+                history.ok(processId.name(), op, key, responseValue);
             } else {
                 if (exception instanceof TimeoutException) {
-                    history.timeout(processId.name(), op, key, value, finalTick);
+                    history.timeout(processId.name(), op, key, value);
                 }
-                history.fail(processId.name(), op, key, value, finalTick);
+                history.fail(processId.name(), op, key, value);
             }
         });
     }
 
 
 
-    private void issueSingleRequest(ClusterClient client, Random clusterSeededRandom, long tick) {
+    private void issueSingleRequest(ClusterClient client, Random clusterSeededRandom) {
         if (pendingRequests.containsKey(client.id) && pendingRequests.get(client.id)) {
             //buffer the request.
-            bufferedRequests.computeIfAbsent(client.id, k -> new ArrayDeque<>()).add(() -> sendClientRequest(client, clusterSeededRandom, tick));
+            bufferedRequests.computeIfAbsent(client.id, k -> new ArrayDeque<>()).add(() -> sendClientRequest(client, clusterSeededRandom));
             return;
         }
         pendingRequests.put(client.id, true);
 
-        sendClientRequest(client, clusterSeededRandom, tick);
+        sendClientRequest(client, clusterSeededRandom);
     }
 
-    private void sendClientRequest(ClusterClient client, Random clusterSeededRandom, long tick) {
-        ListenableFuture opFuture = issueRequest(client, clusterSeededRandom, tick);
+    static class SingleRequestIssuer {
+        ClusterClient client;
+        public SingleRequestIssuer(ClusterClient client) {
+            this.client = client;
+        }
+
+    }
+
+    private void sendClientRequest(ClusterClient client, Random clusterSeededRandom) {
+        ListenableFuture opFuture = issueRequest(client, clusterSeededRandom);
         var processId = client.id;
         opFuture.andThen((result, exception) -> {
             pendingRequests.put(processId, false);
@@ -134,33 +140,8 @@ public abstract class SimulationRunner {
         });
     }
 
-    protected abstract ListenableFuture issueRequest(ClusterClient client, Random clusterSeededRandom, long tick);
+    protected abstract ListenableFuture issueRequest(ClusterClient client, Random clusterSeededRandom);
 
-
-    protected class FutureHistoryRecorder<T> extends ListenableFuture<T> {
-        private final ProcessId processId;
-        private final History history;
-        private final Operation operation;
-        private final ListenableFuture<T> future;
-        private final Function<T, byte[]> valueSupplier;
-
-        static record Operation(Op op, byte[] key, byte[] value, long tick) {
-        }
-
-        public FutureHistoryRecorder(ProcessId processId, History history, Operation operation, ListenableFuture<T> future, Function<T, byte[]> valueSupplier) {
-            this.processId = processId;
-            this.history = history;
-            this.operation = operation;
-            this.future = future;
-            this.valueSupplier = valueSupplier;
-        }
-
-        @Override
-        public ListenableFuture<T> handle(BiConsumer<T, Throwable> handler) {
-
-            return this;
-        }
-    }
 
 
     //We can probably use only buffered requests to figure out if there are any pending requests
