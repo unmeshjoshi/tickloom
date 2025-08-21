@@ -41,7 +41,7 @@ public class NioNetworkIntegrationTest {
 
         echoServer.bind(); //server must be bound to start listening
 
-        clientId = ProcessId.of("client");
+        clientId = ProcessId.of("clientId");
         client = TestPeer.createNew(
                 clientId,
                 registry);
@@ -69,16 +69,16 @@ public class NioNetworkIntegrationTest {
 
     @Test
     void shouldEstablishConnectionAndExchangeMessages() throws Exception {
-        // Send message from client to server
+        // Send message from clientId to server
         Message clientMessage = Message.of(
                 clientId, serverId, PeerType.CLIENT,
                 MessageType.of("TEST"),
-                "Hello from client".getBytes(),
+                "Hello from clientId".getBytes(),
                 "msg-1"
         );
 
         System.out.println("Sending message: " + clientMessage);
-        client.send(serverId, MessageType.of("TEST"),"Hello from client".getBytes());
+        client.send(serverId, MessageType.of("TEST"),"Hello from clientId".getBytes());
 
         // Process networks to handle connection and message
         System.out.println("Processing networks...");
@@ -88,7 +88,7 @@ public class NioNetworkIntegrationTest {
         Message receivedMessage = echoServer.getReceivedMessages().get(0);
         assertEquals(clientId, receivedMessage.source());
         assertEquals(serverId, receivedMessage.destination());
-        assertEquals("Hello from client", new String(receivedMessage.payload()));
+        assertEquals("Hello from clientId", new String(receivedMessage.payload()));
 
         runUntil(() -> client.getReceivedMessages().size() == 1);
 
@@ -172,7 +172,7 @@ public class NioNetworkIntegrationTest {
         runUntil(() -> echoServer.getReceivedMessages().size() == 2);
         runUntil(() -> client.getReceivedMessages().size() == 2);
 
-        // Verify both client and server have only one connection
+        // Verify both clientId and server have only one connection
         assertEquals(1, client.getNetwork().getNoOfConnections());
         assertEquals(1, echoServer.getNetwork().getNoOfConnections());
 
@@ -213,7 +213,7 @@ public class NioNetworkIntegrationTest {
         // Verify connection exists
         assertTrue(echoServer.getNetwork().getConnectionCount() == 1);
 
-        // Close client network (simulates client crash/disconnect)
+        // Close clientId network (simulates clientId crash/disconnect)
         client.close();
 
         // Run for a while to let server detect disconnection
@@ -225,13 +225,13 @@ public class NioNetworkIntegrationTest {
 
     @Test
     void shouldHandleConcurrentConnections() throws Exception {
-        // Create multiple client networks
+        // Create multiple clientId networks
         int clientCount = 10;
         List<TestPeer> clients = new ArrayList<>();
         List<ProcessId> clientIds = new ArrayList<>();
 
         for (int i = 0; i < clientCount; i++) {
-            ProcessId clientId = ProcessId.of("concurrent-client-" + i);
+            ProcessId clientId = ProcessId.of("concurrent-clientId-" + i);
             clients.add(TestPeer.createNew(clientId, registry));
             clientIds.add(clientId);
         }
@@ -289,10 +289,10 @@ public class NioNetworkIntegrationTest {
 
         echoServer.bind(); //server must be bound to start listening
 
-        // The client will detect the failed connection
+        // The clientId will detect the failed connection
         // We need to wait for the connection to be cleaned up first
         runUntil(() -> {
-            // The client should detect the connection failure and clean up
+            // The clientId should detect the connection failure and clean up
             return client.getNetwork().getConnectionCount() == 0;
         });
 
@@ -309,7 +309,7 @@ public class NioNetworkIntegrationTest {
         // Wait for the new message to be processed by the restarted server
         runUntil(() -> echoServer.getReceivedMessages().size() == 1);
 
-        // The restarted server should receive the message and add the client to its connections map
+        // The restarted server should receive the message and add the clientId to its connections map
         // Then it should be able to send a response using that connection
         runUntil(() -> client.getReceivedMessages().size() == 2);
 
@@ -318,10 +318,10 @@ public class NioNetworkIntegrationTest {
         assertEquals("Test message 2", new String(newServerMessage.payload()));
         assertEquals("RESTART2", newServerMessage.messageType().name());
 
-        // Verify that the restarted server has exactly one connection (the client)
+        // Verify that the restarted server has exactly one connection (the clientId)
         assertEquals(1, echoServer.getNetwork().getConnectionCount());
 
-        // Verify that the client has exactly one connection (to the restarted server)
+        // Verify that the clientId has exactly one connection (to the restarted server)
         assertEquals(1, client.getNetwork().getConnectionCount());
 
         System.out.println("Server restart test completed successfully - new connection established and messages flowing");
@@ -329,7 +329,7 @@ public class NioNetworkIntegrationTest {
 
 
     private void cleanupClientNetwork(List<TestPeer> clientNetworks) throws IOException {
-        // Clean up client networks
+        // Clean up clientId networks
         for (TestPeer clientNetwork : clientNetworks) {
             clientNetwork.close();
         }
@@ -376,7 +376,7 @@ public class NioNetworkIntegrationTest {
             Message message = Message.of(
                     clientIds.get(i), serverId, PeerType.CLIENT,
                     MessageType.of("CONCURRENT"),
-                    ("Message from client " + i).getBytes(),
+                    ("Message from clientId " + i).getBytes(),
                     "concurrent-" + i
             );
             messages.add(message);

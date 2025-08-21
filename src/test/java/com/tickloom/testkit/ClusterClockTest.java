@@ -161,7 +161,7 @@ class ClusterClockTest {
             cluster.setTimeForProcess(process2, 10000L);
             cluster.setTimeForProcess(process3, 5000L);  // Behind by 5 seconds
 
-            // Create a client to test with
+            // Create a clientId to test with
             QuorumReplicaClient client = cluster.newClient(
                 ProcessId.of("TestClient"), 
                 QuorumReplicaClient::new

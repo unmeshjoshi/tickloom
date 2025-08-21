@@ -81,8 +81,8 @@ class ClusterInitialTimeTest {
             ProcessId p1 = ProcessId.of("process-1");
             assertEquals(customInitialTime, cluster.getClockForProcess(p1).now());
 
-            // Create a client and verify it also uses the same initial time
-            ProcessId clientId = ProcessId.of("test-client");
+            // Create a clientId and verify it also uses the same initial time
+            ProcessId clientId = ProcessId.of("test-clientId");
             cluster.newClient(clientId, (id, endpoints, bus, codec, clock, timeout) -> 
                 new com.tickloom.algorithms.replication.quorum.QuorumReplicaClient(
                     id, endpoints, bus, codec, clock, timeout));

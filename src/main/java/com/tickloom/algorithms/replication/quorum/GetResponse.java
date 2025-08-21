@@ -4,7 +4,7 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * Response to a client GET request.
+ * Response to a clientId GET request.
  */
 public record GetResponse(byte[] key, byte[] value, boolean found) {
     public GetResponse {

@@ -19,12 +19,12 @@ import java.nio.file.Paths;
 import java.util.*;
 
 /**
- * Command-line client to send GET/SET requests to quorum replicas.
+ * Command-line clientId to send GET/SET requests to quorum replicas.
  */
 public class ClientMain {
 
     private static final String OPT_CONFIG = "--config";
-    private static final String OPT_ID = "--id"; // client id
+    private static final String OPT_ID = "--id"; // clientId id
     private static final String OPT_REPLICAS = "--replicas"; // comma-separated process ids
     private static final String OPT_GET = "--get"; // key
     private static final String OPT_SET = "--set"; // key
@@ -117,7 +117,7 @@ public class ClientMain {
 
             System.exit(0);
         } catch (IOException e) {
-            System.err.println("Failed to start client: " + e.getMessage());
+            System.err.println("Failed to start clientId: " + e.getMessage());
             e.printStackTrace(System.err);
             System.exit(4);
         }
@@ -141,7 +141,7 @@ public class ClientMain {
                 if (network != null) network.close();
             } catch (Exception ignored) {
             }
-        }, "tickloom-client-shutdown"));
+        }, "tickloom-clientId-shutdown"));
     }
 
     private static List<ProcessId> parseReplicasCsv(String csv) {
@@ -163,7 +163,7 @@ public class ClientMain {
     }
 
     private static void printUsageAndExit(int code) {
-        System.out.println("Usage: java -cp <jar> com.tickloom.cmd.Client --config <path/to/config.yaml> --id <client-id> --replicas <id1,id2,...> (--get <key> | --set <key> --value <value>) [--timeout <ticks>] [--deadline-ms <ms>]");
+        System.out.println("Usage: java -cp <jar> com.tickloom.cmd.Client --config <path/to/config.yaml> --id <clientId-id> --replicas <id1,id2,...> (--get <key> | --set <key> --value <value>) [--timeout <ticks>] [--deadline-ms <ms>]");
         System.exit(code);
     }
 

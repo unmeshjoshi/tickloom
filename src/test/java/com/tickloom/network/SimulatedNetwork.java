@@ -388,9 +388,9 @@ public class SimulatedNetwork extends Network {
     private static NetworkLink linkFrom(Message message) {
         // TigerBeetle approach: Handle null source addresses gracefully
         if (message.source() == null) {
-            // For client messages, use destination-only routing
+            // For clientId messages, use destination-only routing
             // This allows network partitioning and packet loss to work correctly
-            // without requiring fake client addresses
+            // without requiring fake clientId addresses
             return new NetworkLink(message.destination(), message.destination());
         }
 

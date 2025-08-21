@@ -1,10 +1,12 @@
 package com.tickloom;
 
+import com.tickloom.algorithms.replication.quorum.QuorumSimulationRunner;
 import com.tickloom.history.History;
 import com.tickloom.history.Op;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -51,5 +53,12 @@ class KnossosTest {
         String edn = h.toEdn();
         boolean ok = Knossos.checkLinearizableRegister(edn);
         assertFalse(ok, "Expected history to be NON-linearizable");
+    }
+
+    @Test
+    public void strictQuorumImplementationShouldBeLinearizable() throws IOException {
+        SimulationRunner runner = new QuorumSimulationRunner(123L);
+        History history = runner.runAndGetHistory(1000);
+        assertTrue(Knossos.checkLinearizableRegister(history.toEdn()));
     }
 }

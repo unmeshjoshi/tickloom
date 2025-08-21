@@ -18,7 +18,7 @@ import com.tickloom.algorithms.replication.quorum.GetResponse;
 import com.tickloom.future.ListenableFuture;
 
 /**
- * Demonstrates the tightened Cluster design with ProcessId-only methods and client-specific targeting.
+ * Demonstrates the tightened Cluster design with ProcessId-only methods and clientId-specific targeting.
  */
 public class ClientTargetingTest {
 
@@ -39,8 +39,8 @@ public class ClientTargetingTest {
             ProcessId sparta = ProcessId.of("sparta");
 
             // Create clients connected to specific nodes
-            ProcessId client1 = ProcessId.of("client-connected-to-athens");
-            ProcessId client2 = ProcessId.of("client-connected-to-byzantium");
+            ProcessId client1 = ProcessId.of("clientId-connected-to-athens");
+            ProcessId client2 = ProcessId.of("clientId-connected-to-byzantium");
             
             // Client 1 connects only to Athens
             QuorumReplicaClient athensClient = cluster.newClientConnectedTo(client1, athens, QuorumReplicaClient::new);
@@ -59,11 +59,11 @@ public class ClientTargetingTest {
             ListenableFuture<SetResponse> byzantiumWrite = byzantiumClient.set(key, value2);
             assertEventually(cluster,() -> byzantiumWrite.isCompleted() && byzantiumWrite.getResult().success());
 
-            // Phase 2: Isolate Athens - client connected to Athens should fail, but Byzantium client continues
+            // Phase 2: Isolate Athens - clientId connected to Athens should fail, but Byzantium clientId continues
             cluster.isolateProcess(athens);
             System.out.println("=== Athens isolated ===");
 
-            // Athens client should fail/timeout when trying to write
+            // Athens clientId should fail/timeout when trying to write
             byte[] failedValue = "should_fail".getBytes();
             ListenableFuture<SetResponse> athensFailedWrite = athensClient.set(key, failedValue);
             
@@ -73,12 +73,12 @@ public class ClientTargetingTest {
                 if (athensFailedWrite.isCompleted()) break;
             }
             
-            System.out.println("Athens client write completed: " + athensFailedWrite.isCompleted());
+            System.out.println("Athens clientId write completed: " + athensFailedWrite.isCompleted());
             if (athensFailedWrite.isCompleted()) {
-                System.out.println("Athens client write success: " + athensFailedWrite.getResult().success());
+                System.out.println("Athens clientId write success: " + athensFailedWrite.getResult().success());
             }
 
-            // Byzantium client should still work (writes to majority)
+            // Byzantium clientId should still work (writes to majority)
             byte[] workingValue = "byzantium_still_works".getBytes();
             ListenableFuture<SetResponse> byzantiumWorkingWrite = byzantiumClient.set(key, workingValue);
             assertEventually(cluster,() -> byzantiumWorkingWrite.isCompleted() && byzantiumWorkingWrite.getResult().success());

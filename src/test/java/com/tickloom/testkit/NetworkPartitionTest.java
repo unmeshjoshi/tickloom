@@ -59,7 +59,7 @@ public class NetworkPartitionTest {
             var majority = NodeGroup.of(CYRENE, DELPHI, SPARTA);
             cluster.partitionNodes(minority, majority);
 
-            // phase 3 — minority write fails for client (no quorum) but persists locally
+            // phase 3 — minority write fails for clientId (no quorum) but persists locally
             var minorityWrite = minorityClient.set(key, minorityValue);
             assertEventually(cluster, minorityWrite::isFailed);
             assertNodesContainValue(cluster, List.of(ATHENS, BYZANTIUM), key, minorityValue);
@@ -105,7 +105,7 @@ public class NetworkPartitionTest {
             // phase 2 — partition
             cluster.partitionNodes(NodeGroup.of(ATHENS, BYZANTIUM), NodeGroup.of(CYRENE, DELPHI, SPARTA));
 
-            // phase 3 — minority write fails for client but persists locally
+            // phase 3 — minority write fails for clientId but persists locally
             var minorityWrite = minorityClient.set(key, minorityValue);
             assertEventually(cluster, minorityWrite::isFailed);
             assertNodesContainValue(cluster, List.of(ATHENS, BYZANTIUM), key, minorityValue);

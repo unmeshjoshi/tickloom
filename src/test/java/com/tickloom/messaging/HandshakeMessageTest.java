@@ -10,14 +10,14 @@ public class HandshakeMessageTest {
 
     @Test
     public void helloMessageContainsRequiredFields() {
-        ProcessId clientId = ProcessId.of("client-1");
+        ProcessId clientId = ProcessId.of("clientId-1");
         ProcessId serverId = ProcessId.of("server-1");
         
         // Hello message with required fields: pid, role, version=1
         // Future extensibility: we can add additional fields like:
         //   "capabilities": ["bidir", "compress=zstd"],
         //   "instanceSeq": 42  // optional, for tie-break. etc..
-        String helloData = "{\"pid\":\"" + clientId.name() + "\",\"role\":\"client\",\"version\":1}";
+        String helloData = "{\"pid\":\"" + clientId.name() + "\",\"role\":\"clientId\",\"version\":1}";
         Message hello = Message.of(clientId, serverId, PeerType.CLIENT, MessageType.HELLO, helloData.getBytes(), null);
         
         assertEquals(MessageType.HELLO, hello.messageType());
@@ -28,7 +28,7 @@ public class HandshakeMessageTest {
 
     @Test
     public void welcomeMessageContainsServerInfo() {
-        ProcessId clientId = ProcessId.of("client-1");
+        ProcessId clientId = ProcessId.of("clientId-1");
         ProcessId serverId = ProcessId.of("server-1");
         
         // Welcome message with server acceptance and info
@@ -43,7 +43,7 @@ public class HandshakeMessageTest {
 
     @Test
     public void rejectMessageWhenConnectionDenied() {
-        ProcessId clientId = ProcessId.of("client-1");
+        ProcessId clientId = ProcessId.of("clientId-1");
         ProcessId serverId = ProcessId.of("server-1");
         
         // Reject message with reason for rejection
@@ -58,7 +58,7 @@ public class HandshakeMessageTest {
 
     @Test
     public void handshakeMessagesCanHaveCorrelationIds() {
-        ProcessId clientId = ProcessId.of("client-1");
+        ProcessId clientId = ProcessId.of("clientId-1");
         ProcessId serverId = ProcessId.of("server-1");
         String correlationId = "handshake-" + System.currentTimeMillis();
         
@@ -75,7 +75,7 @@ public class HandshakeMessageTest {
         // Different process types can use the same handshake protocol
         ProcessId replicaId = ProcessId.of("replica-1");
         ProcessId workerId = ProcessId.of("worker-1");
-        ProcessId clientId = ProcessId.of("client-1");
+        ProcessId clientId = ProcessId.of("clientId-1");
         
         // Replica to replica handshake
         String replicaData = "{\"pid\":\"" + replicaId.name() + "\",\"role\":\"replica\",\"version\":1}";
@@ -86,7 +86,7 @@ public class HandshakeMessageTest {
         Message workerHello = Message.of(workerId, replicaId, PeerType.SERVER, MessageType.HELLO, workerData.getBytes(), null);
         
         // Client to replica handshake
-        String clientData = "{\"pid\":\"" + clientId.name() + "\",\"role\":\"client\",\"version\":1}";
+        String clientData = "{\"pid\":\"" + clientId.name() + "\",\"role\":\"clientId\",\"version\":1}";
         Message clientHello = Message.of(clientId, replicaId, PeerType.CLIENT, MessageType.HELLO, clientData.getBytes(), null);
         
         assertEquals(MessageType.HELLO, replicaHello.messageType());
@@ -96,11 +96,11 @@ public class HandshakeMessageTest {
 
     @Test
     public void connectionHandshakeProtocol() {
-        ProcessId clientId = ProcessId.of("client-1");
+        ProcessId clientId = ProcessId.of("clientId-1");
         ProcessId serverId = ProcessId.of("server-1");
         
         // Step 1: Client sends Hello
-        String helloData = "{\"pid\":\"" + clientId.name() + "\",\"role\":\"client\",\"version\":1}";
+        String helloData = "{\"pid\":\"" + clientId.name() + "\",\"role\":\"clientId\",\"version\":1}";
         Message hello = Message.of(clientId, serverId, PeerType.CLIENT, MessageType.HELLO, helloData.getBytes(), null);
         
         // Step 2: Server responds with Welcome (acceptance)
@@ -114,13 +114,13 @@ public class HandshakeMessageTest {
 
     @Test
     public void futureExtensibilityExample() {
-        ProcessId clientId = ProcessId.of("client-1");
+        ProcessId clientId = ProcessId.of("clientId-1");
         ProcessId serverId = ProcessId.of("server-1");
         
         // Example of how the protocol can be extended in the future
         // Current required fields: pid, role, version
         // Future optional fields: capabilities, instanceSeq, etc.
-        String extendedHelloData = "{\"pid\":\"" + clientId.name() + "\",\"role\":\"client\",\"version\":1," +
+        String extendedHelloData = "{\"pid\":\"" + clientId.name() + "\",\"role\":\"clientId\",\"version\":1," +
                 "\"capabilities\":[\"bidir\",\"compress=zstd\"]," +
                 "\"instanceSeq\":42}";
         Message extendedHello = Message.of(clientId, serverId, PeerType.CLIENT, MessageType.HELLO, extendedHelloData.getBytes(), null);

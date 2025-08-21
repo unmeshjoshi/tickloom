@@ -404,11 +404,11 @@ public class Cluster implements Tickable, AutoCloseable {
     }
 
     /**
-     * Creates a client that connects to all server nodes (default behavior).
+     * Creates a clientId that connects to all server nodes (default behavior).
      * 
-     * @param id the client ID
-     * @param factory the factory to create the client
-     * @return the created client
+     * @param id the clientId ID
+     * @param factory the factory to create the clientId
+     * @return the created clientId
      * @throws IOException if network creation fails
      */
     public <T extends ClusterClient> T newClient(ProcessId id, Cluster.ClientFactory<T> factory) throws IOException {
@@ -416,13 +416,13 @@ public class Cluster implements Tickable, AutoCloseable {
     }
 
     /**
-     * Creates a client that connects to a specific target node.
+     * Creates a clientId that connects to a specific target node.
      * This allows simulating scenarios where clients connect to specific nodes.
      * 
-     * @param id the client ID
+     * @param id the clientId ID
      * @param targetNode the specific server node to connect to
-     * @param factory the factory to create the client
-     * @return the created client
+     * @param factory the factory to create the clientId
+     * @return the created clientId
      * @throws IOException if network creation fails
      */
     public <T extends ClusterClient> T newClientConnectedTo(ProcessId id, ProcessId targetNode, Cluster.ClientFactory<T> factory) throws IOException {
@@ -430,18 +430,18 @@ public class Cluster implements Tickable, AutoCloseable {
     }
 
     /**
-     * Creates a client that connects to specific target nodes.
+     * Creates a clientId that connects to specific target nodes.
      * 
-     * @param id the client ID
+     * @param id the clientId ID
      * @param targetNodes the specific server nodes to connect to
-     * @param factory the factory to create the client
-     * @return the created client
+     * @param factory the factory to create the clientId
+     * @return the created clientId
      * @throws IOException if network creation fails
      */
     private <T extends ClusterClient> T newClient(ProcessId id, List<ProcessId> targetNodes, Cluster.ClientFactory<T> factory) throws IOException {
         Network network = useSimulatedNetwork ? sharedNetwork: createNetwork(messageCodec);
         MessageBus messageBus = useSimulatedNetwork ? sharedMessageBus: new MessageBus(network, messageCodec);
-        // Create a StubClock for the client as well
+        // Create a StubClock for the clientId as well
         StubClock clientClock = new StubClock(initialClockTime);
         processClocks.put(id, clientClock);
         T clusterClient = factory.create(id, targetNodes, messageBus, messageCodec, clientClock, 10000);

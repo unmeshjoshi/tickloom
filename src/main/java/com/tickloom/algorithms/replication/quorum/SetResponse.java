@@ -4,7 +4,7 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * Response to a client SET request.
+ * Response to a clientId SET request.
  */
 public record SetResponse(byte[] key, boolean success) {
     public SetResponse {

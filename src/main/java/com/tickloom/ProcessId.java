@@ -4,7 +4,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Immutable identifier for any process (replica, worker, client) in the system.
+ * Immutable identifier for any process (replica, worker, clientId) in the system.
  * It is just a string but conveniences exist for creating random UUID-backed IDs.
  */
 public record ProcessId(String value) {

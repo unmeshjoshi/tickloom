@@ -10,7 +10,6 @@ import com.tickloom.testkit.Cluster;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.TimeoutException;
@@ -20,38 +19,44 @@ import java.util.function.Function;
 public abstract class SimulationRunner {
     private final ArrayList<com.tickloom.SingleRequestIssuer<ClusterClient>> clients;
     private Cluster cluster;
-    long tickDuration = 100000;
 
-    public SimulationRunner(long tickDuration, long randomSeed, ProcessFactory processFactory, Cluster.ClientFactory<QuorumReplicaClient> clientFactory) throws IOException {
-        this.tickDuration = tickDuration;
+    public SimulationRunner(long randomSeed, ProcessFactory processFactory, Cluster.ClientFactory<QuorumReplicaClient> clientFactory) throws IOException {
+        this(randomSeed, 3, 3, processFactory, clientFactory);
+    }
+    public SimulationRunner(long randomSeed, int clusterSize, int numClients, ProcessFactory processFactory, Cluster.ClientFactory<QuorumReplicaClient> clientFactory) throws IOException {
         this.cluster = new Cluster()
                 .withSeed(randomSeed)
-                .withNumProcesses(3)
+                .withNumProcesses(clusterSize)
                 .withLossySimulatedNetwork()
                 .build(processFactory);
         Random clusterSeedRandom = cluster.getRandom();
         this.clients = new ArrayList<>();
-        for (int i = 0; i < 3; i++) {
-            ClusterClient clusterClient  = cluster.newClient(ProcessId.of("client-" + i), clientFactory);
+        for (int i = 0; i < numClients; i++) {
+            ClusterClient clusterClient  = cluster.newClient(ProcessId.of("clientId-" + i), clientFactory);
             clients.add(new SingleRequestIssuer<>(this, clusterClient, clusterSeedRandom));
         }
+    }
+
+    public History runAndGetHistory(long tickDuration) {
+        runClusterFor(tickDuration);
+        waitForPendingRequests();
+        // optionally skip file write + knossos here for tests
+        return history;
     }
 
     public static void main(String[] args) throws IOException {
         int randomSeed = 111111;
         int runForTicks = 10000;
-        SimulationRunner simulationRunner = new QuorumSimulationRunner(runForTicks, randomSeed);
-        simulationRunner.run();
+        SimulationRunner simulationRunner = new QuorumSimulationRunner(randomSeed);
+        simulationRunner.runForTicks(runForTicks);
     }
 
     protected History history = new History();
 
-    public void run() {
-        runClusterFor(tickDuration);
+    public void runForTicks(long runForTicks) {
+        history = runAndGetHistory(runForTicks);
 
-        waitForPendingRequests();
-
-        writeHistory();
+        writeHistory(history);
 
         checkLinearizability();
 
@@ -63,14 +68,14 @@ public abstract class SimulationRunner {
     }
 
     private void runClusterFor(long tickDuration) {
-        double issueProbabilityPerTick = 0.4; //40% ticks will issue a client request.
+        double issueProbabilityPerTick = 0.4; //40% ticks will issue a clientId request.
         long tick = 0;
         Random clusterSeededRandom = cluster.getRandom();
         while (tickDuration > tick) {
             tick++;
             cluster.tick();
 
-            // Decide whether to issue client request this tick.
+            // Decide whether to issue clientId request this tick.
             if (clusterSeededRandom.nextDouble() > issueProbabilityPerTick) continue;
 
             SingleRequestIssuer<ClusterClient> client = clients.get(clusterSeededRandom.nextInt(clients.size()));
@@ -92,6 +97,14 @@ public abstract class SimulationRunner {
         System.out.println("The history is " + (isLinearizable ? "linearizable" : "not linearizable") + " = " + isLinearizable);
     }
 
+
+    protected void recordReadInvocation(ProcessId processId, Op op, byte[] keyBytes) {
+        history.invoke(processId.name(), op, keyBytes, null);
+    }
+
+    protected void recordInvocation(ProcessId processId, Op op, byte[] keyBytes, byte[] valueBytes) {
+        history.invoke(processId.name(), op, keyBytes, valueBytes);
+    }
     //history recording for get calls, with only key.
     protected <T> ListenableFuture<T> recordReadResponse(ListenableFuture<T> future,
                                                          Op op,
@@ -121,7 +134,7 @@ public abstract class SimulationRunner {
 
     protected abstract ListenableFuture issueRequest(ClusterClient client, Random clusterSeededRandom);
 
-    private void writeHistory() {
+    private void writeHistory(History history) {
         String buildDir = "build";
         String historyFile = buildDir + "/history_" + Instant.now() + ".edn";
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(historyFile))) {

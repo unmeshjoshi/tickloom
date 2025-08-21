@@ -68,7 +68,7 @@ public class QuorumReplica extends Replica {
     }
 
     private void logIncomingGetRequest(GetRequest req, String correlationId, ProcessId clientAddr) {
-        System.out.println("QuorumReplica: Processing client GET request - keyLength: " + req.key().length +
+        System.out.println("QuorumReplica: Processing clientId GET request - keyLength: " + req.key().length +
                 ", correlationId: " + correlationId + ", from: " + clientAddr);
     }
 
@@ -127,7 +127,7 @@ public class QuorumReplica extends Replica {
     }
 
     private void logIncomingSetRequest(SetRequest req, String correlationId, ProcessId clientAddr) {
-        System.out.println("QuorumReplica: Processing client SET request - keyLength: " + req.key().length +
+        System.out.println("QuorumReplica: Processing clientId SET request - keyLength: " + req.key().length +
                 ", valueLength: " + req.value().length + ", correlationId: " + correlationId + ", from: " + clientAddr);
     }
 

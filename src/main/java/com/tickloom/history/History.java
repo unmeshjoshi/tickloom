@@ -22,35 +22,39 @@ public class History {
 
     enum EventType { INVOKE, OK, FAIL, TIMEOUT }
 
-    public static class Event {
-        final long id;
-        final String client;
-        final EventType type;  // "ok=v", "fail", "timeout"
-        final Op op;
-        final byte[] key;
-        final byte[] value; // e.g., "Write(k,v)" or "Read(k)"
-        final long nanoTime;
-
+    //convert following to record
+    public record Event(long id, String clientId,
+                        EventType type, Op op, byte[] key, byte[] value, long nanoTime) {
         Event(long id, String client, EventType type, Op op, byte[] key, byte[] value) {
-            this.id = id;
-            this.client = client;
-            this.op = op;
-            this.key = key;
-            this.value = value;
-            this.type = type;
-            this.nanoTime = System.nanoTime();
+           this(id, client, type, op, key, value, System.nanoTime());
         }
 
         public String toString() {
             return "Event{" +
                     "id=" + id +
-                    ", client='" + client + '\'' +
+                    ", clientId='" + clientId + '\'' +
                     ", type=" + type +
                     ", op=" + op +
                     ", key=" + (key == null ? "" : new String(key)) +
                     ", value=" + (value == null ? "" : new String(value)) +
-                    ", nanoTime=" + nanoTime +
                     "}";
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o == null || getClass() != o.getClass()) return false;
+            Event event = (Event) o;
+            return id == event.id
+                    && op == event.op
+                    && Arrays.equals(key, event.key)
+                    && Arrays.equals(value, event.value)
+                    && Objects.equals(clientId, event.clientId)
+                    && type == event.type;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(id, clientId, type, op, Arrays.hashCode(key), Arrays.hashCode(value));
         }
     }
 
@@ -67,7 +71,7 @@ public class History {
         List<History.Event> evs = new ArrayList<>(all());
         if (evs.isEmpty()) return "[]";
 
-        // time base (ns since first event), stable process ints per client
+        // time base (ns since first event), stable process ints per clientId
         long t0 = evs.stream().mapToLong(e -> e.nanoTime).min().orElse(System.nanoTime());
         Map<String, Integer> proc = new LinkedHashMap<>();
         int[] nextPid = {0};
@@ -83,7 +87,7 @@ public class History {
                 case TIMEOUT-> ":info"; // timeout is indeterminate completion in Knossos
             };
             String f = (e.op == Op.WRITE) ? ":write" : ":read";
-            int pid = proc.computeIfAbsent(e.client, k -> nextPid[0]++);
+            int pid = proc.computeIfAbsent(e.clientId, k -> nextPid[0]++);
 
             // Value conventions for a register:
             // write: invoke->value written; completion->same value
@@ -140,6 +144,21 @@ public class History {
         out.append('"');
         return out.toString();
     }
-
     public List<Event> all() { return events; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        History history = (History) o;
+        // Equality is defined by the sequence of events.
+        //The ids values should also exactly match as the number of events recorded should be exactly same.
+        return Objects.equals(events, history.events)&& ids.get() == history.ids.get();
+    }
+
+    @Override
+    public int hashCode() {
+        // Hash based solely on events sequence for consistency with equals
+        return Objects.hash(events, ids);
+    }
 }

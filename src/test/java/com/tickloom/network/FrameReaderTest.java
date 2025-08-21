@@ -35,7 +35,7 @@ class FrameReaderTest {
     }
 
     private static Message dummyMessage() {
-        return new Message(ProcessId.of("client"), ProcessId.of("server"), PeerType.CLIENT, new MessageType("test"), new byte[0], "x");
+        return new Message(ProcessId.of("clientId"), ProcessId.of("server"), PeerType.CLIENT, new MessageType("test"), new byte[0], "x");
     }
 
     /* -------------- happy‑path cases -------------- */

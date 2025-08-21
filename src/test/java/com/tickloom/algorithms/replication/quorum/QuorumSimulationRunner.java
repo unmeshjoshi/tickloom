@@ -6,13 +6,16 @@ import com.tickloom.algorithms.replication.ClusterClient;
 import com.tickloom.future.ListenableFuture;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.Random;
 
 public class QuorumSimulationRunner extends SimulationRunner {
 
-    public QuorumSimulationRunner(long tickDuration, long randomSeed) throws IOException {
-        super(tickDuration, randomSeed, QuorumReplica::new, QuorumReplicaClient::new);
+    public QuorumSimulationRunner(long randomSeed, int clusterSize, int numClients) throws IOException {
+        super(randomSeed, clusterSize, numClients, QuorumReplica::new, QuorumReplicaClient::new);
+    }
+
+    public QuorumSimulationRunner(long randomSeed) throws IOException {
+        this(randomSeed, 3, 3);
     }
 
     @Override
@@ -27,7 +30,7 @@ public class QuorumSimulationRunner extends SimulationRunner {
 
             QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;
             ListenableFuture<SetResponse> setFuture = quorumReplicaClient.set(key.getBytes(), value.getBytes());//clients.get(0)
-            history.invoke(quorumReplicaClient.id.name(), Op.WRITE, key.getBytes(), value.getBytes());
+            recordInvocation(quorumReplicaClient.id, Op.WRITE, key.getBytes(), value.getBytes());
             opFuture = recordResponse(setFuture, Op.WRITE, key.getBytes(), value.getBytes(),
                     (setResponse) -> value.getBytes(), quorumReplicaClient.id);
 
@@ -35,7 +38,7 @@ public class QuorumSimulationRunner extends SimulationRunner {
         } else {
             QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;
             ListenableFuture<GetResponse> getFuture = quorumReplicaClient.get(key.getBytes());//clients.get(0)
-            history.invoke(quorumReplicaClient.id.name(), Op.READ, key.getBytes(), null);
+            recordReadInvocation(quorumReplicaClient.id, Op.READ, key.getBytes());
             opFuture = recordReadResponse(
                     getFuture, Op.READ, key.getBytes(),
                     (getResponse) -> getResponse.value(), quorumReplicaClient.id);
@@ -45,3 +48,5 @@ public class QuorumSimulationRunner extends SimulationRunner {
     }
 
 }
+
+

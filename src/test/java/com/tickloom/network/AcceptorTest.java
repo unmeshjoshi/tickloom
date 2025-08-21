@@ -18,10 +18,10 @@ class AcceptorTest {
     void closesSocketWhenRegistrationFails() throws Exception {
         // Mock the server socket that owns the accept()
         ServerSocketChannel srv = mock(ServerSocketChannel.class);
-        // Mock a fresh client SocketChannel returned by accept()
+        // Mock a fresh clientId SocketChannel returned by accept()
         SocketChannel client = mock(SocketChannel.class);
 
-        // Pretend accept() returns the client socket
+        // Pretend accept() returns the clientId socket
         when(srv.accept()).thenReturn(client);
 
         // Selector + SelectionKey mocks
@@ -29,7 +29,7 @@ class AcceptorTest {
         SelectionKey srvKey = mock(SelectionKey.class);
         when(srvKey.selector()).thenReturn(selector);
 
-        // Make client.register(..) throw -> simulate "too many keys" or cancelled key
+        // Make clientId.register(..) throw -> simulate "too many keys" or cancelled key
         when(client.register(any(Selector.class), anyInt()))
                 .thenThrow(new ClosedChannelException());
 
@@ -51,10 +51,10 @@ class AcceptorTest {
     void closesSocketWhenRegistrationFailsWithAnyException() throws Exception {
         // Mock the server socket that owns the accept()
         ServerSocketChannel srv = mock(ServerSocketChannel.class);
-        // Mock a fresh client SocketChannel returned by accept()
+        // Mock a fresh clientId SocketChannel returned by accept()
         SocketChannel client = mock(SocketChannel.class);
 
-        // Pretend accept() returns the client socket
+        // Pretend accept() returns the clientId socket
         when(srv.accept()).thenReturn(client);
 
         // Selector + SelectionKey mocks
@@ -62,7 +62,7 @@ class AcceptorTest {
         SelectionKey srvKey = mock(SelectionKey.class);
         when(srvKey.selector()).thenReturn(selector);
 
-        // Make client.register(..) throw -> simulate "too many keys" or cancelled key
+        // Make clientId.register(..) throw -> simulate "too many keys" or cancelled key
         when(client.register(any(Selector.class), anyInt()))
                 .thenThrow(new RuntimeException());
 

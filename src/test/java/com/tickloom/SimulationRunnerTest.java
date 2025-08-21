@@ -1,0 +1,61 @@
+package com.tickloom;
+
+import com.tickloom.algorithms.replication.quorum.QuorumSimulationRunner;
+import com.tickloom.history.History;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class SimulationRunnerTest {
+
+    @Test
+    public void historyWithSameSeedShouldBeIdenticalAcrossRuns() throws IOException {
+        //same seed with same cluster size and number of clients. (defaults to 3 processes and 3 clients)
+        Long seed = 123L;
+        SimulationRunner runner = new QuorumSimulationRunner(seed);
+        SimulationRunner runner2 = new QuorumSimulationRunner(seed);
+        History history1 = runner.runAndGetHistory(1000);
+        History history2 = runner2.runAndGetHistory(1000);
+        assertEquals(history1, history2);
+    }
+
+    @Test
+    public void historyWithDifferentSeedShouldNotBeIdentical() throws IOException {
+        SimulationRunner runner = new QuorumSimulationRunner(123L);
+        SimulationRunner runner2 = new QuorumSimulationRunner(456L);
+        History history1 = runner.runAndGetHistory(1000);
+        History history2 = runner2.runAndGetHistory(1000);
+        assertNotEquals(history1, history2);
+    }
+
+    @Test
+    public void historyWithDifferentTickDurationShouldNotBeIdentical() throws IOException {
+        SimulationRunner runner = new QuorumSimulationRunner(123L);
+        SimulationRunner runner2 = new QuorumSimulationRunner(123L);
+        History history1 = runner.runAndGetHistory(1000);
+        History history2 = runner2.runAndGetHistory(2000);
+        assertNotEquals(history1, history2);
+    }
+
+    @Test
+    public void historyWithDifferentNumProcessesShouldNotBeIdentical() throws IOException {
+        SimulationRunner runner = new QuorumSimulationRunner(123L, 5, 3);
+        SimulationRunner runner2 = new QuorumSimulationRunner(123L, 3, 3);
+        History history1 = runner.runAndGetHistory(1000);
+        History history2 = runner2.runAndGetHistory(1000);
+        assertNotEquals(history1, history2);
+    }
+
+    @Test
+    public void historyWithDifferentNumClientsShouldNotBeIdentical() throws IOException {
+        SimulationRunner runner = new QuorumSimulationRunner(123L, 3, 5);
+        SimulationRunner runner2 = new QuorumSimulationRunner(123L, 3, 3);
+        History history1 = runner.runAndGetHistory(1000);
+        History history2 = runner2.runAndGetHistory(1000);
+        assertNotEquals(history1, history2);
+    }
+
+}

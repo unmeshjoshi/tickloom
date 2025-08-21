@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
  *  CURRENT (v1)
  *  ----------------------------------------------------------------------------
  *  • One TCP socket per peer, bidirectional.
- *  • Both client requests/responses and replica‐to‐replica messages share the
+ *  • Both clientId requests/responses and replica‐to‐replica messages share the
  *    same queue, buffer sizes, and back‑pressure thresholds.
  *  • Framing is a simple 9‑byte header (4+1+4) + payload.
  *
@@ -251,8 +251,8 @@ public class NioNetwork extends Network {
             } catch (Exception e) {
                 System.out.println("NIO: Cannot create outbound connection to Peer" + peerId );
                 if (connection == null) {
-                    // Peer is not in registry (i.e., it's a client), can only use existing connection
-                    throw new IOException("No existing connection to client " + peerId);
+                    // Peer is not in registry (i.e., it's a clientId), can only use existing connection
+                    throw new IOException("No existing connection to clientId " + peerId);
                 }
                 // Connection exists but is not usable, throw exception
                 throw new IOException(" Cannot create outbound connection to Peer " + peerId);
