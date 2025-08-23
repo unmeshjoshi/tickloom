@@ -294,7 +294,7 @@ TickLoom includes a small simulation harness to drive repeatable workloads and v
 
 - **`SimulationRunner`**: base class that runs a cluster for N ticks, issues client requests deterministically (by seed), and records a history.
 - **`QuorumSimulationRunner`**: concrete runner for the quorum key-value example (issues GET/SET).
-- **`Knossos`** integration: converts history to EDN and checks linearizability using the Jepsen Knossos model checker.
+- **`Jepsen`** integration: converts history to EDN and checks linearizability using the Jepsen checker.
 
 ### Example: Run a simulation
 
@@ -303,7 +303,7 @@ long seed = 111_111L;
 long ticks = 10_000L;
 
 var runner = new com.tickloom.algorithms.replication.quorum.QuorumSimulationRunner(seed);
-runner.runForTicks(ticks); // writes EDN to build/history_*.edn and runs Knossos
+runner.runForTicks(ticks); // writes EDN to build/history_*.edn and runs Jepsen checker
 ```
 
 ### Determinism by seed
@@ -322,16 +322,16 @@ assert h1.equals(h2); // same seed -> same history
 
 See `src/test/java/com/tickloom/SimulationRunnerTest.java` for determinism tests.
 
-### Linearizability check (Jepsen/Knossos)
+### Linearizability check (Jepsen)
 
-`SimulationRunner` uses `Knossos` to validate a register model. You can also call it directly:
+`SimulationRunner` uses `Jepsen` to validate a register model. You can also call it directly:
 
 ```java
 var runner = new QuorumSimulationRunner(123L);
 var history = runner.runAndGetHistory(5_000);
 
-var knossos = new com.tickloom.Knossos();
-boolean ok = knossos.checkLinearizableRegister(history.toEdn());
+var jepsen = new com.tickloom.Jepsen();
+boolean ok = jepsen.checkLinearizableRegister(history.toEdn());
 System.out.println("Linearizable = " + ok);
 ```
 
@@ -339,7 +339,7 @@ Notes:
 - The simulation uses a single-threaded tick model; randomness is fully controlled by the seed for reproducibility.
 - EDN histories are stable and suitable for external analysis tools.
 
-For more examples of using Knossos, see `src/test/java/com/tickloom/KnossosTest.java`.
+For more examples of using Jepsen, see `src/test/java/com/tickloom/JepsenTest.java`.
 
 ---
 
@@ -380,8 +380,8 @@ Tickloom is for you if you:
 
 ## Acknowledgements
 - Tickloom’s tick model and deterministic simulation approach are inspired by the excellent [TigerBeetle](https://github.com/tigerbeetle/tigerbeetle) project.
-- [![AI assisted](https://img.shields.io/badge/AI%20assisted-ChatGPT--5-blueviolet)](https://openai.com)
-  ChatGPT-5 was used to brainstorm some ideas and generate some parts of this code.
+- Built using the Cursor and IntelliJ Idea editors.
+- AI assistance: ChatGPT‑5 and Claude Sonnet.
   
 ---
 

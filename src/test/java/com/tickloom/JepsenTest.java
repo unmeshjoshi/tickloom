@@ -12,10 +12,10 @@ import java.nio.charset.StandardCharsets;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class KnossosTest {
+public class JepsenTest {
     @AfterAll
     public static void shutDownAgents() {
-        Knossos.shutdownAgents();
+        Jepsen.shutdownAgents();
     }
 
     @Test
@@ -32,7 +32,7 @@ class KnossosTest {
         h.ok    ("p1", Op.READ,  k, v3);
 
         String edn = h.toEdn();
-        boolean ok = Knossos.checkLinearizableRegister(edn);
+        boolean ok = Jepsen.checkLinearizableRegister(edn);
         assertTrue(ok, "Expected history to be linearizable");
     }
 
@@ -51,7 +51,7 @@ class KnossosTest {
         h.ok    ("p1", Op.READ,  k, v2);
 
         String edn = h.toEdn();
-        boolean ok = Knossos.checkLinearizableRegister(edn);
+        boolean ok = Jepsen.checkLinearizableRegister(edn);
         assertFalse(ok, "Expected history to be NON-linearizable");
     }
 
@@ -59,6 +59,6 @@ class KnossosTest {
     public void strictQuorumImplementationShouldBeLinearizable() throws IOException {
         SimulationRunner runner = new QuorumSimulationRunner(123L);
         History history = runner.runAndGetHistory(1000);
-        assertTrue(Knossos.checkLinearizableRegister(history.toEdn()));
+        assertTrue(Jepsen.checkLinearizableRegister(history.toEdn()));
     }
 }

@@ -64,7 +64,7 @@ public abstract class SimulationRunner {
     }
 
     private static void shutdownClojureAgents() {
-        Knossos.shutdownAgents();
+        Jepsen.shutdownAgents();
     }
 
     private void runClusterFor(long tickDuration) {
@@ -91,7 +91,7 @@ public abstract class SimulationRunner {
     }
 
     private void checkLinearizability() {
-        Knossos knossos = new Knossos();
+        Jepsen knossos = new Jepsen();
         String edn = history.toEdn();
         boolean isLinearizable = knossos.checkLinearizableRegister(edn);
         System.out.println("The history is " + (isLinearizable ? "linearizable" : "not linearizable") + " = " + isLinearizable);
