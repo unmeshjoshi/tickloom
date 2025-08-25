@@ -1,0 +1,30 @@
+{:valid? false,
+ :configs
+ ({:model {:value "v1"},
+   :last-op
+   {:process 0, :type :ok, :f :write, :value "v1", :index 1, :time 1},
+   :pending
+   [{:process 1,
+     :type :invoke,
+     :f :read,
+     :value "WRONG",
+     :index 2,
+     :time 2}]}),
+ :final-paths
+ ([{:op
+    {:process 0, :type :ok, :f :write, :value "v1", :index 1, :time 1},
+    :model {:value "v1"}}
+   {:op
+    {:process 1,
+     :type :ok,
+     :f :read,
+     :value "WRONG",
+     :index 3,
+     :time 3},
+    :model {:msg "\"v1\"≠\"WRONG\""}}]),
+ :previous-ok
+ {:process 0, :type :ok, :f :write, :value "v1", :index 1, :time 1},
+ :last-op
+ {:process 0, :type :ok, :f :write, :value "v1", :index 1, :time 1},
+ :op
+ {:process 1, :type :ok, :f :read, :value "WRONG", :index 3, :time 3}}

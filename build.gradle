@@ -1,8 +1,14 @@
 plugins {
     id 'java'
+    id 'dev.clojurephant.clojure' version '0.8.0'
     id 'com.github.johnrengelman.shadow' version '8.1.1'
     id 'maven-publish'
     id 'signing'
+}
+
+repositories {
+    maven { url "https://clojars.org/repo" }
+    mavenCentral()
 }
 
 import org.gradle.plugins.signing.Sign
@@ -10,16 +16,10 @@ import org.gradle.plugins.signing.Sign
 group = 'com.github.tickloom'
 version = '0.1.0-alpha.4'
 
-repositories {
-    mavenCentral()
-    maven { url 'https://repo.clojars.org' } // Clojure/Jepsen artifacts are on Clojars
-}
-
 dependencies {
-    // Add your dependencies here
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
     implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.17.0'
-    
+
     // Production-ready storage
     implementation 'org.rocksdb:rocksdbjni:9.7.3'
 
