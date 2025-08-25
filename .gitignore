@@ -31,3 +31,6 @@ bin
 # Ignore Java heap dumps
 *.hprof
 bin/
+
+# Jepsen/independent output
+store/
