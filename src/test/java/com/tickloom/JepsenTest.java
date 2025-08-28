@@ -16,10 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class JepsenTest {
-    @AfterAll
-    public static void shutDownAgents() {
-        Jepsen.shutdownAgents();
-    }
+    // Do not shutdown Clojure agents here; other tests may need them in the same JVM
 
     @Test
     void shouldBeLinearizableForRegister() {
@@ -261,5 +258,40 @@ public class JepsenTest {
                 + "]";
         boolean ok = Jepsen.checkIndependentKV(edn, "linearizable", null);
         assertFalse(ok);
+    }
+
+    @Test
+    void shouldBeSequentialButNotLinearizableForRegister() {
+        // Full invoke/ok KV history for linearizability
+        String ednKvFull = "["
+                + "{:type :invoke, :f :write, :process 0, :time 0,  :index 0, :value [\"kv\" \"v0\"]},"
+                + "{:type :ok,     :f :write, :process 0, :time 10, :index 1, :value [\"kv\" \"v0\"]},"
+                + "{:type :invoke, :f :write, :process 0, :time 20, :index 2, :value [\"kv\" \"v1\"]},"
+                + "{:type :ok,     :f :write, :process 0, :time 30, :index 3, :value [\"kv\" \"v1\"]},"
+                + "{:type :invoke, :f :read,  :process 1, :time 40, :index 4, :value [\"kv\" nil]},"
+                + "{:type :ok,     :f :read,  :process 1, :time 50, :index 5, :value [\"kv\" \"v0\"]}"
+                + "]";
+
+        // Use the same full history for sequential; the checker will ignore real-time
+        String ednKvForSeq = ednKvFull;
+
+        boolean lin = Jepsen.checkIndependentKV(ednKvFull, "linearizable", null);
+        boolean seq = Jepsen.checkRegisterKVSequential(ednKvForSeq);
+        assertFalse(lin);
+        assertTrue(seq);
+    }
+
+    @Test
+    void shouldBeSequentialConsistentForRegisterUsingConvenienceMethod() {
+        // Only :ok events, sequentially consistent ordering ignoring real-time
+        String ednKvSeq = "["
+                + "{:type :invoke, :f :write, :process 0, :time 0, :index 0, :value [\"kv\" \"v0\"]},"
+                + "{:type :ok,     :f :write, :process 0, :time 1, :index 1, :value [\"kv\" \"v0\"]},"
+                + "{:type :invoke, :f :read,  :process 1, :time 2, :index 2, :value [\"kv\" nil]},"
+                + "{:type :ok,     :f :read,  :process 1, :time 3, :index 3, :value [\"kv\" \"v0\"]},"
+                + "{:type :invoke, :f :write, :process 0, :time 4, :index 4, :value [\"kv\" \"v1\"]},"
+                + "{:type :ok,     :f :write, :process 0, :time 5, :index 5, :value [\"kv\" \"v1\"]}"
+                + "]";
+        assertTrue(Jepsen.checkRegisterKVSequential(ednKvSeq));
     }
 }

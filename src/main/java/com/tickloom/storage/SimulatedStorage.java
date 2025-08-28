@@ -170,11 +170,15 @@ public class SimulatedStorage implements Storage {
         
         @Override
         void execute(Map<BytesKey, VersionedValue> dataStore) {
-            dataStore.put(key, value);
-            String keyStr = new String(key.bytes());
-            String valueStr = new String(value.value());
-            System.out.println("SimulatedStorage: SET operation - key: " + keyStr + ", value: " + valueStr + 
-                              ", timestamp: " + value.timestamp());
+            VersionedValue versionedValue = dataStore.get(key);
+            if (versionedValue == null || versionedValue.timestamp() < value.timestamp()) {
+                String keyStr = new String(key.bytes());
+                String valueStr = new String(value.value());
+                System.out.println("SimulatedStorage: SET operation - key: " + keyStr + ", value: " + valueStr +
+                        ", timestamp: " + value.timestamp());
+                dataStore.put(key, value);
+
+            }
             future.complete(true);
         }
         

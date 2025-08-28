@@ -1,10 +1,13 @@
 package com.tickloom.testkit;
 
 import com.tickloom.ProcessId;
+import com.tickloom.Jepsen;
 import com.tickloom.algorithms.replication.quorum.GetResponse;
 import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
 import com.tickloom.algorithms.replication.quorum.SetResponse;
+import com.tickloom.history.History;
+import com.tickloom.history.Op;
 import com.tickloom.future.ListenableFuture;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -80,6 +83,58 @@ public class NetworkPartitionTest {
     }
 
     @Test
+    @DisplayName("Local stale read after quorum write: linearizable=false, sequential=true")
+    void localReadAfterQuorumWrite_breaksLin_passesSeq() throws IOException {
+        try (var cluster = new Cluster()
+                .withProcessIds(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA))
+                .useSimulatedNetwork()
+                .build(QuorumReplica::new)
+                .start()) {
+
+            var clientWriter = cluster.newClientConnectedTo(ProcessId.of("client1"), CYRENE, QuorumReplicaClient::new);
+
+            byte[] key = "kv".getBytes();
+            byte[] v0  = "v0".getBytes();
+            byte[] v1  = "v1".getBytes();
+
+            History history = new History();
+
+            // Step 1: initialize value via quorum so all nodes converge to v0
+            history.invoke("client1", Op.WRITE, key, v0);
+            var init = clientWriter.set(key, v0);
+            assertEventually(cluster, init::isCompleted);
+            assertTrue(init.getResult().success());
+            history.ok("client1", Op.WRITE, key, v0);
+
+            // Step 2: partition nodes so writer's majority excludes ATHENS
+            var writerSide = NodeGroup.of(CYRENE, DELPHI, SPARTA);
+            var otherSide  = NodeGroup.of(ATHENS, BYZANTIUM);
+            cluster.partitionNodes(writerSide, otherSide);
+
+            // Step 3: quorum write v1 on writer side
+            history.invoke("client1", Op.WRITE, key, v1);
+            var w1 = clientWriter.set(key, v1);
+            assertEventually(cluster, () -> w1.isCompleted() && w1.getResult().success());
+            history.ok("client1", Op.WRITE, key, v1);
+
+            // Step 4: different client performs local read on ATHENS (single-node read), sees stale v0
+            history.invoke("client2", Op.READ, key, null);
+            var vv = cluster.getStorageValue(ATHENS, key);
+            assertNotNull(vv);
+            assertArrayEquals(v0, vv.value());
+            history.ok("client2", Op.READ, key, vv.value());
+
+            // Step 5: analyze: linearizable should fail; sequential should pass (different client)
+            String edn = history.toEdn();
+            System.out.println("edn = " + edn);
+            boolean lin = Jepsen.checkLinearizableRegister(edn);
+            boolean seq = Jepsen.checkRegisterSequential(edn);
+            assertFalse(lin, "Stale read after successful write should not be linearizable");
+            assertTrue(seq, "Across clients, stale read can be sequential by reordering");
+        }
+    }
+
+    @Test
     @DisplayName("Clock skew: minority (higher timestamp) wins after heal")
     void clockSkewOverwritesMajorityValue() throws IOException {
         try (var cluster = new Cluster()
@@ -96,36 +151,57 @@ public class NetworkPartitionTest {
             byte[] minorityValue = "minority_attempt".getBytes();
             byte[] majorityValue = "majority_success".getBytes();
 
-            // phase 1 — initial converge
+            // Step 0: start recording a client-observed history for Jepsen analysis
+            History history = new History();
+
+            // Step 1: majority-side write of initialValue; cluster converges on v0
+            history.invoke("majority_client", Op.WRITE, key, initialValue);
             var initialSet = majorityClient.set(key, initialValue);
             assertEventually(cluster, initialSet::isCompleted);
             assertTrue(initialSet.getResult().success(), "Initial write should succeed");
             assertAllNodeStoragesContainValue(cluster, key, initialValue);
+            history.ok("majority_client", Op.WRITE, key, initialValue);
 
-            // phase 2 — partition
+            // Step 2: partition cluster into minority (2) and majority (3)
             cluster.partitionNodes(NodeGroup.of(ATHENS, BYZANTIUM), NodeGroup.of(CYRENE, DELPHI, SPARTA));
 
-            // phase 3 — minority write fails for clientId but persists locally
+            // Step 3: minority write times out at client but persists locally in its partition
+            history.invoke("minority_client", Op.WRITE, key, minorityValue);
             var minorityWrite = minorityClient.set(key, minorityValue);
             assertEventually(cluster, minorityWrite::isFailed);
             assertNodesContainValue(cluster, List.of(ATHENS, BYZANTIUM), key, minorityValue);
+            history.timeout("minority_client", Op.WRITE, key, minorityValue);
 
-            // phase 4 — skew CYRENE's clock behind ATHENS; majority write now has lower ts
+            // Step 4: skew majority clock behind minority; majority write now has lower timestamp
             var athensTs = cluster.getStorageValue(ATHENS, key).timestamp();
             cluster.setTimeForProcess(CYRENE, athensTs - SKEW_TICKS);
 
+            history.invoke("majority_client", Op.WRITE, key, majorityValue);
             var majorityWrite = majorityClient.set(key, majorityValue);
             assertEventually(cluster, () -> majorityWrite.isCompleted() && majorityWrite.getResult().success());
-            assertNodesContainValue(cluster, List.of(CYRENE, DELPHI, SPARTA), key, majorityValue);
+            history.ok("majority_client", Op.WRITE, key, majorityValue);
 
-            // phase 5 — heal; higher timestamp (minority) should prevail
+            // Step 5: heal partitions; higher timestamp (minority) should prevail cluster-wide
             cluster.healAllPartitions();
 
+            history.invoke("minority_client", Op.READ, key, null);
             var healedRead = minorityClient.get(key);
             assertEventually(cluster, healedRead::isCompleted);
             assertTrue(healedRead.getResult().found(), "Data should be retrievable after healing");
             assertArrayEquals(minorityValue, healedRead.getResult().value(),
                     "Minority value (higher timestamp) should win after heal with clock skew");
+            history.ok("minority_client", Op.READ, key, healedRead.getResult().value());
+
+            // Step 6: prove not linearizable (real-time precedence) and not sequential (no serial order preserves results)
+            // - Linearizability fails: after healing, the read observes the minority value written in a different
+            //   partition while a successful majority write also occurred. There is no placement respecting real-time precedence.
+            // - Sequential consistency fails: even ignoring real-time order, no single serial order yields the observed read.
+            String edn = history.toEdnKvTuples();
+            boolean linearizable = Jepsen.checkIndependentKV(edn, "linearizable", null);
+            assertFalse(linearizable, "History should be non-linearizable: failed write took effect");
+
+            boolean okSeq = Jepsen.checkRegisterKVSequential(edn);
+            assertTrue(okSeq);
         }
     }
 
@@ -164,6 +240,84 @@ public class NetworkPartitionTest {
             assertEventually(cluster, delayedRead::isCompleted);
             assertTrue(delayedRead.getResult().found(), "Data should be retrievable");
             assertArrayEquals(value, delayedRead.getResult().value(), "Data should be consistent");
+        }
+    }
+
+//    @Test
+//    @DisplayName("Stale read because of clock skew after own write breaks linearizability and sequential consistency")
+    //TODO: Update this test.
+    void clockSkewNoPartition_staleReads_breaksLinAndSeq() throws IOException {
+        try (var cluster = new Cluster()
+                .withProcessIds(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA))
+                .useSimulatedNetwork()
+                .build(QuorumReplica::new)
+                .start()) {
+
+            // Step 0: clients on different servers
+            var client1 = cluster.newClientConnectedTo(MAJORITY_CLIENT, CYRENE, QuorumReplicaClient::new);
+            var client2 = cluster.newClientConnectedTo(MINORITY_CLIENT, ATHENS, QuorumReplicaClient::new);
+
+            // Data
+            byte[] key = "kv".getBytes();
+            byte[] v1  = "v1".getBytes();
+            byte[] v2  = "v2".getBytes();
+
+            // Record client-observed history for Jepsen independent checking
+            History history = new History();
+
+            cluster.partitionNodes(NodeGroup.of(CYRENE, DELPHI, SPARTA), NodeGroup.of(ATHENS, BYZANTIUM));
+            // Step 1: client1 writes v1 successfully (ok)
+//            history.invoke("client1", Op.WRITE, key, v1);
+            var w1 = client1.set(key, v1);
+            assertEventually(cluster, w1::isCompleted);
+            assertTrue(w1.getResult().success());
+//            history.ok("client1", Op.WRITE, key, v1);
+
+            cluster.healAllPartitions();
+            cluster.partitionNodes(NodeGroup.of(ATHENS, BYZANTIUM, CYRENE), NodeGroup.of(DELPHI, SPARTA));
+
+            // Step 3: client2 writes v2 successfully, but by connecting to ATHENS, which has
+            //clock lagging behind the other nodes.
+            history.invoke("client2", Op.WRITE, key, v2);
+            // Step 4: skew clock behind; majority write now has lower timestamp
+            //The write succeeds because the writes are 'permissive'. If a node has
+            //a value with higher timestamp and gets a request with lower timestamp, it does
+            //not reject the request, and returns success.
+            var athensTs = cluster.getStorageValue(CYRENE, key).timestamp();
+            cluster.setTimeForProcess(ATHENS, athensTs - SKEW_TICKS);
+            var w2 = client2.set(key, v2);
+            assertEventually(cluster, () -> w2.isCompleted() && w2.getResult().success());
+            history.ok("client2", Op.WRITE, key, v2);
+
+            ClusterAssertions.assertNodesContainValue(cluster, List.of(ATHENS, BYZANTIUM), key, v2);
+            ClusterAssertions.assertNodesContainValue(cluster, List.of(CYRENE), key, v1);
+            //client2 reads from athens, gets v2
+            //client2 reads from cyrene, gets v1
+
+            // Step 4: client2 performs a read
+            // (new connection bound to CYRENE). This read gets an older value.
+            var client2OtherSide = cluster.newClientConnectedTo(MINORITY_CLIENT, CYRENE, QuorumReplicaClient::new);
+            history.invoke("client2", Op.READ, key, null);
+            var r2 = client2OtherSide.get(key);
+            assertEventually(cluster, r2::isCompleted);
+            history.ok("client2", Op.READ, key, r2.getResult().value());
+
+            String synthetic = history.toEdn();
+            System.out.println("synthetic = " + synthetic);
+            // Step 5.5: Demonstrate with a synthetic per-key history that a completed stale read
+            // after the same client's successful write breaks both lin and seq
+//            String synthetic = "["
+//                    + "{:type :invoke, :f :write, :process 0, :time 0,  :index 0, :value [\"k\" \"v1\"]},"
+//                    + "{:type :ok,     :f :write, :process 0, :time 1,  :index 1, :value [\"k\" \"v1\"]},"
+//                    + "{:type :invoke, :f :write, :process 1, :time 10, :index 2, :value [\"k\" \"v2\"]},"
+//                    + "{:type :ok,     :f :write, :process 1, :time 11, :index 3, :value [\"k\" \"v2\"]},"
+//                    + "{:type :invoke, :f :read,  :process 1, :time 20, :index 4, :value [\"k\" nil]},"
+//                    + "{:type :ok,     :f :read,  :process 1, :time 21, :index 5, :value [\"k\" \"v1\"]}"
+//                    + "]";
+            boolean lin = Jepsen.checkLinearizableRegister(synthetic);
+            boolean seq = Jepsen.checkRegisterSequential(synthetic);
+            assertFalse(lin, "Synthetic stale read after own write should not be linearizable");
+            assertFalse(seq, "Synthetic stale read after own write should not be sequential");
         }
     }
 }

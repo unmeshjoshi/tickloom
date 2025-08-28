@@ -144,6 +144,58 @@ public class History {
         out.append('"');
         return out.toString();
     }
+
+    // ----- Adapter for Jepsen independent KV: :value is [key value] tuples -----
+    public String toEdnKvTuples() {
+        List<History.Event> evs = new ArrayList<>(all());
+        if (evs.isEmpty()) return "[]";
+
+        long t0 = evs.stream().mapToLong(e -> e.nanoTime).min().orElse(System.nanoTime());
+        Map<String, Integer> proc = new LinkedHashMap<>();
+        int[] nextPid = {0};
+
+        StringBuilder sb = new StringBuilder(evs.size() * 80);
+        sb.append("[\n");
+        for (int i = 0; i < evs.size(); i++) {
+            History.Event e = evs.get(i);
+            String type = switch (e.type) {
+                case INVOKE -> ":invoke";
+                case OK     -> ":ok";
+                case FAIL   -> ":fail";
+                case TIMEOUT-> ":info";
+            };
+            String f = (e.op == Op.WRITE) ? ":write" : ":read";
+            int pid = proc.computeIfAbsent(e.clientId, k -> nextPid[0]++);
+
+            String keyStr = (e.key == null) ? "\"\"" : ednStr(new String(e.key));
+            String valStr;
+            boolean isWrite = (e.op == Op.WRITE);
+            boolean isInvoke = e.type == History.EventType.INVOKE;
+            if (isWrite) {
+                valStr = "[" + keyStr + " " + ((e.value == null) ? "nil" : ednStr(new String(e.value))) + "]";
+            } else {
+                String observed = isInvoke ? "nil" : (e.value == null ? "nil" : ednStr(new String(e.value)));
+                valStr = "[" + keyStr + " " + observed + "]";
+            }
+
+            long t = Math.max(0, e.nanoTime - t0);
+
+            sb.append("  {:type ").append(type)
+                    .append(", :f ").append(f)
+                    .append(", :process ").append(pid)
+                    .append(", :time ").append(t)
+                    .append(", :index ").append(i)
+                    .append(", :value ").append(valStr);
+
+            if (e.type == History.EventType.TIMEOUT) {
+                sb.append(", :error [:timeout]");
+            }
+            sb.append("}");
+            if (i < evs.size() - 1) sb.append(",\n");
+        }
+        sb.append("\n]");
+        return sb.toString();
+    }
     public List<Event> all() { return events; }
 
     @Override

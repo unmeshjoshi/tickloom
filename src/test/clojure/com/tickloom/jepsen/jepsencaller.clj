@@ -106,3 +106,85 @@
     (true? (:valid? result))))
 
 
+;; Sequential (ignoring real-time): collapse intervals to single events and lift to independent tuples
+(defn analyze-kv-seq? ^Boolean [history-edn opts-edn]
+  (let [history  (edn/read-string history-edn)
+        ;; erase real-time precedence by setting all times to 0
+        no-rt    (mapv #(assoc % :time 0) history)
+        ;; normalize [k v] values into independent tuples (retain full invoke/ok history)
+        lifted   (mapv (fn [op]
+                         (if (and (vector? (:value op)) (= 2 (count (:value op))))
+                           (let [[k v] (:value op)]
+                             (assoc op :value (ind/tuple k v)))
+                           op))
+                       no-rt)
+        opts     (edn/read-string (or opts-edn "{:time-limit 60000}"))
+        base     (checker/linearizable {:model (km/register)})
+        kv       (ind/checker base)
+        jhist    (h/history lifted)
+        test-map {:name "kv-sequential"
+                  :start-time (System/currentTimeMillis)
+                  :model (km/register)}
+        result   (checker/check kv test-map jhist opts)]
+    (true? (:valid? result))))
+
+
+(defn ->sc-history
+  "Turn a Jepsen history into an SC-checkable one:
+   - keep only :ok events (optional but recommended),
+   - remove all realtime fields so no RT edges remain."
+  [ops]
+  (->> ops
+       (mapv #(-> %
+                  (dissoc :time :start :end :wall-time)
+                  (assoc  :time 0 :start 0 :end 1)))))
+
+(defn explain! [res]
+  (if (:valid? res)
+    (println "OK")
+    (do
+      (println "SC VIOLATION")
+      (when-let [fp (first (:final-paths res))]
+        (println "  Witness prefix:")
+        (doseq [step fp]
+          (println "   " (:op step) "=> model" (:model step))))
+      (when-let [op (:op res)]
+        (println "  Offending op:" (select-keys op [:process :f :value :index])))
+      (when-let [cfg (first (:configs res))]
+        (println "  Stuck at model:" (:model cfg)
+                 " last-op:" (select-keys (:last-op cfg) [:process :f :value :index])
+                 " pending:" (:pending cfg))))))
+
+(defn complete-ops
+  "From a full paired history H, produce one completed map per client :ok op.
+   IMPORTANT: H must be the unfiltered history that still contains both halves."
+  [H]
+  (into []
+        (map (fn [ok]                      ; ok belongs to H (via filtered view)
+               (let [inv (h/invocation H ok)]
+                 ;; If inv is nil, that means the invoke isn't in H -> assertion you saw.
+                 (assert inv (str "No invocation for completion: " ok))
+                 ;; Merge what you need; keep :process/:f from the invoke,
+                 ;; and :type/:value/:index from the completion.
+                 (merge (select-keys inv [:process :f])
+                        (select-keys ok  [:type :value :index])))))
+        (h/oks (h/client-ops H))))
+
+(defn erase-rt [ops]
+  (mapv #(dissoc % :time :start :end :wall-time) ops))
+
+(defn analyze-register-seq
+  "SC on single-key register: complete -> erase RT -> analyze."
+  [history-edn opts-edn]
+  (let [raw   (edn/read-string history-edn)
+        ;; 1) Build Jepsen history from the FULL raw vector (do NOT pre-filter)
+        H     (h/history raw {:have-indices? true})
+        ;; 2) Pair :invoke/:ok into completed ops using the same H
+        done  (complete-ops H)
+        ;; 3) Remove RT fields so only per-client program order remains
+        no-rt (erase-rt done)
+        ;; 4) Analyze
+        opts  (merge {:time-limit 60000} (some-> opts-edn edn/read-string))]
+    (println (complete-ops H))
+    (println no-rt)
+    (kc/analysis (km/register) no-rt opts)))       ; 3) analyze with register model
