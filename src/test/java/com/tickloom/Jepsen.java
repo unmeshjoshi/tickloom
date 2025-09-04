@@ -13,6 +13,7 @@ public class Jepsen {
     static final IFn ENTRY_ANALYZE_KV_Q;
 
     static final IFn ENTRY_ANALYZE_REGISTER_SEQ_Q;
+    static final IFn ENSURE_INDEXED_EDN;
     static final IFn SHUTDOWN_AGENTS;
 
     static {
@@ -22,6 +23,7 @@ public class Jepsen {
         ENTRY_ANALYZE_WITH_MODEL_Q = Clojure.var("com.tickloom.jepsen.jepsencaller", "analyze-with-model?");
         ENTRY_ANALYZE_KV_Q = Clojure.var("com.tickloom.jepsen.jepsencaller", "analyze-kv?");
         ENTRY_ANALYZE_REGISTER_SEQ_Q = Clojure.var("couchbase.seqchecker", "sequential");
+        ENSURE_INDEXED_EDN = Clojure.var("com.tickloom.jepsen.jepsencaller", "ensure-indexed-edn");
         SHUTDOWN_AGENTS = Clojure.var("clojure.core", "shutdown-agents");
     }
 
@@ -49,7 +51,8 @@ public class Jepsen {
     }
 
     public static boolean checkRegisterSequential(String edn) {
-        Object result = ENTRY_ANALYZE_REGISTER_SEQ_Q.invoke(edn, "{:time-limit 60000}");
+        String indexed = (String) ENSURE_INDEXED_EDN.invoke(edn);
+        Object result = ENTRY_ANALYZE_REGISTER_SEQ_Q.invoke(indexed, "{:time-limit 60000}");
         System.out.println("result = " + result);
         PersistentArrayMap map = (PersistentArrayMap) result;
         return Boolean.TRUE.equals(map.get(Keyword.intern("valid?")));

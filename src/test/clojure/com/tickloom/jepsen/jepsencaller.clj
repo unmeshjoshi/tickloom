@@ -106,6 +106,17 @@
     (true? (:valid? result))))
 
 
+;; Utility: ensure every op has an :index; return EDN string
+(defn ensure-indexed-edn ^String [history-edn]
+  (let [ops  (edn/read-string history-edn)
+        ops' (map-indexed (fn [i op]
+                            (if (contains? op :index)
+                              op
+                              (assoc op :index i)))
+                          ops)]
+    (pr-str (vec ops'))))
+
+
 ;; Sequential (ignoring real-time): collapse intervals to single events and lift to independent tuples
 (defn analyze-kv-seq? ^Boolean [history-edn opts-edn]
   (let [history  (edn/read-string history-edn)
