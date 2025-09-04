@@ -213,3 +213,86 @@
       (is (false? (:valid? res)))
       (is (seq (:failures res)))))
   )
+
+
+(deftest sequential-ryw-fail
+  (is (false? (:valid? (sc/check
+                         [(op/invoke 1 :write 1) (op/ok 1 :write 1)
+                          (op/invoke 1 :write 2) (op/ok 1 :write 2)
+                          (op/invoke 1 :read nil) (op/ok 1 :read 1)])))))
+
+(deftest sequential-monotonic-read-fail
+  (is (false? (:valid? (sc/check
+                         [(op/invoke 1 :write 1) (op/ok 1 :write 1)
+                          (op/invoke 1 :write 2) (op/ok 1 :write 2)
+                          (op/invoke 2 :read nil) (op/ok 2 :read 1)
+                          (op/invoke 2 :read nil) (op/ok 2 :read 2)
+                          (op/invoke 2 :read nil) (op/ok 2 :read 1)])))))
+
+(deftest sequential-monotonic-write-fail
+  (is (false? (:valid? (sc/check
+                         [(op/invoke 1 :write 1) (op/ok 1 :write 1)
+                          (op/invoke 1 :write 2) (op/ok 1 :write 2)
+                          (op/invoke 2 :read nil) (op/ok 2 :read 2)
+                          (op/invoke 2 :read nil) (op/ok 2 :read 1)])))))
+
+(deftest sequential-ok
+  (is (:valid? (sc/check
+               [(op/invoke 1 :write 1) (op/ok 1 :write 1)
+                (op/invoke 1 :write 2) (op/ok 1 :write 2)
+                (op/invoke 2 :read  nil) (op/ok 2 :read 1)
+                (op/invoke 2 :read  nil) (op/ok 2 :read 2)
+                (op/invoke 3 :read  nil) (op/ok 3 :read 1)]))))
+
+(deftest sequential-single-order-fail
+  (is (false? (:valid? (sc/check
+                         [(op/invoke 1 :write 1) (op/ok 1 :write 1)
+                          (op/invoke 2 :write 2) (op/ok 2 :write 2)
+                          (op/invoke 3 :read nil) (op/ok 3 :read 2)
+                          (op/invoke 3 :read nil) (op/ok 3 :read 1)
+                          (op/invoke 4 :read nil) (op/ok 4 :read 1)
+                          (op/invoke 4 :read nil) (op/ok 4 :read 2)])))))
+
+;; ---------------------------
+;; Illegal / validation cases
+;; ---------------------------
+
+(deftest illegal-op-type
+  (is (thrown? clojure.lang.ExceptionInfo
+               (sc/check [(op/invoke 1 :write 1)
+                          (assoc (op/ok 1 :write 1) :type :something-strange)]))))
+
+(deftest illegal-op-function
+  (is (thrown? clojure.lang.ExceptionInfo
+               (sc/check [(op/invoke 1 :write 1)
+                          (op/ok 1 :write 1)
+                          (assoc (op/ok 1 :read nil) :f :cas)]))))
+
+(deftest illegal-op-indeterminate-read
+  (is (thrown? clojure.lang.ExceptionInfo
+               (sc/check [(op/invoke 1 :read nil)
+                          (op/info   1 :read nil)]))))
+
+(deftest illegal-non-unique-write-value
+  (is (thrown? clojure.lang.ExceptionInfo
+               (sc/check [(op/invoke 1 :write 1)
+                          (op/fail   1 :write 1)
+                          (op/invoke 1 :write 1)
+                          (op/ok     1 :write 1)]))))
+
+;; ----------
+;; Edge cases
+;; ----------
+
+(deftest edge-empty-history
+  (is (= {:valid? true} (sc/check []))))
+
+(deftest edge-only-invoke-fail
+  (is (= {:valid? true}
+         (sc/check [(op/invoke 0 :read nil)
+                    (op/fail   0 :write 1)]))))
+
+(deftest edge-only-reads-of-nil
+  (is (= {:valid? true}
+         (sc/check [(op/ok 0 :read :nil)
+                    (op/ok 1 :read :nil)]))))
