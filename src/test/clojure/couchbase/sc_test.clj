@@ -41,17 +41,17 @@
 
 (deftest rewrite-history-test
   (testing "unobserved info writes are discarded"
-    (let [raw-history      [(op/invoke 0 :write 1)
-                            (op/ok 0 :write 1)
-                            (op/invoke 1 :write 42)
-                            (op/info 1 :write 42)   ; Observed, should be kept
-                            (op/invoke 1 :write 99)
-                            (op/info 1 :write 99)   ; Unobserved, should be removed
-                            (op/invoke 2 :read 42)
-                            (op/ok 2 :read 42)
-                            (op/invoke 3 :read 1)
-                            (op/ok 3 :read 1)]
-          history          (index raw-history)
+    (let [raw-history [(op/invoke 0 :write 1)
+                       (op/ok 0 :write 1)
+                       (op/invoke 1 :write 42)
+                       (op/info 1 :write 42)                ; Observed, should be kept
+                       (op/invoke 1 :write 99)
+                       (op/info 1 :write 99)                ; Unobserved, should be removed
+                       (op/invoke 2 :read 42)
+                       (op/ok 2 :read 42)
+                       (op/invoke 3 :read 1)
+                       (op/ok 3 :read 1)]
+          history (index raw-history)
           rewritten-history (sc/rewrite-history history)]
 
       ;; CORRECTED ASSERTION 1:
@@ -112,18 +112,18 @@
 (deftest serializable-write-tests
   (testing "write is accepted when no other processes have conflicting reads"
     (let [raw-history [(op/ok 0 :write 2)]
-          history     (index raw-history)
-          candidate   (first history)]
+          history (index raw-history)
+          candidate (first history)]
       (is (:ok? (sc/serializable-write? candidate {} (constantly -1))))))
 
   (testing "write is rejected when another process has a conflicting read queue (read A -> read B)"
-    (let [raw-history      [(op/ok 1 :read 1)
-                            (op/ok 1 :read 2)
-                            (op/ok 0 :write 2)]
-          history          (index raw-history)
-          candidate        (first (filter #(= :write (:f %)) history))
+    (let [raw-history [(op/ok 1 :read 1)
+                       (op/ok 1 :read 2)
+                       (op/ok 0 :write 2)]
+          history (index raw-history)
+          candidate (first (filter #(= :write (:f %)) history))
           thread-histories (group-by :process (filter #(= :read (:f %)) history))
-          res              (sc/serializable-write? candidate thread-histories (constantly 999))]
+          res (sc/serializable-write? candidate thread-histories (constantly 999))]
 
       (is (false? (:ok? res)))
       (is (= candidate (get-in res [:msg :candidate])))
@@ -131,13 +131,13 @@
       (is (= (get-in thread-histories [1 1]) (get-in res [:msg :future2])))))
 
   (testing "write is accepted when a conflict exists but is outside the scan-limit"
-    (let [raw-history      [(op/ok 1 :read 1)
-                            (op/ok 1 :read 2) ; This op will have index 1
-                            (op/ok 0 :write 2)]
-          history          (index raw-history)
-          candidate        (first (filter #(= :write (:f %)) history))
+    (let [raw-history [(op/ok 1 :read 1)
+                       (op/ok 1 :read 2)                    ; This op will have index 1
+                       (op/ok 0 :write 2)]
+          history (index raw-history)
+          candidate (first (filter #(= :write (:f %)) history))
           thread-histories (group-by :process (filter #(= :read (:f %)) history))
-          scan-fn          (constantly 1)]
+          scan-fn (constantly 1)]
       (is (:ok? (sc/serializable-write? candidate thread-histories scan-fn))))))
 
 
@@ -145,39 +145,39 @@
   (testing "next-op picks a valid read when one is available"
     (let [raw-history [(op/ok 0 :read 5)
                        (op/ok 1 :write 6)]
-          history     (index raw-history)
-          reg         5
-          ths         (group-by :process history)
-          scan-fn     (constantly -1)
-          last-seen   {0 :nil, 1 :nil}
-          res         (sc/determine-next-op reg ths scan-fn last-seen)]
+          history (index raw-history)
+          reg 5
+          ths (group-by :process history)
+          scan-fn (constantly -1)
+          last-seen {0 :nil, 1 :nil}
+          res (sc/determine-next-op reg ths scan-fn last-seen)]
       (is (:ok? res))
       (is (= :read (:f (:op res))))))
 
   (testing "next-op picks a write when no reads are valid"
     (let [raw-history [(op/ok 0 :read 2)
                        (op/ok 1 :write 2)]
-          history     (index raw-history)
-          reg         1
-          ths         (group-by :process history)
-          scan-fn     (constantly -1)
-          last-seen   {0 :nil, 1 :nil}
-          res         (sc/determine-next-op reg ths scan-fn last-seen)]
+          history (index raw-history)
+          reg 1
+          ths (group-by :process history)
+          scan-fn (constantly -1)
+          last-seen {0 :nil, 1 :nil}
+          res (sc/determine-next-op reg ths scan-fn last-seen)]
       (is (:ok? res))
       (is (= :write (:f (:op res))))
       (is (= 2 (:value (:op res))))))
 
   (testing "next-op returns all failures when stuck"
     ;; Make write(5) blocked by P0’s [read 2, read 5] sequence.
-    (let [raw-history [(op/ok 0 :read 2)   ; head read mismatches reg=1 -> read fails
-                       (op/ok 0 :read 5)   ; creates blocker for write(5) in same thread
-                       (op/ok 1 :write 5)] ; candidate write that will now be blocked
-          history     (index raw-history)  ; make sure this adds :index 0,1,2...
-          reg         1
-          ths         (group-by :process history)
-          scan-fn     (constantly 999)     ; scan far enough to see the blocker
-          last-seen   {0 :nil, 1 :nil}
-          res         (sc/determine-next-op reg ths scan-fn last-seen)]
+    (let [raw-history [(op/ok 0 :read 2)                    ; head read mismatches reg=1 -> read fails
+                       (op/ok 0 :read 5)                    ; creates blocker for write(5) in same thread
+                       (op/ok 1 :write 5)]                  ; candidate write that will now be blocked
+          history (index raw-history)                       ; make sure this adds :index 0,1,2...
+          reg 1
+          ths (group-by :process history)
+          scan-fn (constantly 999)                          ; scan far enough to see the blocker
+          last-seen {0 :nil, 1 :nil}
+          res (sc/determine-next-op reg ths scan-fn last-seen)]
       (println res)
       (is (false? (:ok? res)))
       ;; Two head candidates: the read (fails) and the write (blocked) -> 2 failures
@@ -188,9 +188,9 @@
   (testing "check returns valid for a simple, correct history"
     (let [;; Create the history using knossos helpers, without indices.
           raw-history [(op/ok 0 :write 1)
-                       (op/ok 1 :read  1)
+                       (op/ok 1 :read 1)
                        (op/ok 0 :write 2)
-                       (op/ok 1 :read  2)]]
+                       (op/ok 1 :read 2)]]
       ;; Pass the raw history directly to check.
       (is (= {:valid? true} (sc/check raw-history)))))
 
@@ -200,15 +200,15 @@
     ;;  - For write(1): in proc 2 we have read 0 then read 1 (before scan-to),
     ;;    and proc 5 has a later read 1 to push scan-to for value 1 high.
     ;;  - For write(2): in proc 3 we have read 0 then read 2 (before scan-to),
-    ;;    and proc 6 has a later read 2 to push scan-to for value 2 high.
-    (let [raw-history [(op/ok 2 :read  0)   ; i=0  head read (≠ :nil) -> read mismatch
-                       (op/ok 2 :read  1)   ; i=1  creates (other -> 1) blocker for write(1)
-                       (op/ok 3 :read  0)   ; i=2  head read (≠ :nil) -> read mismatch
-                       (op/ok 3 :read  2)   ; i=3  creates (other -> 2) blocker for write(2)
-                       (op/ok 1 :write 1)   ; i=4  candidate write(1)
-                       (op/ok 4 :write 2)   ; i=5  candidate write(2)
-                       (op/ok 5 :read  1)   ; i=6  pushes last-ok-read(1) to 6
-                       (op/ok 6 :read  2)]  ; i=7  pushes last-ok-read(2) to 7
+    ;;    and proc 6 has a later read 2.
+    (let [raw-history [(op/ok 2 :read 0)                    ; i=0  head read (≠ :nil) -> read mismatch
+                       (op/ok 2 :read 1)                    ; i=1  creates (other -> 1) blocker for write(1)
+                       (op/ok 3 :read 0)                    ; i=2  head read (≠ :nil) -> read mismatch
+                       (op/ok 3 :read 2)                    ; i=3  creates (other -> 2) blocker for write(2)
+                       (op/ok 1 :write 1)                   ; i=4  candidate write(1)
+                       (op/ok 4 :write 2)                   ; i=5  candidate write(2)
+                       (op/ok 5 :read 1)                    ; i=6  pushes last-ok-read(1) to 6
+                       (op/ok 6 :read 2)]                   ; i=7  pushes last-ok-read(2) to 7
           res (sc/check raw-history)]
       (is (false? (:valid? res)))
       (is (seq (:failures res)))))
@@ -238,11 +238,11 @@
 
 (deftest sequential-ok
   (is (:valid? (sc/check
-               [(op/invoke 1 :write 1) (op/ok 1 :write 1)
-                (op/invoke 1 :write 2) (op/ok 1 :write 2)
-                (op/invoke 2 :read  nil) (op/ok 2 :read 1)
-                (op/invoke 2 :read  nil) (op/ok 2 :read 2)
-                (op/invoke 3 :read  nil) (op/ok 3 :read 1)]))))
+                 [(op/invoke 1 :write 1) (op/ok 1 :write 1)
+                  (op/invoke 1 :write 2) (op/ok 1 :write 2)
+                  (op/invoke 2 :read nil) (op/ok 2 :read 1)
+                  (op/invoke 2 :read nil) (op/ok 2 :read 2)
+                  (op/invoke 3 :read nil) (op/ok 3 :read 1)]))))
 
 (deftest sequential-single-order-fail
   (is (false? (:valid? (sc/check
@@ -271,14 +271,14 @@
 (deftest illegal-op-indeterminate-read
   (is (thrown? clojure.lang.ExceptionInfo
                (sc/check [(op/invoke 1 :read nil)
-                          (op/info   1 :read nil)]))))
+                          (op/info 1 :read nil)]))))
 
 (deftest illegal-non-unique-write-value
   (is (thrown? clojure.lang.ExceptionInfo
                (sc/check [(op/invoke 1 :write 1)
-                          (op/fail   1 :write 1)
+                          (op/fail 1 :write 1)
                           (op/invoke 1 :write 1)
-                          (op/ok     1 :write 1)]))))
+                          (op/ok 1 :write 1)]))))
 
 ;; ----------
 ;; Edge cases
@@ -290,9 +290,18 @@
 (deftest edge-only-invoke-fail
   (is (= {:valid? true}
          (sc/check [(op/invoke 0 :read nil)
-                    (op/fail   0 :write 1)]))))
+                    (op/fail 0 :write 1)]))))
 
 (deftest edge-only-reads-of-nil
   (is (= {:valid? true}
          (sc/check [(op/ok 0 :read :nil)
                     (op/ok 1 :read :nil)]))))
+
+
+(deftest legal-kv-history-per-key-sequential
+  (def history )
+  )
+
+;ClusterClient should generate history
+;Add nemesis events to history
+
