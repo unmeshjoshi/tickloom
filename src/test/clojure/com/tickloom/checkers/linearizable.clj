@@ -17,22 +17,37 @@
      :analysis result}))
 
 (defn check-kv
-  "Check KV linearizability using jepsen.independent with register model per key"
+  "Check KV linearizability by grouping operations by key and checking each independently"
   [history opts]
-  (let [;; Convert [k v] vectors to independent tuples
-        tuple-history (core/prepare-kv-history history)
-        ;; Create independent checker with register model per key
-        base-checker (checker/linearizable {:model (model/register)})
-        kv-checker (ind/checker base-checker)
-        ;; Convert to jepsen history format
-        jhist (hist/history tuple-history)
-        ;; Create test context
-        test-map {:name "kv-linearizable" :model (model/register)}
-        ;; Run the check
-        result (checker/check kv-checker test-map jhist opts)]
-    {:valid? (:valid? result)
+  (let [;; Group operations by key
+        grouped-ops (group-by (fn [op]
+                               (if (vector? (:value op))
+                                 (first (:value op))  ; [key value] format
+                                 (:key op)))          ; {:key k :value v} format
+                             history)
+        ;; Check each key independently for linearizability
+        ;; Convert KV operations to register operations for each key
+        key-results (into {} 
+                         (map (fn [[k ops]]
+                                (let [register-ops (map (fn [op]
+                                                         (if (vector? (:value op))
+                                                           (let [[_ v] (:value op)]
+                                                             (assoc op :value v))
+                                                           op))
+                                                       ops)]
+                                  [k (check-register register-ops opts)]))
+                              grouped-ops))
+        ;; All keys must be linearizable
+        all-valid? (every? :valid? (vals key-results))
+        invalid-keys (keep (fn [[k result]] 
+                            (when-not (:valid? result) k))
+                          key-results)]
+    {:valid? all-valid?
      :count (count history)
-     :analysis result}))
+     :key-results key-results
+     :invalid-keys invalid-keys
+     :analysis {:per-key key-results
+                :overall-valid all-valid?}}))
 
 (defn check-with-model
   "Check linearizability using a custom model"
