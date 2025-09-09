@@ -5,7 +5,8 @@
             [jepsen.independent :as ind]
             [jepsen.checker :as checker]
             [jepsen.history :as h]
-            [couchbase.sc :as sc]))
+            [com.tickloom.checkers.sequential :as seq]
+            [com.tickloom.checkers.linearizable :as lin]))
 
 ;; Built-in model ctors we’ll expose by keyword
 (def ^:private builtin-models
@@ -109,6 +110,5 @@
 (defn check-register-seq
   [history-edn]
   (let [history (edn/read-string history-edn)]
-    (sc/check history)
-  ))
+    (seq/check-register history)))
 

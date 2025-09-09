@@ -213,4 +213,26 @@ public class History {
         // Hash based solely on events sequence for consistency with equals
         return Objects.hash(events, ids);
     }
+    
+    // === ENHANCED EDN GENERATION FOR DIFFERENT MODELS ===
+    
+    /**
+     * Auto-detect model type and generate appropriate EDN
+     */
+    public String toEdn(String model) {
+        return switch (model.toLowerCase()) {
+            case "register" -> toEdn();
+            case "kv" -> toEdnKvTuples();
+            case "auto" -> detectModelAndGenerateEdn();
+            default -> throw new IllegalArgumentException("Unknown model: " + model);
+        };
+    }
+    
+    /**
+     * Auto-detect model based on whether operations have keys
+     */
+    private String detectModelAndGenerateEdn() {
+        boolean hasKeys = events.stream().anyMatch(e -> e.key != null);
+        return hasKeys ? toEdnKvTuples() : toEdn();
+    }
 }

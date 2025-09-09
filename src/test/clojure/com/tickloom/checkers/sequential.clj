@@ -1,8 +1,14 @@
-(ns couchbase.sc
-  (:require [knossos.history :as history])
+(ns com.tickloom.checkers.sequential
+  "Sequential consistency checking for register and KV models - migrated from couchbase.sc"
+  (:require [com.tickloom.checkers.core :as core]
+            [knossos.history :as history]
+            [jepsen.independent :as ind]
+            [jepsen.checker :as checker]
+            [jepsen.history :as hist]
+            [knossos.competition :as competition])
   (:import (clojure.lang ExceptionInfo)))
 
-;; ## Predicate Helpers (Correct) ##
+;; === EXISTING FUNCTIONS FROM couchbase.sc (preserved exactly) ===
 
 (defn discardable?
   [op]
@@ -34,12 +40,9 @@
   (and (= :write (:f op))
        (= :info (:type op))))
 
-;; CORRECTED: Fixed syntax error by comparing symbol to keyword.
 (defn invoke-write? [op]
   (and (= :write (:f op))
        (= :invoke (:type op))))
-
-;; ## Preprocessing and Validation (Corrected) ##
 
 (defn validate-history
   [filtered-history]
@@ -57,7 +60,6 @@
   [history]
   (filter (complement discardable?) history))
 
-;; IDIOMATIC: Replaced custom `count-occurrences` with built-in `frequencies`.
 (defn validate-duplicate-write-attempts
   [history]
   (let [invoked-write-vals (->> history
@@ -68,18 +70,14 @@
       (throw (ex-info "Duplicate write values found" {:type :invalid-history})))
     history))
 
-;; CORRECTED: This function now correctly returns the filtered_history.
 (defn preprocess-history
   [history]
   (let [history (history/ensure-indexed history)]
     (validate-duplicate-write-attempts history)
     (let [filtered-history (discard-invokes-and-fails history)]
       (validate-history filtered-history)
-      filtered-history))) ; <-- Returns the correct value now.
+      filtered-history)))
 
-;; ## Core Checker Logic (Corrected) ##
-
-;; IDIOMATIC: Uses `juxt` for a more concise way to create pairs.
 (defn determine-last-ok-read [history]
   (->> history
        (filter ok-read?)
@@ -114,7 +112,6 @@
       :else
       {:ok? true, :op op})))
 
-;; This helper is required for serializable-write? to provide detailed errors.
 (defn process-not-ready?
   "Finds a `read A -> read B` conflict. If found, returns the `[A B]` pair."
   [write-value max-index process-queue]
@@ -135,8 +132,6 @@
                op))
       nil)))
 
-;; CORRECTED: This now uses `process-not-ready?` to get conflict details,
-;; which fixes the crash and allows it to return a detailed error message.
 (defn serializable-write?
   "Checks if a candidate write is valid by verifying that no process's read
   queue is blocked by it."
@@ -188,12 +183,13 @@
             {:ok?      false
              :failures (concat read-failures write-failures)}))))))
 
-(defn check
-  "Checks if a history is sequentially consistent. The main driver for the checker."
+;; === REGISTER CHECKING (renamed from original 'check') ===
+
+(defn check-register
+  "Checks if a history is sequentially consistent for single register. 
+   This is the original couchbase.sc/check function."
   [raw-history]
-  ;; Initial pipeline to prepare the history for checking.
-  (let [;; 1. Preprocess the raw history (this step now also handles indexing).
-        processed-history (preprocess-history raw-history)
+  (let [processed-history (preprocess-history raw-history)
         scan-to-map       (determine-last-ok-read processed-history)
         scan-fn           (fn [v] (get scan-to-map v -1))
         rewritten-history (rewrite-history processed-history)
@@ -201,7 +197,6 @@
         initial-last-seen (into {} (map (fn [pid] [pid :nil])
                                         (keys initial-threads)))]
 
-    ;; Main simulation loop.
     (loop [reg-val          :nil
            thread-histories initial-threads
            last-seen        initial-last-seen]
@@ -222,3 +217,80 @@
                      (if (= :read (:f op)) (assoc last-seen proc-id op-val) last-seen)))
 
             {:valid? false :failures (:failures next-op-res)}))))))
+
+;; === NEW KV SUPPORT using jepsen.independent ===
+
+(defrecord PerKeySequentialChecker []
+  checker/Checker
+  (check [this test history opts]
+    ;; Use existing register sequential consistency logic for each key
+    (let [result (check-register history)]
+      {:valid? (:valid? result)
+       :count (count history)
+       :failures (when-not (:valid? result) (:failures result))})))
+
+(defn per-key-sequential-checker []
+  (PerKeySequentialChecker.))
+
+(defn check-kv
+  "Check KV sequential consistency by grouping operations by key and checking each independently"
+  [history opts]
+  (let [;; Group operations by key
+        grouped-ops (group-by (fn [op]
+                               (if (vector? (:value op))
+                                 (first (:value op))  ; [key value] format
+                                 (:key op)))          ; {:key k :value v} format
+                             history)
+        ;; Check each key independently for sequential consistency
+        key-results (into {} 
+                         (map (fn [[k ops]]
+                                [k (check-register ops)])
+                              grouped-ops))
+        ;; All keys must be sequentially consistent
+        all-valid? (every? :valid? (vals key-results))
+        invalid-keys (keep (fn [[k result]] 
+                            (when-not (:valid? result) k))
+                          key-results)]
+    {:valid? all-valid?
+     :count (count history)
+     :key-results key-results
+     :invalid-keys invalid-keys
+     :failures (when-not all-valid?
+                 (mapcat :failures (vals key-results)))}))
+
+;; === CUSTOM MODEL SUPPORT ===
+
+(defn check-with-model
+  "Check sequential consistency using a custom model by dropping real-time constraints"
+  [history custom-model opts]
+  (let [;; Remove real-time constraints for sequential consistency
+        sequential-history (mapv #(assoc % :time 0) history)
+        result (competition/analysis custom-model sequential-history opts)]
+    {:valid? (:valid? result)
+     :count (count history)
+     :failures (when-not (:valid? result) [(:error result)])}))
+
+;; === MAIN DISPATCHER ===
+
+(defn check
+  "Main entry point for sequential consistency checking.
+   Supports: 'register', 'kv', or custom model objects"
+  [history-edn model-type-or-object opts]
+  (let [history (core/parse-history history-edn)]
+    (core/validate-history history)
+    
+    (cond
+      ;; Built-in models
+      (= model-type-or-object "register") 
+      (check-register history)
+      
+      (= model-type-or-object "kv") 
+      (check-kv history (or opts (core/default-opts)))
+      
+      ;; Custom model object (implements knossos.model.Model)
+      (and (not (string? model-type-or-object))
+           model-type-or-object)
+      (check-with-model history model-type-or-object (or opts (core/default-opts)))
+      
+      :else 
+      (throw (ex-info "Unknown model type" {:model model-type-or-object})))))

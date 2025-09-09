@@ -200,7 +200,7 @@ public class NetworkPartitionTest {
             boolean linearizable = Jepsen.checkIndependentKV(edn, "linearizable", null);
             assertFalse(linearizable, "History should be non-linearizable: failed write took effect");
 
-            boolean okSeq = Jepsen.checkRegisterKVSequential(edn);
+            boolean okSeq = Jepsen.checkConsistency(edn, "kv", "sequential");
             assertTrue(okSeq);
         }
     }

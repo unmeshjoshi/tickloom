@@ -276,7 +276,7 @@ public class JepsenTest {
         String ednKvForSeq = ednKvFull;
 
         boolean lin = Jepsen.checkIndependentKV(ednKvFull, "linearizable", null);
-        boolean seq = Jepsen.checkRegisterKVSequential(ednKvForSeq);
+        boolean seq = Jepsen.checkConsistency(ednKvForSeq, "kv", "sequential");
         assertFalse(lin);
         assertTrue(seq);
     }
@@ -292,6 +292,6 @@ public class JepsenTest {
                 + "{:type :invoke, :f :write, :process 0, :time 4, :index 4, :value [\"kv\" \"v1\"]},"
                 + "{:type :ok,     :f :write, :process 0, :time 5, :index 5, :value [\"kv\" \"v1\"]}"
                 + "]";
-        assertTrue(Jepsen.checkRegisterKVSequential(ednKvSeq));
+        assertTrue(Jepsen.checkConsistency(ednKvSeq, "kv", "sequential"));
     }
 }

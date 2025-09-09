@@ -4,6 +4,7 @@ import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import clojure.lang.Keyword;
 import clojure.lang.PersistentArrayMap;
+import com.tickloom.checkers.ConsistencyChecker;
 
 // ----- Clojure/Jepsen interop helpers -----
 public class Jepsen {
@@ -17,7 +18,6 @@ public class Jepsen {
 
     static {
         REQUIRE.invoke(Clojure.read("com.tickloom.jepsen.jepsencaller"));
-        REQUIRE.invoke(Clojure.read("couchbase.sc"));  // Add this line
         ENTRY_ANALYZE_Q = Clojure.var("com.tickloom.jepsen.jepsencaller", "analyze?");
         ENTRY_ANALYZE_WITH_MODEL_Q = Clojure.var("com.tickloom.jepsen.jepsencaller", "analyze-with-model?");
         ENTRY_ANALYZE_KV_Q = Clojure.var("com.tickloom.jepsen.jepsencaller", "analyze-kv?");
@@ -65,9 +65,36 @@ public class Jepsen {
         SHUTDOWN_AGENTS.invoke();
     }
 
-    public static boolean checkRegisterKVSequential(String ednKvSeq) {
-        //TODO: Implement.
-
-        return true;
+    
+    // === NEW METHODS USING ENHANCED INFRASTRUCTURE ===
+    
+    /**
+     * Check consistency using the new infrastructure.
+     * @param historyEdn EDN string of the history
+     * @param model Model type ("register" or "kv")
+     * @param consistencyType Consistency type ("linearizable" or "sequential")
+     * @return true if the history satisfies the consistency model
+     */
+    public static boolean checkConsistency(String historyEdn, String model, String consistencyType) {
+        if ("linearizable".equals(consistencyType)) {
+            return ConsistencyChecker.checkLinearizable(historyEdn, model);
+        } else if ("sequential".equals(consistencyType)) {
+            return ConsistencyChecker.checkSequential(historyEdn, model);
+        } else {
+            throw new IllegalArgumentException("Unknown consistency type: " + consistencyType);
+        }
+    }
+    
+    /**
+     * Check consistency with custom model using the new infrastructure.
+     */
+    public static boolean checkConsistencyWithModel(String historyEdn, Object customModel, String consistencyType) {
+        if ("linearizable".equals(consistencyType)) {
+            return ConsistencyChecker.checkLinearizableWithModel(historyEdn, customModel);
+        } else if ("sequential".equals(consistencyType)) {
+            return ConsistencyChecker.checkSequentialWithModel(historyEdn, customModel);
+        } else {
+            throw new IllegalArgumentException("Unknown consistency type: " + consistencyType);
+        }
     }
 }
