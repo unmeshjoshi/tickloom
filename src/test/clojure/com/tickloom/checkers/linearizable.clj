@@ -2,11 +2,7 @@
   "Linearizability checking for register and KV models - thin wrapper over Jepsen/Knossos"
   (:require [com.tickloom.checkers.core :as core]
             [knossos.model :as model]
-            [knossos.competition :as competition]
-            [jepsen.independent :as ind]
-            [jepsen.checker :as checker]
-            [jepsen.history :as hist]
-            [clojure.edn :as edn]))
+            [knossos.competition :as competition]))
 
 (defn check-register
   "Check register linearizability using Knossos directly"

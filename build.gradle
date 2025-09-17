@@ -147,16 +147,16 @@ task inspectData {
     doLast {
         def dataDir = file('build/demo-data')
         if (!dataDir.exists()) {
-            println "❌ Data directory does not exist: ${dataDir.absolutePath}"
+            println " Data directory does not exist: ${dataDir.absolutePath}"
             println "   Run './gradlew runCluster' first to generate data"
             return
         }
         
-        println "📁 Data directory: ${dataDir.absolutePath}"
-        println "🔍 Inspecting RocksDB files..."
+        println " Data directory: ${dataDir.absolutePath}"
+        println " Inspecting RocksDB files..."
         
         dataDir.eachDir { replicaDir ->
-            println "\n📂 Replica: ${replicaDir.name}"
+            println "\n Replica: ${replicaDir.name}"
             if (replicaDir.exists()) {
                 def files = replicaDir.listFiles()
                 if (files) {
@@ -164,10 +164,10 @@ task inspectData {
                         println "   📄 ${file.name} (${file.length()} bytes)"
                     }
                 } else {
-                    println "   ⚠️  No files found"
+                    println " No files found"
                 }
             } else {
-                println "   ❌ Directory not found"
+                println "    Directory not found"
             }
         }
         

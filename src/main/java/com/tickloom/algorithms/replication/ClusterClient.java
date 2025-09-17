@@ -3,6 +3,7 @@ package com.tickloom.algorithms.replication;
 import com.tickloom.Process;
 import com.tickloom.ProcessId;
 import com.tickloom.future.ListenableFuture;
+import com.tickloom.history.Op;
 import com.tickloom.messaging.*;
 import com.tickloom.network.MessageCodec;
 import com.tickloom.network.PeerType;
@@ -11,6 +12,7 @@ import com.tickloom.util.Utils;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.function.Function;
 
 public abstract class ClusterClient extends Process {
     
@@ -23,6 +25,10 @@ public abstract class ClusterClient extends Process {
         this.replicaEndpoints = List.copyOf(replicaEndpoints);
     }
 
+//    can have history writing decorator which delegates to cluster client?
+    // class HistoryWritingClient extends ClusterClient {
+
+
     public List<ProcessId> getReplicaEndpoints() {
         return replicaEndpoints;
     }
@@ -30,7 +36,25 @@ public abstract class ClusterClient extends Process {
     public int getPendingRequestCount() {
         return waitingList.size();
     }
-    
+
+
+
+    static class HistoryDescription {
+        Op op;
+        Function requestToKey;
+        Function responseToValue;
+
+    }
+//
+//    protected <T> ListenableFuture<T> sendRequestWithHistory(Object request, ProcessId destination,
+//                                                  MessageType messageType, HistoryDescription historyDescription) {
+//
+//        //record invocation
+//        //send request
+//        //record response
+//    }
+
+
     protected <T> ListenableFuture<T> sendRequest(Object request, ProcessId destination, 
                                                  MessageType messageType) {
         String correlationId = generateCorrelationId();

@@ -3,6 +3,11 @@ package com.tickloom.history;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
+//Model - Client - Workload
+//a client can provide callback that the generic clusterclient can call to get history event.
+//invokeEvent   responseEvent failureEvent..
+
+
 public class History {
     public void invoke(String name, Op op, byte[] key, byte[] value) {
         record(name, EventType.INVOKE, op, key, value);
