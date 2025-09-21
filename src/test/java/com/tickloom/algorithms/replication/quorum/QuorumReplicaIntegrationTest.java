@@ -15,7 +15,7 @@ public class QuorumReplicaIntegrationTest {
     @Test
     public void testSetAndGetRequestWithSimulatedNetwork() throws IOException {
         var key = "test-key".getBytes();
-        var value = "test-value".getBytes();
+        var value = "test-name".getBytes();
 
         try (Cluster cluster = new Cluster()
                 .withNumProcesses(3)
@@ -37,7 +37,7 @@ public class QuorumReplicaIntegrationTest {
 
             var getResponse = getFuture.getResult();
             assertArrayEquals(key, getResponse.key(), "Response key should match request key");
-            assertArrayEquals(value, getResponse.value(), "Response value should match request value");
+            assertArrayEquals(value, getResponse.value(), "Response name should match request name");
         }
     }
 
@@ -48,7 +48,7 @@ public class QuorumReplicaIntegrationTest {
     @Test
     public void testSetAndGetRequestWithRealNetwork() throws IOException {
         var key = "test-key".getBytes();
-        var value = "test-value".getBytes();
+        var value = "test-name".getBytes();
 
         try (Cluster cluster = new Cluster()
                 .withNumProcesses(3)
@@ -72,7 +72,7 @@ public class QuorumReplicaIntegrationTest {
             assertEventually(cluster,() -> getFuture.isCompleted());
             var getResponse = getFuture.getResult();
             assertArrayEquals(key, getResponse.key(), "Response key should match request key");
-            assertArrayEquals(value, getResponse.value(), "Response value should match request value");
+            assertArrayEquals(value, getResponse.value(), "Response name should match request name");
         }
     }
 }

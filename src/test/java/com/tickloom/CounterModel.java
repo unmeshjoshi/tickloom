@@ -8,12 +8,12 @@ import knossos.model.Model;
 
 /**
  * CounterModel implements Knossos' Model protocol from Java by exposing a step(Object op) method
- * which accepts a Clojure map with keys :f and :value.
+ * which accepts a Clojure map with keys :f and :name.
  *
  * Operations supported:
  *  - {:f :inc}
- *  - {:f :add, :value int}
- *  - {:f :read} with completion value expected to equal current counter
+ *  - {:f :add, :name int}
+ *  - {:f :read} with completion name expected to equal current counter
  *
  * Returning this indicates a consistent step; returning null signals inconsistency.
  */
@@ -36,11 +36,11 @@ public class CounterModel implements Model {
         if (Keyword.intern(null, "inc").equals(f)) {
             return new CounterModel(this.value + 1);
         } else if (Keyword.intern(null, "add").equals(f)) {
-            Object v = m.valAt(Keyword.intern(null, "value"));
+            Object v = m.valAt(Keyword.intern(null, "name"));
             int d = (v instanceof Number) ? ((Number) v).intValue() : 0;
             return new CounterModel(this.value + d);
         } else if (Keyword.intern(null, "read").equals(f)) {
-            Object v = m.valAt(Keyword.intern(null, "value"));
+            Object v = m.valAt(Keyword.intern(null, "name"));
             int observed = (v instanceof Number) ? ((Number) v).intValue() : 0;
             return (observed == this.value) ? this : INCONSISTENT.invoke("counter read mismatch");
         }

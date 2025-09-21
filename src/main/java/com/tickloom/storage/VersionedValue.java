@@ -3,8 +3,8 @@ package com.tickloom.storage;
 import java.util.Arrays;
 
 /**
- * Represents a value with its associated timestamp version.
- * The timestamp represents the system time when this value was created or last modified.
+ * Represents a name with its associated timestamp version.
+ * The timestamp represents the system time when this name was created or last modified.
  */
 public record VersionedValue(byte[] value, long timestamp) {
     
@@ -33,7 +33,7 @@ public record VersionedValue(byte[] value, long timestamp) {
     @Override
     public String toString() {
         return "VersionedValue{" +
-                "value.length=" + value.length +
+                "name.length=" + value.length +
                 ", timestamp=" + timestamp +
                 '}';
     }

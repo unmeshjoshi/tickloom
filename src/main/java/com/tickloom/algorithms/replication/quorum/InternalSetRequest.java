@@ -4,7 +4,7 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * Internal request sent between replicas to set a value for a specific key.
+ * Internal request sent between replicas to set a name for a specific key.
  */
 public record InternalSetRequest(byte[] key, byte[] value, long timestamp) {
     public InternalSetRequest {

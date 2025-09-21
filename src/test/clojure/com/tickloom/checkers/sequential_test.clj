@@ -1,7 +1,9 @@
 (ns com.tickloom.checkers.sequential-test
   (:require [clojure.test :refer :all]
+            [clojure.core :as core]
             [knossos.op :as op]
             [knossos.history :refer [index]]
+            [jepsen.checker :as c]
             [com.tickloom.checkers.sequential :as seq])
   (:import (clojure.lang ExceptionInfo)))
 
@@ -33,7 +35,7 @@
 (deftest determine-last-ok-read-test
   ;; CORRECTED: This test now uses knossos helpers for consistency and the
   ;; assertion syntax is fixed. It correctly identifies that only the read
-  ;; of value 2 should be in the final map.
+  ;; of name 2 should be in the final map.
   (let [raw-history [(op/ok 0 :write 1)
                      (op/ok 0 :read 2)]
         history (index raw-history)]
@@ -67,7 +69,7 @@
                      rewritten-history))))))
 
 (deftest serializable-read-test
-  (testing "first read must equal register value"
+  (testing "first read must equal register name"
     (is (:ok? (seq/serializable-read? (op/ok 1 :read 5) 5 :nil)))
     (let [res (seq/serializable-read? (op/ok 1 :read 6) 5 :nil)]
       (is (false? (:ok? res)))
@@ -86,20 +88,20 @@
   (let [opA (op/ok 0 :read 'A')
         opB (op/ok 0 :read 'B')]
 
-    (testing "Process is NOT ready when a different value (A) is read before the write-value (B)"
+    (testing "Process is NOT ready when a different name (A) is read before the write-name (B)"
       (let [history (index [opA opB])]
         ;; Should return the conflicting pair [A B]
         (is (some? (seq/process-not-ready? 'B' 999 history)))))
 
-    (testing "Process IS ready when the write-value (B) is read before a different value (A)"
+    (testing "Process IS ready when the write-name (B) is read before a different name (A)"
       (let [history (index [opB opA])]
         (is (nil? (seq/process-not-ready? 'B' 999 history)))))
 
-    (testing "Process IS ready when only the write-value (B) is read"
+    (testing "Process IS ready when only the write-name (B) is read"
       (let [history (index [(op/ok 0 :read 'B') opB])]
         (is (nil? (seq/process-not-ready? 'B' 999 history)))))
 
-    (testing "Process IS ready when the write-value (B) is never read"
+    (testing "Process IS ready when the write-name (B) is never read"
       (let [history (index [opA])]
         (is (nil? (seq/process-not-ready? 'B' 999 history)))))
 
@@ -198,7 +200,7 @@
     ;; Heads: several reads that don't match reg=:nil, and two writes (1,2).
     ;; Blockers:
     ;;  - For write(1): in proc 2 we have read 0 then read 1 (before scan-to),
-    ;;    and proc 5 has a later read 1 to push scan-to for value 1 high.
+    ;;    and proc 5 has a later read 1 to push scan-to for name 1 high.
     ;;  - For write(2): in proc 3 we have read 0 then read 2 (before scan-to),
     ;;    and proc 6 has a later read 2.
     (let [raw-history [(op/ok 2 :read 0)                    ; i=0  head read (≠ :nil) -> read mismatch
@@ -214,6 +216,19 @@
       (is (seq (:failures res)))))
   )
 
+(deftest checker-test
+  (let [checker (seq/checker "register")
+        history "[{:process 1 :type :invoke :f :write :value 1}
+                 {:process 1 :type :ok :f :write :value 1}
+                 {:process 1 :type :invoke :f :write :value 2}
+                 {:process 1 :type :ok :f :write :value 2}
+                 {:process 1 :type :invoke :f :read :value nil}
+                 {:process 1 :type :ok :f :read :value 1}]"
+
+        result (c/check checker "checker-test" history {})
+        ]
+    (println result)
+))
 
 (deftest sequential-ryw-fail
   (is (false? (:valid? (seq/check-register
@@ -296,11 +311,6 @@
   (is (= {:valid? true}
          (seq/check-register [(op/ok 0 :read :nil)
                     (op/ok 1 :read :nil)]))))
-
-
-(deftest legal-kv-history-per-key-sequential
-  (def history )
-  )
 
 ;ClusterClient should generate history
 ;Add nemesis events to history

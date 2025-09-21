@@ -2,6 +2,11 @@ package com.tickloom.util;
 
 import com.tickloom.Tickable;
 
+import java.io.IOException;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -33,5 +38,16 @@ public class TestUtils {
 
     public static String randomProcessId(String prefix) {
         return prefix + "-" + (int) (Math.random() * 1000);
+    }
+
+    public static void writeEdnFile(String fileName, String ednString) throws IOException {
+        final URL buildRootUrl = TestUtils.class.getResource("/");
+        Path buildRoot = Path.of(buildRootUrl.getPath());
+        Path historyDir = buildRoot.resolve("history-edns");
+        Files.createDirectories(historyDir);
+        final Path ednFilePath = historyDir.resolve(fileName);
+        System.out.println("Writing to " + ednFilePath);
+        Files.writeString(ednFilePath, ednString, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
+
     }
 }

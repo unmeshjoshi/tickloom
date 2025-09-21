@@ -9,7 +9,7 @@ import java.util.function.BiConsumer;
  * This version is simplified to only use a `handle` method, enforcing that both success
  * and failure cases are always considered.
  *
- * @param <T> the type of the result value
+ * @param <T> the type of the result name
  */
 
 public class ListenableFuture<T> {
@@ -68,7 +68,7 @@ public class ListenableFuture<T> {
     /**
      * Returns the completed result.
      *
-     * @return the result value
+     * @return the result name
      * @throws IllegalStateException if the future is not successfully completed
      */
     public T getResult() {
@@ -94,7 +94,7 @@ public class ListenableFuture<T> {
     /**
      * Completes the future with a successful result.
      *
-     * @param result the result value
+     * @param result the result name
      */
     public void complete(T result) {
         if (state != State.PENDING) {

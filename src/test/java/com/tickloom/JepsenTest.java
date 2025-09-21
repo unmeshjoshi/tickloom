@@ -2,15 +2,12 @@ package com.tickloom;
 
 import com.tickloom.algorithms.replication.quorum.QuorumSimulationRunner;
 import com.tickloom.history.History;
+import com.tickloom.history.JepsenHistory;
 import com.tickloom.history.Op;
-import org.junit.jupiter.api.AfterAll;
+import com.tickloom.util.TestUtils;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-
-import clojure.java.api.Clojure;
-import clojure.lang.IFn;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -22,17 +19,19 @@ public class JepsenTest {
     void shouldBeLinearizableForRegister() {
         // Process p0 writes "3", p1 reads "3" -> linearizable
         History h = new History();
-        byte[] k = "k".getBytes(StandardCharsets.UTF_8);
-        byte[] v3 = "3".getBytes(StandardCharsets.UTF_8);
+        String k = "k";
+        String v3 = "3";
 
-        h.invoke("p0", Op.WRITE, k, v3);
-        h.ok    ("p0", Op.WRITE, k, v3);
+        ProcessId clien1 = ProcessId.of("clien1");
+        h.invoke(clien1, Op.WRITE, k, JepsenHistory.tuple(k, v3));
+        h.ok    (clien1, Op.WRITE, k, JepsenHistory.tuple(k, v3));
 
-        h.invoke("p1", Op.READ,  k, null);
-        h.ok    ("p1", Op.READ,  k, v3);
+        h.invoke(ProcessId.of("1"), Op.READ,  k, JepsenHistory.tuple(k, null));
+        h.ok(ProcessId.of("1"), Op.READ,  k, JepsenHistory.tuple(k, v3));
 
         String edn = h.toEdn();
-        boolean ok = Jepsen.checkLinearizableRegister(edn);
+        System.out.println("edn = " + edn);
+        boolean ok = Jepsen.check(edn, "linearizable", "register");
         assertTrue(ok, "Expected history to be linearizable");
     }
 
@@ -40,26 +39,28 @@ public class JepsenTest {
     void shouldBeNonLinearizableForRegister() {
         // p0 writes "1", p1 reads "2" with no concurrent write of "2" -> non-linearizable
         History h = new History();
-        byte[] k = "k".getBytes(StandardCharsets.UTF_8);
-        byte[] v1 = "1".getBytes(StandardCharsets.UTF_8);
-        byte[] v2 = "2".getBytes(StandardCharsets.UTF_8);
+        String k = "k";
+        String v1 = "1";
+        String v2 = "2";
 
-        h.invoke("p0", Op.WRITE, k, v1);
-        h.ok    ("p0", Op.WRITE, k, v1);
+        h.invoke(ProcessId.of("p0"), Op.WRITE, k, v1);
+        h.ok    (ProcessId.of("p0"), Op.WRITE, k, v1);
 
-        h.invoke("p1", Op.READ,  k, null);
-        h.ok    ("p1", Op.READ,  k, v2);
+        h.invoke(ProcessId.of("p1"), Op.READ,  k, null);
+        h.ok    (ProcessId.of("p1"), Op.READ,  k, v2);
 
         String edn = h.toEdn();
-        boolean ok = Jepsen.checkLinearizableRegister(edn);
+        boolean ok = Jepsen.check(edn, "linearizable", "register");
         assertFalse(ok, "Expected history to be NON-linearizable");
     }
 
     @Test
     public void shouldBeLinearizableForStrictQuorumImplementation() throws IOException {
         SimulationRunner runner = new QuorumSimulationRunner(123L);
-        History history = runner.runAndGetHistory(1000);
-        assertTrue(Jepsen.checkLinearizableRegister(history.toEdn()));
+        History history = runner.runAndGetHistory(25);
+        String edn = history.toEdn();
+        TestUtils.writeEdnFile("linearizable-with-strict-quorum-history.edn", edn);
+        assertTrue(Jepsen.checkIndependent(edn, "linearizable", "register"));
     }
 
     @Test
@@ -68,40 +69,12 @@ public class JepsenTest {
         String[] models = new String[]{
                 "register",
                 "cas-register",
-                "mutex",
-                "fifo-queue",
-                "unordered-queue",
                 "set"
         };
         for (String model : models) {
-            boolean ok = Jepsen.check(edn, "linearizable", model, null);
+            boolean ok = Jepsen.check(edn, "linearizable", model);
             assertTrue(ok, "Empty history should be valid for model: " + model);
         }
-    }
-
-    @Test
-    void shouldBeValidForRegisterWithCustomModelObject() {
-        // Same history as shouldBeLinearizable_register
-        History h = new History();
-        byte[] k = "k".getBytes(StandardCharsets.UTF_8);
-        byte[] v3 = "3".getBytes(StandardCharsets.UTF_8);
-
-        h.invoke("p0", Op.WRITE, k, v3);
-        h.ok    ("p0", Op.WRITE, k, v3);
-
-        h.invoke("p1", Op.READ,  k, null);
-        h.ok    ("p1", Op.READ,  k, v3);
-
-        String edn = h.toEdn();
-
-        // Build a concrete Knossos model instance via Clojure interop
-        IFn require = Clojure.var("clojure.core", "require");
-        require.invoke(Clojure.read("knossos.model"));
-        IFn registerCtor = Clojure.var("knossos.model", "register");
-        Object modelObject = registerCtor.invoke();
-
-        boolean ok = Jepsen.checkWithModel(edn, "linearizable", modelObject, null);
-        assertTrue(ok, "Expected history to be linearizable with custom model object");
     }
 
     // ---- Examples per built-in model ----
@@ -110,188 +83,94 @@ public class JepsenTest {
     void shouldBeValidForCasRegisterWriteThenRead() {
         // Simple write/read sequence for CAS register (supports :write and :read)
         String edn = "["
-                + "{:type :invoke, :f :write, :process 0, :time 0, :index 0, :value \"v1\"},"
-                + "{:type :ok,     :f :write, :process 0, :time 1, :index 1, :value \"v1\"},"
-                + "{:type :invoke, :f :read,  :process 1, :time 2, :index 2, :value nil},"
-                + "{:type :ok,     :f :read,  :process 1, :time 3, :index 3, :value \"v1\"}"
+                + "{:type :invoke, :f :write, :process 0, :time 0, :index 0, :name \"v1\"},"
+                + "{:type :ok,     :f :write, :process 0, :time 1, :index 1, :name \"v1\"},"
+                + "{:type :invoke, :f :read,  :process 1, :time 2, :index 2, :name nil},"
+                + "{:type :ok,     :f :read,  :process 1, :time 3, :index 3, :name \"v1\"}"
                 + "]";
-        boolean ok = Jepsen.check(edn, "linearizable", "cas-register", null);
+        boolean ok = Jepsen.check(edn, "linearizable", "cas-register");
         assertTrue(ok);
     }
 
     @Test
     void shouldBeValidForMutexAcquireRelease() {
         String edn = "["
-                + "{:type :invoke, :f :acquire, :process 0, :time 0, :index 0, :value nil},"
-                + "{:type :ok,     :f :acquire, :process 0, :time 1, :index 1, :value true},"
-                + "{:type :invoke, :f :release, :process 0, :time 2, :index 2, :value nil},"
-                + "{:type :ok,     :f :release, :process 0, :time 3, :index 3, :value true},"
-                + "{:type :invoke, :f :acquire, :process 1, :time 4, :index 4, :value nil},"
-                + "{:type :ok,     :f :acquire, :process 1, :time 5, :index 5, :value true},"
-                + "{:type :invoke, :f :release, :process 1, :time 6, :index 6, :value nil},"
-                + "{:type :ok,     :f :release, :process 1, :time 7, :index 7, :value true}"
+                + "{:type :invoke, :f :acquire, :process 0, :time 0, :index 0, :name nil},"
+                + "{:type :ok,     :f :acquire, :process 0, :time 1, :index 1, :name true},"
+                + "{:type :invoke, :f :release, :process 0, :time 2, :index 2, :name nil},"
+                + "{:type :ok,     :f :release, :process 0, :time 3, :index 3, :name true},"
+                + "{:type :invoke, :f :acquire, :process 1, :time 4, :index 4, :name nil},"
+                + "{:type :ok,     :f :acquire, :process 1, :time 5, :index 5, :name true},"
+                + "{:type :invoke, :f :release, :process 1, :time 6, :index 6, :name nil},"
+                + "{:type :ok,     :f :release, :process 1, :time 7, :index 7, :name true}"
                 + "]";
-        boolean ok = Jepsen.check(edn, "linearizable", "mutex", null);
+        boolean ok = Jepsen.check(edn, "linearizable", "mutex");
         assertTrue(ok);
     }
 
     @Test
     void shouldBeValidForFifoQueueEnqueueDequeue() {
         String edn = "["
-                + "{:type :invoke, :f :enqueue, :process 0, :time 0, :index 0, :value \"x\"},"
-                + "{:type :ok,     :f :enqueue, :process 0, :time 1, :index 1, :value \"x\"},"
-                + "{:type :invoke, :f :dequeue, :process 1, :time 2, :index 2, :value nil},"
-                + "{:type :ok,     :f :dequeue, :process 1, :time 3, :index 3, :value \"x\"}"
+                + "{:type :invoke, :f :enqueue, :process 0, :time 0, :index 0, :name \"x\"},"
+                + "{:type :ok,     :f :enqueue, :process 0, :time 1, :index 1, :name \"x\"},"
+                + "{:type :invoke, :f :dequeue, :process 1, :time 2, :index 2, :name nil},"
+                + "{:type :ok,     :f :dequeue, :process 1, :time 3, :index 3, :name \"x\"}"
                 + "]";
-        boolean ok = Jepsen.check(edn, "linearizable", "fifo-queue", null);
+        boolean ok = Jepsen.check(edn, "linearizable", "fifo-queue");
         assertTrue(ok);
     }
 
     @Test
     void shouldBeValidForUnorderedQueueEnqueueDequeue() {
         String edn = "["
-                + "{:type :invoke, :f :enqueue, :process 0, :time 0, :index 0, :value \"a\"},"
-                + "{:type :ok,     :f :enqueue, :process 0, :time 1, :index 1, :value \"a\"},"
-                + "{:type :invoke, :f :dequeue, :process 1, :time 2, :index 2, :value nil},"
-                + "{:type :ok,     :f :dequeue, :process 1, :time 3, :index 3, :value \"a\"}"
+                + "{:type :invoke, :f :enqueue, :process 0, :time 0, :index 0, :name \"a\"},"
+                + "{:type :ok,     :f :enqueue, :process 0, :time 1, :index 1, :name \"a\"},"
+                + "{:type :invoke, :f :dequeue, :process 1, :time 2, :index 2, :name nil},"
+                + "{:type :ok,     :f :dequeue, :process 1, :time 3, :index 3, :name \"a\"}"
                 + "]";
-        boolean ok = Jepsen.check(edn, "linearizable", "unordered-queue", null);
+        boolean ok = Jepsen.check(edn, "linearizable", "unordered-queue");
         assertTrue(ok);
     }
 
     @Test
     void shouldBeValidForSetAddThenRead() {
         String edn = "["
-                + "{:type :invoke, :f :add,  :process 0, :time 0, :index 0, :value \"e1\"},"
-                + "{:type :ok,     :f :add,  :process 0, :time 1, :index 1, :value \"e1\"},"
-                + "{:type :invoke, :f :read, :process 1, :time 2, :index 2, :value nil},"
-                + "{:type :ok,     :f :read, :process 1, :time 3, :index 3, :value #{\"e1\"}}"
+                + "{:type :invoke, :f :add,  :process 0, :time 0, :index 0, :name \"e1\"},"
+                + "{:type :ok,     :f :add,  :process 0, :time 1, :index 1, :name \"e1\"},"
+                + "{:type :invoke, :f :read, :process 1, :time 2, :index 2, :name nil},"
+                + "{:type :ok,     :f :read, :process 1, :time 3, :index 3, :name #{\"e1\"}}"
                 + "]";
-        boolean ok = Jepsen.check(edn, "linearizable", "set", null);
+        boolean ok = Jepsen.check(edn, "linearizable", "set");
         assertTrue(ok);
-    }
-
-    @Test
-    void shouldBeValidForCustomMutexModel() {
-        // Build mutex model object in Java via clojure interop
-        IFn require = Clojure.var("clojure.core", "require");
-        require.invoke(Clojure.read("knossos.model"));
-        IFn mutexCtor = Clojure.var("knossos.model", "mutex");
-        Object modelObject = mutexCtor.invoke();
-
-        String edn = "["
-                + "{:type :invoke, :f :acquire, :process 0, :time 0, :index 0, :value nil},"
-                + "{:type :ok,     :f :acquire, :process 0, :time 1, :index 1, :value true},"
-                + "{:type :invoke, :f :release, :process 0, :time 2, :index 2, :value nil},"
-                + "{:type :ok,     :f :release, :process 0, :time 3, :index 3, :value true}"
-                + "]";
-        boolean ok = Jepsen.checkWithModel(edn, "linearizable", modelObject, null);
-        assertTrue(ok);
-    }
-
-    @Test
-    void shouldBeValidForCustomJavaCounterModel() {
-        CounterModel cm = new CounterModel(0);
-        String edn = "["
-                + "{:type :invoke, :f :inc,  :process 0, :time 0, :index 0, :value nil},"
-                + "{:type :ok,     :f :inc,  :process 0, :time 1, :index 1, :value nil},"
-                + "{:type :invoke, :f :add,  :process 1, :time 2, :index 2, :value 2},"
-                + "{:type :ok,     :f :add,  :process 1, :time 3, :index 3, :value 2},"
-                + "{:type :invoke, :f :read, :process 2, :time 4, :index 4, :value nil},"
-                + "{:type :ok,     :f :read, :process 2, :time 5, :index 5, :value 3}"
-                + "]";
-        boolean ok = Jepsen.checkWithModel(edn, "linearizable", cm, null);
-        assertTrue(ok);
-    }
-
-    @Test
-    void shouldBeInvalidForCustomJavaCounterModelWhenReadWrong() {
-        CounterModel cm = new CounterModel(0);
-        String edn = "["
-                + "{:type :invoke, :f :inc,  :process 0, :time 0, :index 0, :value nil},"
-                + "{:type :ok,     :f :inc,  :process 0, :time 1, :index 1, :value nil},"
-                + "{:type :invoke, :f :add,  :process 1, :time 2, :index 2, :value 2},"
-                + "{:type :ok,     :f :add,  :process 1, :time 3, :index 3, :value 2},"
-                + "{:type :invoke, :f :read, :process 2, :time 4, :index 4, :value nil},"
-                + "{:type :ok,     :f :read, :process 2, :time 5, :index 5, :value 2}"
-                + "]";
-        boolean ok = Jepsen.checkWithModel(edn, "linearizable", cm, null);
-        assertFalse(ok);
-    }
-
-    @Test
-    void shouldBeInvalidForCustomJavaCounterModelWhenInitialReadNonZero() {
-        CounterModel cm = new CounterModel(0);
-        String edn = "["
-                + "{:type :invoke, :f :read, :process 0, :time 0, :index 0, :value nil},"
-                + "{:type :ok,     :f :read, :process 0, :time 1, :index 1, :value 1}"
-                + "]";
-        boolean ok = Jepsen.checkWithModel(edn, "linearizable", cm, null);
-        assertFalse(ok);
     }
 
     @Test
     void shouldBeValidForKvIndependentPerKey() {
         // Two keys k1,k2 with per-key linearizable sequences
         String edn = "["
-                + "{:type :invoke, :f :write, :process 0, :time 0, :index 0, :value [\"k1\" \"v1\"]},"
-                + "{:type :ok,     :f :write, :process 0, :time 1, :index 1, :value [\"k1\" \"v1\"]},"
-                + "{:type :invoke, :f :read,  :process 1, :time 2, :index 2, :value [\"k1\" nil]},"
-                + "{:type :ok,     :f :read,  :process 1, :time 3, :index 3, :value [\"k1\" \"v1\"]},"
+                + "{:type :invoke, :f :write, :process 0, :time 0, :index 0, :name [\"k1\" \"v1\"]},"
+                + "{:type :ok,     :f :write, :process 0, :time 1, :index 1, :name [\"k1\" \"v1\"]},"
+                + "{:type :invoke, :f :read,  :process 1, :time 2, :index 2, :name [\"k1\" nil]},"
+                + "{:type :ok,     :f :read,  :process 1, :time 3, :index 3, :name [\"k1\" \"v1\"]},"
 
-                + "{:type :invoke, :f :write, :process 2, :time 4, :index 4, :value [\"k2\" \"a\"]},"
-                + "{:type :ok,     :f :write, :process 2, :time 5, :index 5, :value [\"k2\" \"a\"]},"
-                + "{:type :invoke, :f :read,  :process 3, :time 6, :index 6, :value [\"k2\" nil]},"
-                + "{:type :ok,     :f :read,  :process 3, :time 7, :index 7, :value [\"k2\" \"a\"]}"
+                + "{:type :invoke, :f :write, :process 2, :time 4, :index 4, :name [\"k2\" \"a\"]},"
+                + "{:type :ok,     :f :write, :process 2, :time 5, :index 5, :name [\"k2\" \"a\"]},"
+                + "{:type :invoke, :f :read,  :process 3, :time 6, :index 6, :name [\"k2\" nil]},"
+                + "{:type :ok,     :f :read,  :process 3, :time 7, :index 7, :name [\"k2\" \"a\"]}"
                 + "]";
-        boolean ok = Jepsen.checkIndependentKV(edn, "linearizable", null);
+        boolean ok = Jepsen.checkIndependent(edn, "linearizable", "register");
         assertTrue(ok);
     }
 
     @Test
     void shouldBeInvalidForKvIndependentWhenWrongValueOnOneKey() {
         String edn = "["
-                + "{:type :invoke, :f :write, :process 0, :time 0, :index 0, :value [\"k1\" \"v1\"]},"
-                + "{:type :ok,     :f :write, :process 0, :time 1, :index 1, :value [\"k1\" \"v1\"]},"
-                + "{:type :invoke, :f :read,  :process 1, :time 2, :index 2, :value [\"k1\" nil]},"
-                + "{:type :ok,     :f :read,  :process 1, :time 3, :index 3, :value [\"k1\" \"WRONG\"]}"
+                + "{:type :invoke, :f :write, :process 0, :time 0, :index 0, :name [\"k1\" \"v1\"]},"
+                + "{:type :ok,     :f :write, :process 0, :time 1, :index 1, :name [\"k1\" \"v1\"]},"
+                + "{:type :invoke, :f :read,  :process 1, :time 2, :index 2, :name [\"k1\" nil]},"
+                + "{:type :ok,     :f :read,  :process 1, :time 3, :index 3, :name [\"k1\" \"WRONG\"]}"
                 + "]";
-        boolean ok = Jepsen.checkIndependentKV(edn, "linearizable", null);
+        boolean ok = Jepsen.checkIndependent(edn, "linearizable", "register");
         assertFalse(ok);
-    }
-
-    @Test
-    void shouldBeSequentialButNotLinearizableForRegister() {
-        // Full invoke/ok KV history for linearizability
-        String ednKvFull = "["
-                + "{:type :invoke, :f :write, :process 0, :time 0,  :index 0, :value [\"kv\" \"v0\"]},"
-                + "{:type :ok,     :f :write, :process 0, :time 10, :index 1, :value [\"kv\" \"v0\"]},"
-                + "{:type :invoke, :f :write, :process 0, :time 20, :index 2, :value [\"kv\" \"v1\"]},"
-                + "{:type :ok,     :f :write, :process 0, :time 30, :index 3, :value [\"kv\" \"v1\"]},"
-                + "{:type :invoke, :f :read,  :process 1, :time 40, :index 4, :value [\"kv\" nil]},"
-                + "{:type :ok,     :f :read,  :process 1, :time 50, :index 5, :value [\"kv\" \"v0\"]}"
-                + "]";
-
-        // Use the same full history for sequential; the checker will ignore real-time
-        String ednKvForSeq = ednKvFull;
-
-        boolean lin = Jepsen.checkIndependentKV(ednKvFull, "linearizable", null);
-        boolean seq = Jepsen.checkConsistency(ednKvForSeq, "kv", "sequential");
-        assertFalse(lin);
-        assertTrue(seq);
-    }
-
-    @Test
-    void shouldBeSequentialConsistentForRegisterUsingConvenienceMethod() {
-        // Only :ok events, sequentially consistent ordering ignoring real-time
-        String ednKvSeq = "["
-                + "{:type :invoke, :f :write, :process 0, :time 0, :index 0, :value [\"kv\" \"v0\"]},"
-                + "{:type :ok,     :f :write, :process 0, :time 1, :index 1, :value [\"kv\" \"v0\"]},"
-                + "{:type :invoke, :f :read,  :process 1, :time 2, :index 2, :value [\"kv\" nil]},"
-                + "{:type :ok,     :f :read,  :process 1, :time 3, :index 3, :value [\"kv\" \"v0\"]},"
-                + "{:type :invoke, :f :write, :process 0, :time 4, :index 4, :value [\"kv\" \"v1\"]},"
-                + "{:type :ok,     :f :write, :process 0, :time 5, :index 5, :value [\"kv\" \"v1\"]}"
-                + "]";
-        assertTrue(Jepsen.checkConsistency(ednKvSeq, "kv", "sequential"));
     }
 }

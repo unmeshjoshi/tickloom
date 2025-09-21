@@ -35,11 +35,6 @@ public class SingleRequestIssuer<C extends ClusterClient> {
 
     private void sendClientRequest() {
         ListenableFuture<?> f = simulationRunner.issueRequest(client, rng);
-        if (f == null) {
-            inFlight = false;
-            drainNext();
-            return;
-        }
         f.andThen((result, ex) -> {
             inFlight = false;
             drainNext();
@@ -47,8 +42,10 @@ public class SingleRequestIssuer<C extends ClusterClient> {
     }
 
     private void drainNext() {
+        if (inFlight) return;     // someone else already started one
+
         Runnable next = buffered.pollFirst();
-        if (next != null) sendRequest(next);
+        if (next != null) next.run();
     }
 
     public boolean isInFlight() { return inFlight; }

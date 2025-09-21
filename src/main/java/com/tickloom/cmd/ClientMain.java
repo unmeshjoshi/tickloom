@@ -28,7 +28,7 @@ public class ClientMain {
     private static final String OPT_REPLICAS = "--replicas"; // comma-separated process ids
     private static final String OPT_GET = "--get"; // key
     private static final String OPT_SET = "--set"; // key
-    private static final String OPT_VALUE = "--value"; // value for set
+    private static final String OPT_VALUE = "--name"; // name for set
     private static final String OPT_TIMEOUT = "--timeout"; // ticks
     private static final String OPT_DEADLINE_MS = "--deadline-ms"; // wall-clock budget
 
@@ -57,7 +57,7 @@ public class ClientMain {
         }
         String valueArg = options.get(OPT_VALUE);
         if (isSet && isBlank(valueArg)) {
-            System.err.println("--value is required for --set");
+            System.err.println("--name is required for --set");
             printUsageAndExit(1);
         }
 
@@ -163,7 +163,7 @@ public class ClientMain {
     }
 
     private static void printUsageAndExit(int code) {
-        System.out.println("Usage: java -cp <jar> com.tickloom.cmd.Client --config <path/to/config.yaml> --id <clientId-id> --replicas <id1,id2,...> (--get <key> | --set <key> --value <value>) [--timeout <ticks>] [--deadline-ms <ms>]");
+        System.out.println("Usage: java -cp <jar> com.tickloom.cmd.Client --config <path/to/config.yaml> --id <clientId-id> --replicas <id1,id2,...> (--get <key> | --set <key> --name <name>) [--timeout <ticks>] [--deadline-ms <ms>]");
         System.exit(code);
     }
 
@@ -185,7 +185,7 @@ public class ClientMain {
                 case OPT_TIMEOUT:
                 case OPT_DEADLINE_MS:
                     if (i + 1 >= args.length) {
-                        System.err.println("Missing value for option: " + a);
+                        System.err.println("Missing name for option: " + a);
                         printUsageAndExit(1);
                     }
                     opts.put(a, args[++i]);

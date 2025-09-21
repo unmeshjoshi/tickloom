@@ -35,8 +35,8 @@ public class SimulatedNetworkTest {
     void shouldSendAndReceiveMessageImmediately() {
         // Given - network with registered callback handler
 
-        ProcessId source = new ProcessId("192.168.1.1");
-        ProcessId destination = new ProcessId("192.168.1.2");
+        ProcessId source = ProcessId.of("192.168.1.1");
+        ProcessId destination = ProcessId.of("192.168.1.2");
         Message message = Message.of(source, destination, PeerType.SERVER, new MessageType("CLIENT_GET_REQUEST"), "test".getBytes(), "test-correlation-id");
         
         // When
@@ -51,9 +51,9 @@ public class SimulatedNetworkTest {
     @Test
     void shouldDeliverMessagesToCorrectAddress() {
 
-        ProcessId address1 = new ProcessId("192.168.1.1");
-        ProcessId address2 = new ProcessId("192.168.1.2");
-        ProcessId source = new ProcessId("192.168.1.3");
+        ProcessId address1 = ProcessId.of("192.168.1.1");
+        ProcessId address2 = ProcessId.of("192.168.1.2");
+        ProcessId source = ProcessId.of("192.168.1.3");
 
         Message message1 = Message.of(source, address1, PeerType.SERVER, new MessageType("CLIENT_GET_REQUEST"), "msg1".getBytes(), "test-correlation-id-1");
         Message message2 = Message.of(source, address2, PeerType.SERVER, new MessageType("CLIENT_SET_REQUEST"), "msg2".getBytes(), "test-correlation-id-2");
@@ -83,8 +83,8 @@ public class SimulatedNetworkTest {
     void shouldHandleMultipleMessagesToSameAddress() {
         // Given - network with registered callback handler
         
-        ProcessId source = new ProcessId("192.168.1.1");
-        ProcessId destination = new ProcessId("192.168.1.2");
+        ProcessId source = ProcessId.of("192.168.1.1");
+        ProcessId destination = ProcessId.of("192.168.1.2");
         
         Message message1 = Message.of(source, destination, PeerType.SERVER, new MessageType("CLIENT_GET_REQUEST"), "msg1".getBytes(), "test-correlation-id-3");
         Message message2 = Message.of(source, destination, PeerType.SERVER, new MessageType("CLIENT_SET_REQUEST"), "msg2".getBytes(), "test-correlation-id-4");
@@ -113,8 +113,8 @@ public class SimulatedNetworkTest {
         SimulatedNetwork lossyNetwork = SimulatedNetwork.lossyNetwork(new Random(), 1.0); // No delay, 100% packet loss
         lossyNetwork.registerMessageDispatcher(lossyHandler);
 
-        ProcessId source = new ProcessId("192.168.1.1");
-        ProcessId destination = new ProcessId("192.168.1.2");
+        ProcessId source = ProcessId.of("192.168.1.1");
+        ProcessId destination = ProcessId.of("192.168.1.2");
         Message message = Message.of(source, destination, PeerType.SERVER, new MessageType("CLIENT_GET_REQUEST"), "lost".getBytes(), "test-correlation-id-6");
         
         // When
@@ -137,8 +137,8 @@ public class SimulatedNetworkTest {
         SimulatedNetwork network2 = SimulatedNetwork.lossyNetwork(seed2,  0.5 ).withDelayTicks(1); // 50% packet loss
         network2.registerMessageDispatcher(handler2);
 
-        ProcessId source = new ProcessId("192.168.1.1");
-        ProcessId destination = new ProcessId("192.168.1.2");
+        ProcessId source = ProcessId.of("192.168.1.1");
+        ProcessId destination = ProcessId.of("192.168.1.2");
         
         // When - send multiple messages to both networks
         for (int i = 0; i < 10; i++) {
@@ -157,8 +157,8 @@ public class SimulatedNetworkTest {
     @Test
     void shouldSupportBidirectionalPartitioning() {
         // Given - network with registered callback handler
-        ProcessId nodeA = new ProcessId("192.168.1.1");
-        ProcessId nodeB = new ProcessId("192.168.1.2");
+        ProcessId nodeA = ProcessId.of("192.168.1.1");
+        ProcessId nodeB = ProcessId.of("192.168.1.2");
         
         Message messageAtoB = Message.of(nodeA, nodeB, PeerType.SERVER, new MessageType("CLIENT_GET_REQUEST"), "A->B".getBytes(), "test-correlation-id-9");
         Message messageBtoA = Message.of(nodeB, nodeA, PeerType.SERVER, new MessageType("CLIENT_SET_REQUEST"), "B->A".getBytes(), "test-correlation-id-10");
@@ -177,8 +177,8 @@ public class SimulatedNetworkTest {
     @Test
     void shouldSupportOneWayPartitioning() {
         // Given - network with registered callback handler
-        ProcessId nodeA = new ProcessId("192.168.1.1");
-        ProcessId nodeB = new ProcessId("192.168.1.2");
+        ProcessId nodeA = ProcessId.of("192.168.1.1");
+        ProcessId nodeB = ProcessId.of("192.168.1.2");
         
         Message messageAtoB = Message.of(nodeA, nodeB, PeerType.SERVER, new MessageType("CLIENT_GET_REQUEST"), "A->B".getBytes(), "test-correlation-id-11");
         Message messageBtoA = Message.of(nodeB, nodeA, PeerType.SERVER, new MessageType("CLIENT_SET_REQUEST"), "B->A".getBytes(), "test-correlation-id-12");
@@ -197,8 +197,8 @@ public class SimulatedNetworkTest {
 
     @Test
     public void shouldDropMessagesOfSpecificType() {
-        ProcessId nodeA = new ProcessId("192.168.1.1");
-        ProcessId nodeB = new ProcessId("192.168.1.2");
+        ProcessId nodeA = ProcessId.of("192.168.1.1");
+        ProcessId nodeB = ProcessId.of("192.168.1.2");
 
         Message getRequest = Message.of(nodeA, nodeB, PeerType.SERVER, new MessageType("CLIENT_GET_REQUEST"), "A->B".getBytes(), "test-correlation-id-11");
         Message setRequest = Message.of(nodeA, nodeB, PeerType.SERVER, new MessageType("CLIENT_SET_REQUEST"), "A->B".getBytes(), "test-correlation-id-12");
@@ -215,8 +215,8 @@ public class SimulatedNetworkTest {
     
     @Test
     void shouldHealPartitions() {
-        ProcessId nodeA = new ProcessId("192.168.1.1");
-        ProcessId nodeB = new ProcessId("192.168.1.2");
+        ProcessId nodeA = ProcessId.of("192.168.1.1");
+        ProcessId nodeB = ProcessId.of("192.168.1.2");
         
         Message message = Message.of(nodeA, nodeB, PeerType.SERVER, new MessageType("CLIENT_GET_REQUEST"), "healed".getBytes(), "test-correlation-id-13");
         
@@ -240,9 +240,9 @@ public class SimulatedNetworkTest {
     
     @Test
     void shouldSupportPerLinkDelay() {
-        ProcessId nodeA = new ProcessId("192.168.1.1");
-        ProcessId nodeB = new ProcessId("192.168.1.2");
-        ProcessId nodeC = new ProcessId("192.168.1.3");
+        ProcessId nodeA = ProcessId.of("192.168.1.1");
+        ProcessId nodeB = ProcessId.of("192.168.1.2");
+        ProcessId nodeC = ProcessId.of("192.168.1.3");
         
         // Set different delays for different links
         network.setDelay(nodeA, nodeB, 3); // 3 tick delay
@@ -273,9 +273,9 @@ public class SimulatedNetworkTest {
     @Test
     void shouldSupportPerLinkPacketLoss() {
 
-        ProcessId nodeA = new ProcessId("192.168.1.1");
-        ProcessId nodeB = new ProcessId("192.168.1.2");
-        ProcessId nodeC = new ProcessId("192.168.1.3");
+        ProcessId nodeA = ProcessId.of("192.168.1.1");
+        ProcessId nodeB = ProcessId.of("192.168.1.2");
+        ProcessId nodeC = ProcessId.of("192.168.1.3");
         
         // Set different packet loss rates for different links
         network.setPacketLoss(nodeA, nodeB, 1.0); // 100% loss rate
@@ -297,8 +297,8 @@ public class SimulatedNetworkTest {
     @Test
     void shouldMaintainPartitionStateAcrossMultipleMessages() {
 
-        ProcessId nodeA = new ProcessId("192.168.1.1");
-        ProcessId nodeB = new ProcessId("192.168.1.2");
+        ProcessId nodeA = ProcessId.of("192.168.1.1");
+        ProcessId nodeB = ProcessId.of("192.168.1.2");
         
         // When - establish partition and send multiple messages
         network.partitionTwoWay(nodeA, nodeB);

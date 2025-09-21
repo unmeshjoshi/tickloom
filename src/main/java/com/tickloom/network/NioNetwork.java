@@ -201,9 +201,9 @@ public class NioNetwork extends Network {
             connections.remove(sourceId);
             System.out.println("NIO: Removed inbound connection for source: " + sourceId);
         } else {
-            // Fallback: remove by value (less efficient but handles edge cases)
+            // Fallback: remove by name (less efficient but handles edge cases)
             connections.entrySet().removeIf(entry -> entry.getValue() == nioConnection);
-            System.out.println("NIO: Removed connection by value comparison");
+            System.out.println("NIO: Removed connection by name comparison");
         }
     }
 

@@ -42,11 +42,11 @@ public class ConsistencyPropertiesTest {
             History history = new History();
 
             // Initialize to v0 under full connectivity
-            history.invoke("client1", Op.WRITE, key, v0);
+            history.invoke(ProcessId.of("client1"), Op.WRITE, key, v0);
             var init = clientWriter.set(key, v0);
             assertEventually(cluster, init::isCompleted);
             assertTrue(init.getResult().success());
-            history.ok("client1", Op.WRITE, key, v0);
+            history.ok(ProcessId.of("client1"), Op.WRITE, key, v0);
 
             assertEventually(cluster, () -> {
                 var v = cluster.getStorageValue(ATHENS, key);
@@ -58,22 +58,22 @@ public class ConsistencyPropertiesTest {
             cluster.partitionNodes(writerSide, otherSide);
 
             // Quorum write v1 on writer side
-            history.invoke("client1", Op.WRITE, key, v1);
+            history.invoke(ProcessId.of("client1"), Op.WRITE, key, v1);
             var w1 = clientWriter.set(key, v1);
             assertEventually(cluster, () -> w1.isCompleted() && w1.getResult().success());
             assertTrue(w1.getResult().success());
-            history.ok("client1", Op.WRITE, key, v1);
+            history.ok(ProcessId.of("client1"), Op.WRITE, key, v1);
 
             // Local read from ATHENS (read-one), returns stale v0
-            history.invoke("client2", Op.READ, key, null);
+            history.invoke(ProcessId.of("client2"), Op.READ, key, null);
             var vv = cluster.getStorageValue(ATHENS, key);
             assertNotNull(vv);
             assertArrayEquals(v0, vv.value());
-            history.ok("client2", Op.READ, key, vv.value());
+            history.ok(ProcessId.of("client2"), Op.READ, key, vv.value());
 
-            String edn = history.toEdnKvTuples();
+            String edn = history.toEdn();
             System.out.println("edn = " + edn);
-            assertFalse(Jepsen.checkIndependentKV(edn, "linearizable", null));
+            assertFalse(Jepsen.checkIndependent(edn, "linearizable", null));
             assertTrue(Jepsen.checkRegisterSequential(edn));
         }
     }
@@ -96,11 +96,11 @@ public class ConsistencyPropertiesTest {
             History history = new History();
 
             // Initialize v0
-            history.invoke("clientX", Op.WRITE, key, v0);
+            history.invoke(ProcessId.of("clientX"), Op.WRITE, key, v0);
             var init = client.set(key, v0);
             assertEventually(cluster, init::isCompleted);
             assertTrue(init.getResult().success());
-            history.ok("clientX", Op.WRITE, key, v0);
+            history.ok(ProcessId.of("clientX"), Op.WRITE, key, v0);
 
             // Partition to isolate ATHENS
             var writerSide = NodeGroup.of(CYRENE, DELPHI, SPARTA);
@@ -108,24 +108,22 @@ public class ConsistencyPropertiesTest {
             cluster.partitionNodes(writerSide, otherSide);
 
             // Same client quorum write v1
-            history.invoke("clientX", Op.WRITE, key, v1);
+            history.invoke(ProcessId.of("clientX"), Op.WRITE, key, v1);
             var w1 = client.set(key, v1);
             assertEventually(cluster, () -> w1.isCompleted() && w1.getResult().success());
             assertTrue(w1.getResult().success());
-            history.ok("clientX", Op.WRITE, key, v1);
+            history.ok(ProcessId.of("clientX"), Op.WRITE, key, v1);
 
             // Same client performs local read from ATHENS (read-one) -> stale v0
-            history.invoke("clientX", Op.READ, key, null);
+            history.invoke(ProcessId.of("clientX"), Op.READ, key, null);
             var vv = cluster.getStorageValue(ATHENS, key);
             assertNotNull(vv);
             assertArrayEquals(v0, vv.value());
-            history.ok("clientX", Op.READ, key, vv.value());
+            history.ok(ProcessId.of("clientX"), Op.READ, key, vv.value());
 
-            String edn = history.toEdnKvTuples();
-            assertFalse(Jepsen.checkIndependentKV(edn, "linearizable", null));
-            assertFalse(Jepsen.checkIndependentKV(edn, "sequential", null));
+            String edn = history.toEdn();
+            assertFalse(Jepsen.check(edn, "linearizable", "register"));
+            assertFalse(Jepsen.checkIndependent(edn, "sequential", null));
         }
     }
 }
-
-

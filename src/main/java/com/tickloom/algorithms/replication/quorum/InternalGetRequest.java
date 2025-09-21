@@ -4,7 +4,7 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * Internal request sent between replicas to get a value for a specific key.
+ * Internal request sent between replicas to get a name for a specific key.
  */
 public record InternalGetRequest(byte[] key) {
     public InternalGetRequest {

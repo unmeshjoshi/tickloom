@@ -3,7 +3,6 @@ package com.tickloom.algorithms.replication;
 import com.tickloom.Process;
 import com.tickloom.ProcessId;
 import com.tickloom.future.ListenableFuture;
-import com.tickloom.history.Op;
 import com.tickloom.messaging.*;
 import com.tickloom.network.MessageCodec;
 import com.tickloom.network.PeerType;
@@ -36,23 +35,6 @@ public abstract class ClusterClient extends Process {
     public int getPendingRequestCount() {
         return waitingList.size();
     }
-
-
-
-    static class HistoryDescription {
-        Op op;
-        Function requestToKey;
-        Function responseToValue;
-
-    }
-//
-//    protected <T> ListenableFuture<T> sendRequestWithHistory(Object request, ProcessId destination,
-//                                                  MessageType messageType, HistoryDescription historyDescription) {
-//
-//        //record invocation
-//        //send request
-//        //record response
-//    }
 
 
     protected <T> ListenableFuture<T> sendRequest(Object request, ProcessId destination, 

@@ -9,7 +9,7 @@ import java.util.Objects;
 public record GetResponse(byte[] key, byte[] value, boolean found) {
     public GetResponse {
         Objects.requireNonNull(key, "Key cannot be null");
-        // value can be null when not found
+        // name can be null when not found
         if (found && value == null) {
             throw new IllegalArgumentException("Value cannot be null when found is true");
         }

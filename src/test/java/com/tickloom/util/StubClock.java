@@ -30,7 +30,7 @@ public class StubClock implements Clock {
     }
     
     /**
-     * Sets the current time to the specified value.
+     * Sets the current time to the specified name.
      * 
      * @param time the time to set in milliseconds
      */

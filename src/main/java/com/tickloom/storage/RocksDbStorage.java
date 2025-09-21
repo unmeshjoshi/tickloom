@@ -17,7 +17,7 @@ import java.util.concurrent.Executors;
 
 /**
  * Production-ready RocksDB-based storage implementation.
- * Provides persistent key-value storage while maintaining the async ListenableFuture interface
+ * Provides persistent key-name storage while maintaining the async ListenableFuture interface
  * and deterministic tick() behavior required by the simulation framework.
  * 
  * Key features:
@@ -150,7 +150,7 @@ public class RocksDbStorage implements Storage {
     
     /**
      * Serializes a VersionedValue to bytes for storage.
-     * Format: [8 bytes timestamp][remaining bytes: value]
+     * Format: [8 bytes timestamp][remaining bytes: name]
      */
     private byte[] serializeVersionedValue(VersionedValue versionedValue) {
         byte[] value = versionedValue.value();
@@ -163,7 +163,7 @@ public class RocksDbStorage implements Storage {
             serialized[i] = (byte) (timestamp >>> (56 - i * 8));
         }
         
-        // Write value bytes
+        // Write name bytes
         System.arraycopy(value, 0, serialized, 8, value.length);
         
         return serialized;
@@ -183,7 +183,7 @@ public class RocksDbStorage implements Storage {
             timestamp = (timestamp << 8) | (data[i] & 0xFF);
         }
         
-        // Read value from remaining bytes
+        // Read name from remaining bytes
         byte[] value = new byte[data.length - 8];
         System.arraycopy(data, 8, value, 0, value.length);
         

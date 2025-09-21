@@ -4,7 +4,7 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * Client request to get a value for a specific key.
+ * Client request to get a name for a specific key.
  */
 public record GetRequest(byte[] key) {
     public GetRequest {

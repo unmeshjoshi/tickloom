@@ -32,6 +32,6 @@ public record NodeGroup(Set<ProcessId> processIds) {
 
     @Override
     public String toString() {
-        return processIds.stream().map(ProcessId::value).collect(Collectors.joining(", ", "[", "]"));
+        return processIds.stream().map(ProcessId::name).collect(Collectors.joining(", ", "[", "]"));
     }
 }

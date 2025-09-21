@@ -28,12 +28,12 @@ public class ClusterAssertions {
     }
 
     /**
-     * Asserts that a specific value exists in storage on a specific process.
+     * Asserts that a specific name exists in storage on a specific process.
      *
      * @param processId the ID of the process
      * @param key the key to check
-     * @param expectedValue the expected value
-     * @return true if the value matches, false otherwise
+     * @param expectedValue the expected name
+     * @return true if the name matches, false otherwise
      */
     public static boolean storageContainsValue(Cluster cluster, ProcessId processId, byte[] key, byte[] expectedValue) {
         VersionedValue actual = cluster.getStorageValue(processId, key);

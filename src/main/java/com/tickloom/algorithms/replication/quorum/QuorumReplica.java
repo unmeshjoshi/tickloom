@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Quorum-based replica implementation for distributed key-value store.
+ * Quorum-based replica implementation for distributed key-name store.
  * This implementation uses majority quorum consensus for read and write operations.
  * <p>
  * Based on the quorum consensus algorithm where operations require majority
@@ -82,7 +82,10 @@ public class QuorumReplica extends Replica {
                 latestValue != null ? latestValue.value() : null,
                 latestValue != null);
 
+
         var responseMessage = createMessage(clientAddr, correlationId, response, QuorumMessageTypes.CLIENT_GET_RESPONSE);
+
+        System.out.println("Sending client response for key = " + new String(req.key()) + " " + response);
 
         send(responseMessage);
     }
@@ -94,16 +97,17 @@ public class QuorumReplica extends Replica {
 
         var responseMessage = createMessage(clientAddr, correlationId, response, QuorumMessageTypes.CLIENT_GET_RESPONSE);
 
+        System.out.println("Sending client response for key = " + new String(req.key()) + " " + response);
         send(responseMessage);
     }
 
     private void logSuccessfulGetResponse(GetRequest req, String correlationId, VersionedValue latestValue) {
-        System.out.println("QuorumReplica: Successful GET response - keyLength: " + req.key().length +
+        System.out.println("QuorumReplica: Successful GET response - key: " + new String(req.key()) +
                 ", correlationId: " + correlationId + ", hasValue: " + (latestValue != null));
     }
 
     private void logFailedGetResponse(GetRequest req, String correlationId, Throwable error) {
-        System.out.println("QuorumReplica: Failed GET response - keyLength: " + req.key().length +
+        System.out.println("QuorumReplica: Failed GET response - key: " + new String(req.key()) +
                 ", correlationId: " + correlationId + ", error: " + error.getMessage());
     }
 
@@ -169,7 +173,7 @@ public class QuorumReplica extends Replica {
                 ", correlationId: " + correlationId + ", error: " + error.getMessage());
     }
 
-    // Helper method to extract the latest value from quorum responses
+    // Helper method to extract the latest name from quorum responses
     private VersionedValue getLatestValueFromResponses(Map<ProcessId, InternalGetResponse> responses) {
         VersionedValue latestValue = null;
         long latestTimestamp = -1;
@@ -203,10 +207,12 @@ public class QuorumReplica extends Replica {
     private void sendInternalGetResponse(Message incomingMessage, VersionedValue value, Throwable error, InternalGetRequest getRequest) {
 
         logInternalGetResponse(value, error, getRequest);
-        //value will be null if not found or error
+        //name will be null if not found or error
         var response = new InternalGetResponse(getRequest.key(), value);
+
         var responseMessage = createResponseMessage(incomingMessage, response, QuorumMessageTypes.INTERNAL_GET_RESPONSE);
 
+        System.out.println("Sending response message for key = " + new String(getRequest.key()) + " " + responseMessage);
 
         send(responseMessage);
 
@@ -215,11 +221,11 @@ public class QuorumReplica extends Replica {
     private static void logInternalGetResponse(VersionedValue value, Throwable error, InternalGetRequest getRequest) {
         if (error == null) {
             String valueStr = value != null ? "found" : "not found";
-            System.out.println("QuorumReplica: Internal GET completed - keyLength: " + getRequest.key().length +
-                    ", value: " + valueStr );
+            System.out.println("QuorumReplica: Internal GET completed - key: " + getRequest.key() +
+                    ", name: " + valueStr );
 
         } else {
-            System.out.println("QuorumReplica: Internal GET failed - keyLength: " + getRequest.key().length +
+            System.out.println("QuorumReplica: Internal GET failed - key: " + getRequest.key() +
                     ", error: " + error.getMessage());
         }
     }

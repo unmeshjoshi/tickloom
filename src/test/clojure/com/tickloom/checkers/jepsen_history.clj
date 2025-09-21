@@ -5,17 +5,17 @@
   [])
 
 (defn invoke
-  [history process f value]
-  (conj history {:process process :type :invoke :f f :value value}))
+  [history process-id process-name f value]
+  (conj history {:process process-id :process-name process-name :type :invoke :f f :value value}))
 
 (defn ok
-  [history process f value]
-  (conj history {:process process :type :ok :f f :value value}))
+  [history process-id process-name f value]
+  (conj history {:process process-id :process-name process-name :type :ok :f f :value value}))
 
 (defn fail
-  [history process f value]
-  (conj history {:process process :type :fail :f f :value value}))
+  [history process-id process-name f value]
+  (conj history {:process process-id :process-name process-name :type :fail :f f :value value}))
 
 (defn info
-  [history process f value]
-  (conj history {:process process :type :info :f f :value value}))
+  [history process-id process-name f value]
+  (conj history {:process process-id :process-name process-name :type :info :f f :value value}))

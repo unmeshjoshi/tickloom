@@ -11,7 +11,7 @@ import java.util.Objects;
 public record InternalGetResponse(byte[] key, VersionedValue value) {
     public InternalGetResponse {
         Objects.requireNonNull(key, "Key cannot be null");
-        // value can be null when not found
+        // name can be null when not found
     }
 
     @Override

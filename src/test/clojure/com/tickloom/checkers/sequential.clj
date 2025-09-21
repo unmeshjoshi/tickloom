@@ -1,12 +1,10 @@
 (ns com.tickloom.checkers.sequential
   "Sequential consistency checking for register and KV models - migrated from couchbase.sc"
-  (:require [com.tickloom.checkers.core :as core]
-            [knossos.history :as history]
-            [jepsen.independent :as ind]
+  (:require [clojure.edn :as edn]
+            [com.tickloom.checkers.core :as core]
             [jepsen.checker :as checker]
-            [jepsen.history :as hist]
-            [knossos.competition :as competition])
-  (:import (clojure.lang ExceptionInfo)))
+            [knossos.competition :as competition]
+            [knossos.history :as history]))
 
 ;; === EXISTING FUNCTIONS FROM couchbase.sc (preserved exactly) ===
 
@@ -92,13 +90,13 @@
             history)))
 
 (defn serializable-read?
-  "Check if the given op is a read op return with the current register value"
+  "Check if the given op is a read op return with the current register name"
   [op reg-val last-seen-for-proc]
   (let [op-val (:value op)]
     (cond
       (not= op-val reg-val)
       {:ok? false
-       :msg {:msg           "Read candidate value doesn't match register value"
+       :msg {:msg           "Read candidate name doesn't match register name"
              :register-value     reg-val
              :candidate          op
              :last-seen-for-proc last-seen-for-proc}}
@@ -238,17 +236,17 @@
   (let [;; Group operations by key
         grouped-ops (group-by (fn [op]
                                (if (vector? (:value op))
-                                 (first (:value op))  ; [key value] format
-                                 (:key op)))          ; {:key k :value v} format
+                                 (first (:value op))  ; [key name] format
+                                 (:key op)))          ; {:key k :name v} format
                              history)
         ;; Check each key independently for sequential consistency
-        key-results (into {} 
+        key-results (into {}
                          (map (fn [[k ops]]
                                 [k (check-register ops)])
                               grouped-ops))
         ;; All keys must be sequentially consistent
         all-valid? (every? :valid? (vals key-results))
-        invalid-keys (keep (fn [[k result]] 
+        invalid-keys (keep (fn [[k result]]
                             (when-not (:valid? result) k))
                           key-results)]
     {:valid? all-valid?
@@ -272,25 +270,28 @@
 
 ;; === MAIN DISPATCHER ===
 
+
 (defn check
   "Main entry point for sequential consistency checking.
    Supports: 'register', 'kv', or custom model objects"
-  [history-edn model-type-or-object opts]
+  [history-edn model opts]
   (let [history (core/parse-history history-edn)]
     (core/validate-history history)
-    
+
     (cond
       ;; Built-in models
-      (= model-type-or-object "register") 
+      (= model "register")
       (check-register history)
-      
-      (= model-type-or-object "kv") 
-      (check-kv history (or opts (core/default-opts)))
-      
-      ;; Custom model object (implements knossos.model.Model)
-      (and (not (string? model-type-or-object))
-           model-type-or-object)
-      (check-with-model history model-type-or-object (or opts (core/default-opts)))
-      
-      :else 
-      (throw (ex-info "Unknown model type" {:model model-type-or-object})))))
+
+      :else
+      (throw (ex-info "Unknown model type" {:model model})))))
+
+
+(defn checker
+  [model]
+  (reify checker/Checker
+    (check [this test history opts]
+      (let [history-edn (edn/read-string history)]
+        (check history model opts))
+      ))
+  )

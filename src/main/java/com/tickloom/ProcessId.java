@@ -1,26 +1,31 @@
 package com.tickloom;
 
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Immutable identifier for any process (replica, worker, clientId) in the system.
  * It is just a string but conveniences exist for creating random UUID-backed IDs.
+ * Uniqueness is guaranteed by an internal UUID.
  */
-public record ProcessId(String value) {
+public record ProcessId(String name, Long id) {
+    static Map<String, ProcessId> processIdMap = new ConcurrentHashMap<>();
 
-    public ProcessId {
-        Objects.requireNonNull(value, "Process ID cannot be null");
-        if (value.isBlank()) {
-            throw new IllegalArgumentException("Process ID cannot be blank");
-        }
+    private static final AtomicLong counter = new AtomicLong(0);
+
+    private ProcessId(String name) {
+        this(name, counter.getAndIncrement());
     }
 
     /**
-     * Returns this ID as a human-readable name (alias for {@link #value()}).
+     * Returns this ID as a human-readable name (alias for {@link #name()}).
      */
     public String name() {
-        return value;
+        return name;
     }
 
     /**
@@ -33,12 +38,12 @@ public record ProcessId(String value) {
     /**
      * Convenience factory to wrap an arbitrary string.
      */
-    public static ProcessId of(String id) {
-        return new ProcessId(id);
+    public static ProcessId of(String name) {
+        return processIdMap.computeIfAbsent(name, ProcessId::new);
     }
 
     @Override
     public String toString() {
-        return value;
+        return name;
     }
 }

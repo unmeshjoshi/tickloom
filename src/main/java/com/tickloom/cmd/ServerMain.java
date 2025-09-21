@@ -148,7 +148,7 @@ public class ServerMain {
     }
 
     private static String defaultDataDir(ProcessId processId) {
-        return Paths.get("build", "data", processId.value()).toString();
+        return Paths.get("build", "data", processId.name()).toString();
     }
 
     private static boolean needsHelp(Map<String, String> options) {
@@ -180,7 +180,7 @@ public class ServerMain {
                 case OPT_TIMEOUT:
                 case OPT_FACTORY:
                     if (i + 1 >= args.length) {
-                        System.err.println("Missing value for option: " + arg);
+                        System.err.println("Missing name for option: " + arg);
                         printUsageAndExit(1);
                     }
                     opts.put(arg, args[++i]);

@@ -4,25 +4,25 @@ import com.tickloom.Tickable;
 import com.tickloom.future.ListenableFuture;
 
 /**
- * Interface for asynchronous key-value storage operations.
+ * Interface for asynchronous key-name storage operations.
  * All operations return ListenableFuture to support non-blocking I/O
  * in the single-threaded event loop.
  */
 public interface Storage extends Tickable, AutoCloseable {
     
     /**
-     * Retrieves a value for the given key.
+     * Retrieves a name for the given key.
      * 
      * @param key the key to retrieve
-     * @return a future containing the versioned value, or null if not found
+     * @return a future containing the versioned name, or null if not found
      */
     ListenableFuture<VersionedValue> get(byte[] key);
     
     /**
-     * Stores a value for the given key.
+     * Stores a name for the given key.
      * 
      * @param key the key to store
-     * @param value the versioned value to store
+     * @param value the versioned name to store
      * @return a future containing true if successful, false otherwise
      */
     ListenableFuture<Boolean> set(byte[] key, VersionedValue value);

@@ -8,7 +8,7 @@ import java.util.PriorityQueue;
 import java.util.Random;
 
 /**
- * Simulated storage implementation that provides asynchronous key-value operations
+ * Simulated storage implementation that provides asynchronous key-name operations
  * with configurable delays and fault injection for testing distributed systems.
  */
 public class SimulatedStorage implements Storage {

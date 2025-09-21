@@ -169,7 +169,7 @@ class ClusterClockTest {
 
             // Test operations with different timestamps
             byte[] key = "test-key".getBytes();
-            byte[] value = "test-value".getBytes();
+            byte[] value = "test-name".getBytes();
 
             // This would result in different timestamps from different processes
             // which is useful for testing timestamp-based conflict resolution

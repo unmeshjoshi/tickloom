@@ -4,7 +4,7 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * Client request to set a value for a specific key.
+ * Client request to set a name for a specific key.
  */
 public record SetRequest(byte[] key, byte[] value) {
     public SetRequest {

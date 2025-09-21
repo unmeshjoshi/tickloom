@@ -22,26 +22,39 @@ public class QuorumSimulationRunner extends SimulationRunner {
     protected ListenableFuture issueRequest(ClusterClient client, Random clusterSeededRandom) {
         String key = randomKey();
         String value = randomValue();
-
         // Pick operation.
         boolean doSet = clusterSeededRandom.nextBoolean();
         ListenableFuture opFuture = null;
         if (doSet) {
 
             QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;
+            System.out.println("Issuing request for key = " + key + " value = " + value + " from client " + quorumReplicaClient.id.name() + ": " + quorumReplicaClient.id.id());
+
             ListenableFuture<SetResponse> setFuture = quorumReplicaClient.set(key.getBytes(), value.getBytes());//clients.get(0)
-            recordInvocation(quorumReplicaClient.id, Op.WRITE, key.getBytes(), value.getBytes());
-            opFuture = recordResponse(setFuture, Op.WRITE, key.getBytes(), value.getBytes(),
-                    (setResponse) -> value.getBytes(), quorumReplicaClient.id);
+            recordInvocation(quorumReplicaClient.id, Op.WRITE, key, value);
+            opFuture = recordResponse(setFuture, Op.WRITE, key, value,
+                    (setResponse) -> value, quorumReplicaClient.id);
 
 
         } else {
             QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;
+            System.out.println("Issuing request for key = " + key  + " from client " + quorumReplicaClient.id.name() + ": " + quorumReplicaClient.id.id());
             ListenableFuture<GetResponse> getFuture = quorumReplicaClient.get(key.getBytes());//clients.get(0)
-            recordReadInvocation(quorumReplicaClient.id, Op.READ, key.getBytes());
+            recordReadInvocation(quorumReplicaClient.id, Op.READ, key);
             opFuture = recordReadResponse(
-                    getFuture, Op.READ, key.getBytes(),
-                    (getResponse) -> getResponse.value(), quorumReplicaClient.id);
+                    getFuture, Op.READ, key,
+                    (getResponse) -> {
+                        try {
+                            System.out.println("Received response for key = " + key + " value = " + getResponse);
+                            byte[] responseValue = getResponse.value();
+                            return (responseValue != null) ?
+                                    new String(responseValue) : null; //TODO: Need to fix null handling
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            return null;
+                        }
+                    }
+            , quorumReplicaClient.id);
         }
 
         return opFuture;

@@ -2,7 +2,6 @@ package com.tickloom;
 
 import com.tickloom.algorithms.replication.quorum.QuorumSimulationRunner;
 import com.tickloom.history.History;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

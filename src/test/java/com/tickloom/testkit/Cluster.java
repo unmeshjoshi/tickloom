@@ -365,7 +365,7 @@ public class Cluster implements Tickable, AutoCloseable {
     }
 
     /**
-     * Retrieves a value from storage on a specific process for testing.
+     * Retrieves a name from storage on a specific process for testing.
      * This method handles the asynchronous nature of storage operations.
      * 
      * @param processId the ID of the process
@@ -555,7 +555,7 @@ public class Cluster implements Tickable, AutoCloseable {
         var basePort = 8000;
         Map<ProcessId, ProcessConfig> endpoints = new HashMap<>();
         for (int i = 0; i < processIds.size(); i++) {
-            ProcessConfig config = new ProcessConfig(processIds.get(i).value(), "127.0.0.1", basePort + i);
+            ProcessConfig config = new ProcessConfig(processIds.get(i).name(), "127.0.0.1", basePort + i);
             endpoints.put(processIds.get(i), config);
         }
 
