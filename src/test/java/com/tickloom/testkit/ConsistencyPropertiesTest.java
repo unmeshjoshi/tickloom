@@ -73,8 +73,8 @@ public class ConsistencyPropertiesTest {
 
             String edn = history.toEdn();
             System.out.println("edn = " + edn);
-            assertFalse(Jepsen.checkIndependent(edn, "linearizable", "register"));
-            assertTrue(Jepsen.checkIndependent(edn, "sequential", "register"));
+            assertFalse(Jepsen.check(edn, "linearizable", "register"));
+            assertTrue(Jepsen.check(edn, "sequential", "register"));
         }
     }
 

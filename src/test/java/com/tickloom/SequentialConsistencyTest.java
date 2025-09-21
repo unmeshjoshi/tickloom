@@ -29,10 +29,10 @@ public class SequentialConsistencyTest {
     @Test
     void shouldBeNonSequentialForImpossibleRead() {
         String edn = "["
-                + "{:type :invoke, :f :write, :process 0, :time 0,  :index 0, :name \"v0\"},"
-                + "{:type :ok,     :f :write, :process 0, :time 10, :index 1, :name \"v0\"},"
-                + "{:type :invoke, :f :read,  :process 1, :time 20, :index 2, :name nil},"
-                + "{:type :ok,     :f :read,  :process 1, :time 30, :index 3, :name \"v1\"}"
+                + "{:type :invoke, :f :write, :process 0, :time 0,  :index 0, :value \"v0\"},"
+                + "{:type :ok,     :f :write, :process 0, :time 10, :index 1, :value \"v0\"},"
+                + "{:type :invoke, :f :read,  :process 1, :time 20, :index 2, :value nil},"
+                + "{:type :ok,     :f :read,  :process 1, :time 30, :index 3, :value \"v1\"}"
                 + "]";
 
         boolean seq = Jepsen.check(edn, "sequential", "register");
