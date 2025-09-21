@@ -31,7 +31,7 @@ public class JepsenTest {
 
         String edn = h.toEdn();
         System.out.println("edn = " + edn);
-        boolean ok = Jepsen.check(edn, "linearizable", "register");
+        boolean ok = Jepsen.checkIndependent(edn, "linearizable", "register");
         assertTrue(ok, "Expected history to be linearizable");
     }
 
@@ -123,10 +123,10 @@ public class JepsenTest {
     @Test
     void shouldBeValidForUnorderedQueueEnqueueDequeue() {
         String edn = "["
-                + "{:type :invoke, :f :enqueue, :process 0, :time 0, :index 0, :name \"a\"},"
-                + "{:type :ok,     :f :enqueue, :process 0, :time 1, :index 1, :name \"a\"},"
-                + "{:type :invoke, :f :dequeue, :process 1, :time 2, :index 2, :name nil},"
-                + "{:type :ok,     :f :dequeue, :process 1, :time 3, :index 3, :name \"a\"}"
+                + "{:type :invoke, :f :enqueue, :process 0, :time 0, :index 0, :value \"a\"},"
+                + "{:type :ok,     :f :enqueue, :process 0, :time 1, :index 1, :value \"a\"},"
+                + "{:type :invoke, :f :dequeue, :process 1, :time 2, :index 2, :value nil},"
+                + "{:type :ok,     :f :dequeue, :process 1, :time 3, :index 3, :value \"a\"}"
                 + "]";
         boolean ok = Jepsen.check(edn, "linearizable", "unordered-queue");
         assertTrue(ok);
@@ -134,12 +134,13 @@ public class JepsenTest {
 
     @Test
     void shouldBeValidForSetAddThenRead() {
-        String edn = "["
-                + "{:type :invoke, :f :add,  :process 0, :time 0, :index 0, :name \"e1\"},"
-                + "{:type :ok,     :f :add,  :process 0, :time 1, :index 1, :name \"e1\"},"
-                + "{:type :invoke, :f :read, :process 1, :time 2, :index 2, :name nil},"
-                + "{:type :ok,     :f :read, :process 1, :time 3, :index 3, :name #{\"e1\"}}"
-                + "]";
+        String edn =    "["
+                        + "{:type :invoke, :f :add,  :process 0, :time 0, :index 0, :value 1},"
+                        + "{:type :ok,     :f :add,  :process 0, :time 1, :index 1, :value 1},"
+                        + "{:type :invoke, :f :read, :process 1, :time 2, :index 2, :value nil},"
+                        + "{:type :ok,     :f :read, :process 1, :time 3, :index 3, :value #{1}}"
+                        + "]";
+
         boolean ok = Jepsen.check(edn, "linearizable", "set");
         assertTrue(ok);
     }
@@ -165,10 +166,10 @@ public class JepsenTest {
     @Test
     void shouldBeInvalidForKvIndependentWhenWrongValueOnOneKey() {
         String edn = "["
-                + "{:type :invoke, :f :write, :process 0, :time 0, :index 0, :name [\"k1\" \"v1\"]},"
-                + "{:type :ok,     :f :write, :process 0, :time 1, :index 1, :name [\"k1\" \"v1\"]},"
-                + "{:type :invoke, :f :read,  :process 1, :time 2, :index 2, :name [\"k1\" nil]},"
-                + "{:type :ok,     :f :read,  :process 1, :time 3, :index 3, :name [\"k1\" \"WRONG\"]}"
+                + "{:type :invoke, :f :write, :process 0, :time 0, :index 0, :value [\"k1\" \"v1\"]},"
+                + "{:type :ok,     :f :write, :process 0, :time 1, :index 1, :value [\"k1\" \"v1\"]},"
+                + "{:type :invoke, :f :read,  :process 1, :time 2, :index 2, :value [\"k1\" nil]},"
+                + "{:type :ok,     :f :read,  :process 1, :time 3, :index 3, :value [\"k1\" \"WRONG\"]}"
                 + "]";
         boolean ok = Jepsen.checkIndependent(edn, "linearizable", "register");
         assertFalse(ok);

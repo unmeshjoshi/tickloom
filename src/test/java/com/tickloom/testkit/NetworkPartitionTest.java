@@ -1,10 +1,12 @@
 package com.tickloom.testkit;
 
+import clojure.lang.IPersistentVector;
 import com.tickloom.ProcessId;
 import com.tickloom.Jepsen;
 import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
 import com.tickloom.history.History;
+import com.tickloom.history.JepsenHistory;
 import com.tickloom.history.Op;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -143,20 +145,20 @@ public class NetworkPartitionTest {
             var minorityClient = cluster.newClientConnectedTo(MINORITY_CLIENT, ATHENS, QuorumReplicaClient::new);
             var majorityClient = cluster.newClientConnectedTo(MAJORITY_CLIENT, CYRENE, QuorumReplicaClient::new);
 
-            byte[] key = "distributed_ledger".getBytes();
-            byte[] initialValue = "genesis_block".getBytes();
-            byte[] minorityValue = "minority_attempt".getBytes();
-            byte[] majorityValue = "majority_success".getBytes();
+            String key = "distributed_ledger";
+            String initialValue = "genesis_block";
+            String minorityValue = "minority_attempt";
+            String majorityValue = "majority_success";
 
             // Step 0: start recording a client-observed history for Jepsen analysis
-            History history = new History();
+            History<String, String> history = new History<>();
 
             // Step 1: majority-side write of initialValue; cluster converges on v0
-            history.invoke(ProcessId.of("majority_client"), Op.WRITE, key, initialValue);
-            var initialSet = majorityClient.set(key, initialValue);
+            history.invoke(ProcessId.of("majority_client"), Op.WRITE, new String(key), initialValue);
+            var initialSet = majorityClient.set(key.getBytes(), initialValue.getBytes());
             assertEventually(cluster, initialSet::isCompleted);
             assertTrue(initialSet.getResult().success(), "Initial write should succeed");
-            assertAllNodeStoragesContainValue(cluster, key, initialValue);
+            assertAllNodeStoragesContainValue(cluster, key.getBytes(), initialValue.getBytes());
             history.ok(ProcessId.of("majority_client"), Op.WRITE, key, initialValue);
 
             // Step 2: partition cluster into minority (2) and majority (3)
@@ -164,17 +166,17 @@ public class NetworkPartitionTest {
 
             // Step 3: minority write times out at client but persists locally in its partition
             history.invoke(ProcessId.of("minority_client"), Op.WRITE, key, minorityValue);
-            var minorityWrite = minorityClient.set(key, minorityValue);
+            var minorityWrite = minorityClient.set(key.getBytes(), minorityValue.getBytes());
             assertEventually(cluster, minorityWrite::isFailed);
-            assertNodesContainValue(cluster, List.of(ATHENS, BYZANTIUM), key, minorityValue);
-            history.timeout(ProcessId.of("minority_client"), Op.WRITE, key, minorityValue);
+            assertNodesContainValue(cluster, List.of(ATHENS, BYZANTIUM), key.getBytes(), minorityValue.getBytes());
+            history.fail(ProcessId.of("minority_client"), Op.WRITE, key, minorityValue);
 
             // Step 4: skew majority clock behind minority; majority write now has lower timestamp
-            var athensTs = cluster.getStorageValue(ATHENS, key).timestamp();
+            var athensTs = cluster.getStorageValue(ATHENS, key.getBytes()).timestamp();
             cluster.setTimeForProcess(CYRENE, athensTs - SKEW_TICKS);
 
             history.invoke(ProcessId.of("majority_client"), Op.WRITE, key, majorityValue);
-            var majorityWrite = majorityClient.set(key, majorityValue);
+            var majorityWrite = majorityClient.set(key.getBytes(), majorityValue.getBytes());
             assertEventually(cluster, () -> majorityWrite.isCompleted() && majorityWrite.getResult().success());
             history.ok(ProcessId.of("majority_client"), Op.WRITE, key, majorityValue);
 
@@ -182,22 +184,23 @@ public class NetworkPartitionTest {
             cluster.healAllPartitions();
 
             history.invoke(ProcessId.of("minority_client"), Op.READ, key, null);
-            var healedRead = minorityClient.get(key);
+            var healedRead = minorityClient.get(key.getBytes());
             assertEventually(cluster, healedRead::isCompleted);
             assertTrue(healedRead.getResult().found(), "Data should be retrievable after healing");
-            assertArrayEquals(minorityValue, healedRead.getResult().value(),
+            assertArrayEquals(minorityValue.getBytes(), healedRead.getResult().value(),
                     "Minority name (higher timestamp) should win after heal with clock skew");
-            history.ok(ProcessId.of("minority_client"), Op.READ, key, healedRead.getResult().value());
+            history.ok(ProcessId.of("minority_client"), Op.READ, key, new String(healedRead.getResult().value()));
 
             // Step 6: prove not linearizable (real-time precedence) and not sequential (no serial order preserves results)
             // - Linearizability fails: after healing, the read observes the minority name written in a different
             //   partition while a successful majority write also occurred. There is no placement respecting real-time precedence.
             // - Sequential consistency fails: even ignoring real-time order, no single serial order yields the observed read.
             String edn = history.toEdn();
-            boolean linearizable = Jepsen.checkIndependent(edn, "linearizable", "register");
+            System.out.println("edn = " + edn);
+            boolean linearizable = Jepsen.check(edn, "linearizable", "register");
             assertFalse(linearizable, "History should be non-linearizable: failed write took effect");
 
-            boolean okSeq = Jepsen.checkIndependent(edn, "sequential", "register");
+            boolean okSeq = Jepsen.check(edn, "sequential", "register");
             assertTrue(okSeq);
         }
     }

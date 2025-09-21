@@ -289,9 +289,10 @@
 
 (defn checker
   [model]
+  (let [outer-check #'com.tickloom.checkers.sequential/check]
   (reify checker/Checker
     (check [this test history opts]
       (let [history-edn (edn/read-string history)]
-        (check history model opts))
+        (outer-check (history-edn model opts))
       ))
-  )
+  )))

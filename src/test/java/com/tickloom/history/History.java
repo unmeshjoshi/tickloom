@@ -2,21 +2,23 @@ package com.tickloom.history;
 
 import com.tickloom.ProcessId;
 
-import java.util.*;
-import java.util.concurrent.atomic.AtomicLong;
-
 //Model - Client - Workload
 //a client can provide callback that the generic clusterclient can call to get history event.
 //invokeEvent   responseEvent failureEvent..
 
 
 @Deprecated
-//Wrapper class for History.
+//Wrapper class for History.n
 //The new implementation is JepsenHistory
 //we will step by step replace this class.
 public class History<K, V> {
     //Make jepsen history parameterised. For KV store, we can have value as JepsenHistory.tuple.
     JepsenHistory jepsenHistory = new JepsenHistory();
+
+    public Long getProcessIndex(ProcessId processId) {
+        return jepsenHistory.getProcessIndex(processId);
+    }
+
     public void invoke(ProcessId processId, Op op, K key, V value) {
         jepsenHistory.invoke(processId, op, value);
     }

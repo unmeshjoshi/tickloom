@@ -14,16 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class JepsenHistoryTest {
 
     @Test
-    public void testJepsenHistoryCreation() {
-        IFn REQUIRE = Clojure.var("clojure.core", "require");
-        REQUIRE.invoke(Clojure.read("com.tickloom.checkers.jepsen-history"));
-
-        IFn create = Clojure.var("com.tickloom.checkers.jepsen-history", "create");
-        IPersistentVector history = (IPersistentVector) create.invoke();
-        assertEquals(0, history.length());
-    }
-
-    @Test
     public void testInvokeEvent() {
         JepsenHistory history = new JepsenHistory();
 

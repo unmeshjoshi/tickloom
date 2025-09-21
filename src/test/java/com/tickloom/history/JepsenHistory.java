@@ -8,7 +8,9 @@ import clojure.lang.PersistentVector;
 import com.tickloom.ProcessId;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 //Wrapper
 public class JepsenHistory {
@@ -30,7 +32,8 @@ public class JepsenHistory {
         return PersistentVector.create(vals);
     }
 
-
+    Map<ProcessId, Long> processIdMap = new HashMap<>();
+    long processIdCounter = 0;
 
     public JepsenHistory() {
         loadNamespaces(Arrays.asList("com.tickloom.checkers.jepsen-history",
@@ -47,9 +50,14 @@ public class JepsenHistory {
 
     }
 
+    public Long getProcessIndex(ProcessId processId) {
+        return processIdMap.computeIfAbsent(processId, p -> processIdCounter++);
+    }
+
     public JepsenHistory invoke(ProcessId processId, Op op, Object value) {
         //make history final and provide update method to keep JepsenHistory class immutable.
-        history = (IPersistentVector) invoke.invoke(history, processId.id(), processId.name(), createKeyword(op.name()), value);
+        
+        history = (IPersistentVector) invoke.invoke(history, getProcessIndex(processId), processId.name(), createKeyword(op.name()), value);
         return this;
     }
 
@@ -65,24 +73,27 @@ public class JepsenHistory {
 
     public boolean matches(String ednString) {
         IPersistentVector expectedHistory = toEdn(ednString);
+        System.out.println("expectedHistory = " + expectedHistory);
+        System.out.println("history = " + history);
+        System.out.println("history.equals(expectedHistory) = " + history.equals(expectedHistory));
         return history.equals(expectedHistory);
     }
 
     public JepsenHistory ok(ProcessId processId, Op op, Object value) {
         //make history final and provide update method to keep JepsenHistory class immutable.
-        history = (IPersistentVector) ok.invoke(history, processId.id(), processId.name(), createKeyword(op.name()), value);
+        history = (IPersistentVector) ok.invoke(history, getProcessIndex(processId), processId.name(), createKeyword(op.name()), value);
         return this;
     }
 
     public JepsenHistory fail(ProcessId processId, Op op, Object value) {
         //make history final and provide update method to keep JepsenHistory class immutable.
-        history = (IPersistentVector) fail.invoke(history, processId.id(),  processId.name(), createKeyword(op.name()), value);
+        history = (IPersistentVector) fail.invoke(history, getProcessIndex(processId),  processId.name(), createKeyword(op.name()), value);
         return this;
     }
 
     public JepsenHistory info(ProcessId processId, Op op, Object value) {
         //make history final and provide update method to keep JepsenHistory class immutable.
-        history = (IPersistentVector) info.invoke(history, processId.id(),  processId.name(), createKeyword(op.name()), value);
+        history = (IPersistentVector) info.invoke(history, getProcessIndex(processId),  processId.name(), createKeyword(op.name()), value);
         return this;
     }
 

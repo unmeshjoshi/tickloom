@@ -17,6 +17,9 @@
                 "register"     (model/register)
                 "cas-register" (model/cas-register)
                 "set"          (model/set)
+                "mutex"        (model/mutex)
+                "unordered-queue" (model/unordered-queue)
+                "fifo-queue"  (model/fifo-queue)
                 })
 (defn get-checker [mode model]
   (let [m (get model-map model)]
@@ -28,12 +31,19 @@
          :timeline     (timeline/html)})
 
       (= mode "sequential")
-      (checker/compose
-        {:sequential (seq/checker "register")
-         :timeline   (timeline/html)})
+      (seq/checker "register")
 
       :else
       (throw (ex-info "Unknown checker mode" {:mode mode})))))
+
+(defn get-history
+  [history-edn mode independent]
+  (if (= mode "linearizable")
+    (h/history (if independent (value-tuple (edn/read-string history-edn)) (edn/read-string history-edn)))
+    ;FIXME: For our custom sequential checker, we need to directly pass the history-edn
+    ;We can write custom checker to encapsulate these details for both the linearizable and sequential checkers
+    history-edn
+  ))
 
 (defn analyze
   "Generic entry point.
@@ -44,11 +54,9 @@
      :opts-edn     - optional EDN map string for kc/analysis, e.g. {:time-limit 60000}
 
    Returns a map {:valid? boolean, :result <full-analysis-map>}."
-  ;Add 'mode' to specify whether sequential consistency or linearizability check is needed.
-  ;As of now doing only linearizability check for the given model.
   [{:keys [history-edn mode model opts-edn independent]
     :or   {opts-edn "{:time-limit 60000}" model "register" mode "linearizable" independent false}}]
-  (let [history (h/history (value-tuple (edn/read-string history-edn)))
+  (let [history (get-history history-edn mode independent)
         opts (edn/read-string opts-edn)
         c (get-checker mode model)
         checker (if independent

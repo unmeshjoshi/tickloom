@@ -12,15 +12,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * It is just a string but conveniences exist for creating random UUID-backed IDs.
  * Uniqueness is guaranteed by an internal UUID.
  */
-public record ProcessId(String name, Long id) {
-    static Map<String, ProcessId> processIdMap = new ConcurrentHashMap<>();
-
-    private static final AtomicLong counter = new AtomicLong(0);
-
-    private ProcessId(String name) {
-        this(name, counter.getAndIncrement());
-    }
-
+public record ProcessId(String name) {
     /**
      * Returns this ID as a human-readable name (alias for {@link #name()}).
      */
@@ -39,7 +31,7 @@ public record ProcessId(String name, Long id) {
      * Convenience factory to wrap an arbitrary string.
      */
     public static ProcessId of(String name) {
-        return processIdMap.computeIfAbsent(name, ProcessId::new);
+        return new ProcessId(name);
     }
 
     @Override
