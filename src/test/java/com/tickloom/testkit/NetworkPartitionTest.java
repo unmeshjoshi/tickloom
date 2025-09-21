@@ -92,15 +92,15 @@ public class NetworkPartitionTest {
 
             var clientWriter = cluster.newClientConnectedTo(ProcessId.of("client1"), CYRENE, QuorumReplicaClient::new);
 
-            byte[] key = "kv".getBytes();
-            byte[] v0  = "v0".getBytes();
-            byte[] v1  = "v1".getBytes();
+            String key = "kv";
+            String v0  = "v0";
+            String v1  = "v1";
 
-            History history = new History();
+            History<String, String> history = new History();
 
             // Step 1: initialize name via quorum so all nodes converge to v0
             history.invoke(ProcessId.of("client1"), Op.WRITE, key, v0);
-            var init = clientWriter.set(key, v0);
+            var init = clientWriter.set(key.getBytes(), v0.getBytes());
             assertEventually(cluster, init::isCompleted);
             assertTrue(init.getResult().success());
             history.ok(ProcessId.of("client1"), Op.WRITE, key, v0);
@@ -112,22 +112,22 @@ public class NetworkPartitionTest {
 
             // Step 3: quorum write v1 on writer side
             history.invoke(ProcessId.of("client1"), Op.WRITE, key, v1);
-            var w1 = clientWriter.set(key, v1);
+            var w1 = clientWriter.set(key.getBytes(), v1.getBytes());
             assertEventually(cluster, () -> w1.isCompleted() && w1.getResult().success());
             history.ok(ProcessId.of("client1"), Op.WRITE, key, v1);
 
             // Step 4: different client performs local read on ATHENS (single-node read), sees stale v0
             history.invoke(ProcessId.of("client2"), Op.READ, key, null);
-            var vv = cluster.getStorageValue(ATHENS, key);
+            var vv = cluster.getStorageValue(ATHENS, key.getBytes());
             assertNotNull(vv);
-            assertArrayEquals(v0, vv.value());
-            history.ok(ProcessId.of("client2"), Op.READ, key, vv.value());
+            assertArrayEquals(v0.getBytes(), vv.value());
+            history.ok(ProcessId.of("client2"), Op.READ, key, new String(vv.value()));
 
             // Step 5: analyze: linearizable should fail; sequential should pass (different client)
             String edn = history.toEdn();
             System.out.println("edn = " + edn);
             boolean lin = Jepsen.check(edn, "linearizable", "register");
-            boolean seq = Jepsen.checkRegisterSequential(edn);
+            boolean seq = Jepsen.check(edn, "sequential", "register");
             assertFalse(lin, "Stale read after successful write should not be linearizable");
             assertTrue(seq, "Across clients, stale read can be sequential by reordering");
         }
@@ -201,7 +201,7 @@ public class NetworkPartitionTest {
             assertFalse(linearizable, "History should be non-linearizable: failed write took effect");
 
             boolean okSeq = Jepsen.check(edn, "sequential", "register");
-            assertTrue(okSeq);
+            assertFalse(okSeq);
         }
     }
 
@@ -315,7 +315,7 @@ public class NetworkPartitionTest {
 //                    + "{:type :ok,     :f :read,  :process 1, :time 21, :index 5, :name [\"k\" \"v1\"]}"
 //                    + "]";
             boolean lin = Jepsen.check(synthetic, "linearizable", "register");
-            boolean seq = Jepsen.checkRegisterSequential(synthetic);
+            boolean seq = Jepsen.check(synthetic, "sequential", "register");
             assertFalse(lin, "Synthetic stale read after own write should not be linearizable");
             assertFalse(seq, "Synthetic stale read after own write should not be sequential");
         }

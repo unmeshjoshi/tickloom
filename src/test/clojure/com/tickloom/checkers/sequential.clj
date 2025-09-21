@@ -293,6 +293,6 @@
   (reify checker/Checker
     (check [this test history opts]
       (let [history-edn (edn/read-string history)]
-        (outer-check (history-edn model opts))
+        (outer-check history-edn model opts)
       ))
   )))

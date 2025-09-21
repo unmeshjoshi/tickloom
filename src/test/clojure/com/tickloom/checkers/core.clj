@@ -16,7 +16,10 @@
 (defn parse-history
   "Parse EDN string to Clojure data structure"
   [history-edn]
-  (edn/read-string history-edn))
+  (cond
+    (string? history-edn)                 (edn/read-string history-edn)     ; or (core/parse-history x)
+    :else                       history-edn))                     ; already EDN data
+
 
 (defn detect-model
   "Auto-detect model type based on history format

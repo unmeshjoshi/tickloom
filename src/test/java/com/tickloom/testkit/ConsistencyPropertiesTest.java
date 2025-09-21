@@ -35,22 +35,22 @@ public class ConsistencyPropertiesTest {
 
             var clientWriter = cluster.newClientConnectedTo(ProcessId.of("client1"), CYRENE, QuorumReplicaClient::new);
 
-            byte[] key = "kv".getBytes();
-            byte[] v0  = "v0".getBytes();
-            byte[] v1  = "v1".getBytes();
+            String key = "kv";
+            String v0  = "v0";
+            String v1  = "v1";
 
-            History history = new History();
+            History<String, String> history = new History();
 
             // Initialize to v0 under full connectivity
             history.invoke(ProcessId.of("client1"), Op.WRITE, key, v0);
-            var init = clientWriter.set(key, v0);
+            var init = clientWriter.set(key.getBytes(), v0.getBytes());
             assertEventually(cluster, init::isCompleted);
             assertTrue(init.getResult().success());
             history.ok(ProcessId.of("client1"), Op.WRITE, key, v0);
 
             assertEventually(cluster, () -> {
-                var v = cluster.getStorageValue(ATHENS, key);
-                return v != null && java.util.Arrays.equals(v.value(), v0);
+                var v = cluster.getStorageValue(ATHENS, key.getBytes());
+                return v != null && java.util.Arrays.equals(v.value(), v0.getBytes());
             });
             // Partition to isolate ATHENS from writer majority
             var writerSide = NodeGroup.of(CYRENE, DELPHI, SPARTA);
@@ -59,22 +59,22 @@ public class ConsistencyPropertiesTest {
 
             // Quorum write v1 on writer side
             history.invoke(ProcessId.of("client1"), Op.WRITE, key, v1);
-            var w1 = clientWriter.set(key, v1);
+            var w1 = clientWriter.set(key.getBytes(), v1.getBytes());
             assertEventually(cluster, () -> w1.isCompleted() && w1.getResult().success());
             assertTrue(w1.getResult().success());
             history.ok(ProcessId.of("client1"), Op.WRITE, key, v1);
 
             // Local read from ATHENS (read-one), returns stale v0
             history.invoke(ProcessId.of("client2"), Op.READ, key, null);
-            var vv = cluster.getStorageValue(ATHENS, key);
+            var vv = cluster.getStorageValue(ATHENS, key.getBytes());
             assertNotNull(vv);
-            assertArrayEquals(v0, vv.value());
-            history.ok(ProcessId.of("client2"), Op.READ, key, vv.value());
+            assertArrayEquals(v0.getBytes(), vv.value());
+            history.ok(ProcessId.of("client2"), Op.READ, key, new String(vv.value()));
 
             String edn = history.toEdn();
             System.out.println("edn = " + edn);
-            assertFalse(Jepsen.checkIndependent(edn, "linearizable", null));
-            assertTrue(Jepsen.checkRegisterSequential(edn));
+            assertFalse(Jepsen.checkIndependent(edn, "linearizable", "register"));
+            assertTrue(Jepsen.checkIndependent(edn, "sequential", "register"));
         }
     }
 
@@ -89,15 +89,15 @@ public class ConsistencyPropertiesTest {
 
             var client = cluster.newClientConnectedTo(ProcessId.of("clientX"), CYRENE, QuorumReplicaClient::new);
 
-            byte[] key = "kv".getBytes();
-            byte[] v0  = "v0".getBytes();
-            byte[] v1  = "v1".getBytes();
+            String key = "kv";
+            String v0  = "v0";
+            String v1  = "v1";
 
-            History history = new History();
+            History<String, String> history = new History();
 
             // Initialize v0
             history.invoke(ProcessId.of("clientX"), Op.WRITE, key, v0);
-            var init = client.set(key, v0);
+            var init = client.set(key.getBytes(), v0.getBytes());
             assertEventually(cluster, init::isCompleted);
             assertTrue(init.getResult().success());
             history.ok(ProcessId.of("clientX"), Op.WRITE, key, v0);
@@ -109,21 +109,21 @@ public class ConsistencyPropertiesTest {
 
             // Same client quorum write v1
             history.invoke(ProcessId.of("clientX"), Op.WRITE, key, v1);
-            var w1 = client.set(key, v1);
+            var w1 = client.set(key.getBytes(), v1.getBytes());
             assertEventually(cluster, () -> w1.isCompleted() && w1.getResult().success());
             assertTrue(w1.getResult().success());
             history.ok(ProcessId.of("clientX"), Op.WRITE, key, v1);
 
             // Same client performs local read from ATHENS (read-one) -> stale v0
             history.invoke(ProcessId.of("clientX"), Op.READ, key, null);
-            var vv = cluster.getStorageValue(ATHENS, key);
+            var vv = cluster.getStorageValue(ATHENS, key.getBytes());
             assertNotNull(vv);
-            assertArrayEquals(v0, vv.value());
-            history.ok(ProcessId.of("clientX"), Op.READ, key, vv.value());
+            assertArrayEquals(v0.getBytes(), vv.value());
+            history.ok(ProcessId.of("clientX"), Op.READ, key, new String(vv.value()));
 
             String edn = history.toEdn();
             assertFalse(Jepsen.check(edn, "linearizable", "register"));
-            assertFalse(Jepsen.checkIndependent(edn, "sequential", null));
+            assertFalse(Jepsen.check(edn, "sequential", "register"));
         }
     }
 }

@@ -38,8 +38,4 @@ public class Jepsen {
     static void shutdownAgents() {
         SHUTDOWN_AGENTS.invoke();
     }
-
-    public static boolean checkRegisterSequential(String edn) {
-      return false;
-    }
 }

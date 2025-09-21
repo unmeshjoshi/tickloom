@@ -18,7 +18,7 @@ class SimulationRunnerTest {
         SimulationRunner runner2 = new QuorumSimulationRunner(seed);
         History history1 = runner.runAndGetHistory(1000);
         History history2 = runner2.runAndGetHistory(1000);
-        assertEquals(history1, history2);
+        assertEquals(history1.toEdn(), history2.toEdn());
     }
 
     @Test
@@ -27,7 +27,7 @@ class SimulationRunnerTest {
         SimulationRunner runner2 = new QuorumSimulationRunner(456L);
         History history1 = runner.runAndGetHistory(1000);
         History history2 = runner2.runAndGetHistory(1000);
-        assertNotEquals(history1, history2);
+        assertNotEquals(history1.toEdn(), history2.toEdn());
     }
 
     @Test
@@ -36,7 +36,7 @@ class SimulationRunnerTest {
         SimulationRunner runner2 = new QuorumSimulationRunner(123L);
         History history1 = runner.runAndGetHistory(1000);
         History history2 = runner2.runAndGetHistory(2000);
-        assertNotEquals(history1, history2);
+        assertNotEquals(history1.toEdn(), history2.toEdn());
     }
 
     @Test
@@ -45,7 +45,7 @@ class SimulationRunnerTest {
         SimulationRunner runner2 = new QuorumSimulationRunner(123L, 3, 3);
         History history1 = runner.runAndGetHistory(1000);
         History history2 = runner2.runAndGetHistory(1000);
-        assertNotEquals(history1, history2);
+        assertNotEquals(history1.toEdn(), history2.toEdn());
     }
 
     @Test
@@ -54,7 +54,7 @@ class SimulationRunnerTest {
         SimulationRunner runner2 = new QuorumSimulationRunner(123L, 3, 3);
         History history1 = runner.runAndGetHistory(1000);
         History history2 = runner2.runAndGetHistory(1000);
-        assertNotEquals(history1, history2);
+        assertNotEquals(history1.toEdn(), history2.toEdn());
     }
 
 }
