@@ -4,7 +4,7 @@ plugins {
     id 'com.github.johnrengelman.shadow' version '8.1.1'
     id 'maven-publish'
     id 'signing'
-    id 'com.vanniktech.maven.publish' version '0.30.0'
+    id 'com.vanniktech.maven.publish' version '0.34.0'
 }
 
 repositories {
@@ -178,9 +178,7 @@ task inspectData {
 
 // --- Publishing Configuration ---------------------------------------------
 
-// Project coordinates for Maven Central
-group = 'io.github.unmeshjoshi'
-version = '0.1.0-alpha.5'  // Incremented to avoid conflicts with existing published version
+// Project coordinates for Maven Central - using version declared at top of file
 
 // NOTE: Central Portal publishing for Gradle projects:
 // 1. Publish to OSSRH staging (below) - then promote via Central Portal UI
@@ -193,46 +191,42 @@ java {
     // withJavadocJar()
 }
 
-// Maven Central publishing with vanniktech plugin - properly configured
+// Vanniktech plugin v0.34.0 configuration - simplified API
 mavenPublishing {
-    publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL)
+    publishToMavenCentral()
     signAllPublications()
-    coordinates(project.group, project.name, project.version)
-    
     pom {
-        name.set('TickLoom')
-        description.set('A library for building distributed systems.')
-        url.set('https://github.com/unmeshjoshi/tickloom')
-        
+        name = 'TickLoom'
+        description = 'A distributed systems library implementing Raft consensus, quorum-based replication, and other distributed algorithms with comprehensive testing infrastructure'
+        url = 'https://github.com/unmeshjoshi/tickloom'
+
         licenses {
             license {
-                name.set('The Apache License, Version 2.0')
-                url.set('http://www.apache.org/licenses/LICENSE-2.0.txt')
+                name = 'The Apache License, Version 2.0'
+                url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
             }
         }
-        
+
         developers {
             developer {
-                id.set('unmeshjoshi')
-                name.set('Unmesh Joshi')
-                email.set('unmeshjoshi@gmail.com')
+                id = 'unmeshjoshi'
+                name = 'Unmesh Joshi'
+                email = 'unmeshjoshi@gmail.com'
             }
         }
-        
+
         scm {
-            connection.set('scm:git:git://github.com/unmeshjoshi/tickloom.git')
-            developerConnection.set('scm:git:ssh://github.com/unmeshjoshi/tickloom.git')
-            url.set('https://github.com/unmeshjoshi/tickloom')
+            connection = 'scm:git:git://github.com/unmeshjoshi/tickloom.git'
+            developerConnection = 'scm:git:ssh://github.com/unmeshjoshi/tickloom.git'
+            url = 'https://github.com/unmeshjoshi/tickloom'
         }
     }
 }
 
-// Configure credentials for vanniktech plugin
-project.ext["mavenCentralUsername"] = System.getenv("CENTRAL_USERNAME") ?: findProperty("mavenCentralUsername") ?: ""
-project.ext["mavenCentralPassword"] = System.getenv("CENTRAL_TOKEN") ?: findProperty("mavenCentralPassword") ?: ""
-project.ext["signing.keyId"] = findProperty("signing.keyId") ?: ""
-project.ext["signing.password"] = findProperty("signing.password") ?: findProperty("signingPassword") ?: ""
-project.ext["signing.secretKeyRingFile"] = findProperty("signing.secretKeyRingFile") ?: findProperty("signingKeyFile") ?: ""
+
+// Central Portal specific properties that might be required for the build service
+project.ext["centralPortalBaseUrl"] = "https://central.sonatype.com"
+project.ext["centralPortalPublishingType"] = "USER_MANAGED"
 
 // --- Testkit artifacts (packaged from src/test/java/com/tickloom/testkit/**) ---
 
@@ -388,129 +382,21 @@ publishing {
     }
 }
 
-// Signing configuration (vanniktech plugin will handle main library, we handle testkit)
+// Signing configuration - vanniktech plugin handles main library automatically
+// We only need to sign our custom testkit publication
 signing {
-    // Check for Gradle properties first (signingKeyFile + signingPassword)
-    def signingKeyFile = findProperty("signingKeyFile")
-    def signingPassword = findProperty("signingPassword")
+    def localSigningKeyFile = findProperty("signingKeyFile")
+    def localSigningPassword = findProperty("signingPassword")
     
-    if (signingKeyFile && signingPassword) {
-        // Use file-based signing from gradle.properties
-        def keyFile = file(signingKeyFile.toString())
+    if (localSigningKeyFile && localSigningPassword) {
+        def keyFile = file(localSigningKeyFile.toString())
         if (keyFile.exists()) {
             def signingKey = keyFile.getText('UTF-8')
-            useInMemoryPgpKeys(signingKey, signingPassword.toString())
-            sign publishing.publications
-            println "Using signing key from file: ${signingKeyFile}"
-        } else {
-            println "Signing key file not found: ${keyFile.absolutePath}"
+            useInMemoryPgpKeys(signingKey, localSigningPassword.toString())
+            // Only sign the testkit publication - vanniktech handles the main library
+            sign publishing.publications.mavenTestkit
+            println "Configured signing for testkit publication"
         }
-    } else {
-        // Fall back to environment variables
-        def envSigningKey = System.getenv("OSSRH_GPG_SECRET_KEY") ?: findProperty("signingKey")
-        def envSigningPassword = System.getenv("OSSRH_GPG_SECRET_KEY_PASSWORD") ?: findProperty("signingPassword")
-        def gpgKeyId = System.getenv('GPG_KEY_ID')
-        
-        if (envSigningKey && envSigningPassword) {
-            useInMemoryPgpKeys(envSigningKey.toString(), envSigningPassword.toString())
-            sign publishing.publications
-            println "Using in-memory PGP keys from environment"
-        } else if (gpgKeyId) {
-            useGpgCmd()
-            sign publishing.publications
-            println "Using GPG command-line signing with key: ${gpgKeyId}"
-        } else {
-            println "Signing disabled: No signing configuration found."
-            println "Expected: signingKeyFile + signingPassword in gradle.properties"
-        }
-    }
-}
-
-// --- Environment Variables Setup ---
-// The vanniktech plugin expects specific Gradle properties.
-// Map environment variables to the required Gradle properties
-
-// Set the required Gradle properties for the plugin
-def envUsername = System.getenv('CENTRAL_USERNAME') ?: findProperty('mavenCentralUsername')
-def envToken = System.getenv('CENTRAL_TOKEN') ?: findProperty('mavenCentralPassword')
-
-if (envUsername) {
-    project.ext.mavenCentralUsername = envUsername
-    println "✅ Central Portal credentials configured"
-} else {
-    println "❌ CENTRAL_USERNAME not found - set environment variable or use -PmavenCentralUsername"
-}
-
-if (envToken) {
-    project.ext.mavenCentralPassword = envToken
-} else {
-    println "❌ CENTRAL_TOKEN not found - set environment variable or use -PmavenCentralPassword"
-}
-
-// Environment Variables needed:
-// - CENTRAL_USERNAME = Your Central Portal username
-// - CENTRAL_TOKEN = Your Central Portal user token
-// - signingKeyFile = Path to GPG private key file (in gradle.properties)
-// - signingPassword = GPG key passphrase (in gradle.properties)
-//
-// Publishing commands:
-// - ./gradlew publishAllPublicationsToMavenCentralRepository (publish both)
-// - ./gradlew publishMavenPublicationToMavenCentralRepository (main library only)
-// - ./gradlew publishMavenTestkitPublicationToMavenCentralRepository (testkit only)
-//
-// ✅ SUCCESS: Both libraries published to Maven Central!
-// - Main library: io.github.unmeshjoshi:tickloom:0.1.0-alpha.5
-// - Testkit: io.github.unmeshjoshi:tickloom-testkit:0.1.0-alpha.5
-
-// Debug task to verify credentials are set
-tasks.register('checkPublishingCredentials') {
-    group = 'help'
-    description = 'Verify that publishing credentials are properly configured'
-    doLast {
-        def centralUser = System.getenv('CENTRAL_USERNAME')
-        def centralToken = System.getenv('CENTRAL_TOKEN')
-        def signingKeyFile = findProperty('signingKeyFile')
-        def gradleSigningPassword = findProperty('signingPassword')
-        def gpgKey = System.getenv('OSSRH_GPG_SECRET_KEY')
-        def gpgPassword = System.getenv('OSSRH_GPG_SECRET_KEY_PASSWORD')
-        def gpgKeyId = System.getenv('GPG_KEY_ID')
-        
-        println "\n=== Publishing Credentials Check ==="
-        println "CENTRAL_USERNAME: ${centralUser ? 'SET' : 'NOT SET'}"
-        println "CENTRAL_TOKEN: ${centralToken ? 'SET (' + centralToken.length() + ' chars)' : 'NOT SET'}"
-        println ""
-        println "=== GPG Signing Options ==="
-        println "Option 1 - Gradle Properties (PREFERRED):"
-        println "  signingKeyFile: ${signingKeyFile ? 'SET (' + signingKeyFile + ')' : 'NOT SET'}"
-        println "  signingPassword: ${gradleSigningPassword ? 'SET' : 'NOT SET'}"
-        if (signingKeyFile) {
-            def keyFile = file(signingKeyFile.toString())
-            println "  Key file exists: ${keyFile.exists()}"
-        }
-        println "Option 2 - Environment Variables:"
-        println "  OSSRH_GPG_SECRET_KEY: ${gpgKey ? 'SET' : 'NOT SET'}"
-        println "  OSSRH_GPG_SECRET_KEY_PASSWORD: ${gpgPassword ? 'SET' : 'NOT SET'}"
-        println "Option 3 - GPG Command Line:"
-        println "  GPG_KEY_ID: ${gpgKeyId ? 'SET (' + gpgKeyId + ')' : 'NOT SET'}"
-        
-        def hasCredentials = centralUser && centralToken
-        def hasGradleKeys = signingKeyFile && gradleSigningPassword && file(signingKeyFile.toString()).exists()
-        def hasEnvKeys = gpgKey && gpgPassword
-        def hasGpgCmd = gpgKeyId
-        
-        if (hasCredentials && (hasGradleKeys || hasEnvKeys || hasGpgCmd)) {
-            println "\n✅ Ready to publish!"
-            if (hasGradleKeys) println "   Using Gradle properties signing (preferred)"
-            else if (hasEnvKeys) println "   Using environment variable signing"
-            else if (hasGpgCmd) println "   Using GPG command-line signing"
-        } else {
-            println "\n❌ Missing configuration:"
-            if (!hasCredentials) println "   - Set CENTRAL_USERNAME and CENTRAL_TOKEN environment variables"
-            if (!hasGradleKeys && !hasEnvKeys && !hasGpgCmd) {
-                println "   - Configure signing in gradle.properties: signingKeyFile + signingPassword"
-            }
-        }
-        println "==================================\n"
     }
 }
 
