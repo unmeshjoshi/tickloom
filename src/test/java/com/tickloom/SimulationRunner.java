@@ -67,7 +67,7 @@ public abstract class SimulationRunner {
     }
 
     private static void shutdownClojureAgents() {
-        Jepsen.shutdownAgents();
+        ConsistencyChecker.shutdownAgents();
     }
 
     private void runClusterFor(long tickDuration) {
@@ -94,9 +94,9 @@ public abstract class SimulationRunner {
     }
 
     private void checkLinearizability() {
-        Jepsen jepsen = new Jepsen();
+        ConsistencyChecker consistencyChecker = new ConsistencyChecker();
         String edn = history.toEdn();
-        boolean isLinearizable = Jepsen.check(edn, "linearizable", "register");
+        boolean isLinearizable = ConsistencyChecker.check(edn, "linearizable", "register");
         System.out.println("The history is " + (isLinearizable ? "linearizable" : "not linearizable") + " = " + isLinearizable);
     }
 

@@ -1,12 +1,10 @@
 package com.tickloom.testkit;
 
-import clojure.lang.IPersistentVector;
+import com.tickloom.ConsistencyChecker;
 import com.tickloom.ProcessId;
-import com.tickloom.Jepsen;
 import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
 import com.tickloom.history.History;
-import com.tickloom.history.JepsenHistory;
 import com.tickloom.history.Op;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -126,8 +124,8 @@ public class NetworkPartitionTest {
             // Step 5: analyze: linearizable should fail; sequential should pass (different client)
             String edn = history.toEdn();
             System.out.println("edn = " + edn);
-            boolean lin = Jepsen.check(edn, "linearizable", "register");
-            boolean seq = Jepsen.check(edn, "sequential", "register");
+            boolean lin = ConsistencyChecker.check(edn, "linearizable", "register");
+            boolean seq = ConsistencyChecker.check(edn, "sequential", "register");
             assertFalse(lin, "Stale read after successful write should not be linearizable");
             assertTrue(seq, "Across clients, stale read can be sequential by reordering");
         }
@@ -197,10 +195,10 @@ public class NetworkPartitionTest {
             // - Sequential consistency fails: even ignoring real-time order, no single serial order yields the observed read.
             String edn = history.toEdn();
             System.out.println("edn = " + edn);
-            boolean linearizable = Jepsen.check(edn, "linearizable", "register");
+            boolean linearizable = ConsistencyChecker.check(edn, "linearizable", "register");
             assertFalse(linearizable, "History should be non-linearizable: failed write took effect");
 
-            boolean okSeq = Jepsen.check(edn, "sequential", "register");
+            boolean okSeq = ConsistencyChecker.check(edn, "sequential", "register");
             assertFalse(okSeq);
         }
     }
@@ -314,8 +312,8 @@ public class NetworkPartitionTest {
 //                    + "{:type :invoke, :f :read,  :process 1, :time 20, :index 4, :name [\"k\" nil]},"
 //                    + "{:type :ok,     :f :read,  :process 1, :time 21, :index 5, :name [\"k\" \"v1\"]}"
 //                    + "]";
-            boolean lin = Jepsen.check(synthetic, "linearizable", "register");
-            boolean seq = Jepsen.check(synthetic, "sequential", "register");
+            boolean lin = ConsistencyChecker.check(synthetic, "linearizable", "register");
+            boolean seq = ConsistencyChecker.check(synthetic, "sequential", "register");
             assertFalse(lin, "Synthetic stale read after own write should not be linearizable");
             assertFalse(seq, "Synthetic stale read after own write should not be sequential");
         }

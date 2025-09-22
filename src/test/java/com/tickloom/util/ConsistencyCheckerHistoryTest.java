@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class JepsenHistoryTest {
+public class ConsistencyCheckerHistoryTest {
 
     @Test
     public void testInvokeEvent() {

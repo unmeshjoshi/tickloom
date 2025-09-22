@@ -19,10 +19,10 @@ public class SequentialConsistencyTest {
                 + "]";
 
         // Linearizable should fail for the full interval history
-        boolean lin = Jepsen.check(ednFull, "linearizable", "register");
+        boolean lin = ConsistencyChecker.check(ednFull, "linearizable", "register");
         assertFalse(lin);
 
-        boolean seq = Jepsen.check(ednFull, "sequential", "register");
+        boolean seq = ConsistencyChecker.check(ednFull, "sequential", "register");
         assertTrue(seq);
     }
 
@@ -35,7 +35,7 @@ public class SequentialConsistencyTest {
                 + "{:type :ok,     :f :read,  :process 1, :time 30, :index 3, :value \"v1\"}"
                 + "]";
 
-        boolean seq = Jepsen.check(edn, "sequential", "register");
+        boolean seq = ConsistencyChecker.check(edn, "sequential", "register");
         assertFalse(seq);
     }
 }

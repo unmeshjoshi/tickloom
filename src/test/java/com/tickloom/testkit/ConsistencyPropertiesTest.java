@@ -1,6 +1,6 @@
 package com.tickloom.testkit;
 
-import com.tickloom.Jepsen;
+import com.tickloom.ConsistencyChecker;
 import com.tickloom.ProcessId;
 import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
@@ -73,8 +73,8 @@ public class ConsistencyPropertiesTest {
 
             String edn = history.toEdn();
             System.out.println("edn = " + edn);
-            assertFalse(Jepsen.check(edn, "linearizable", "register"));
-            assertTrue(Jepsen.check(edn, "sequential", "register"));
+            assertFalse(ConsistencyChecker.check(edn, "linearizable", "register"));
+            assertTrue(ConsistencyChecker.check(edn, "sequential", "register"));
         }
     }
 
@@ -122,8 +122,8 @@ public class ConsistencyPropertiesTest {
             history.ok(ProcessId.of("clientX"), Op.READ, key, new String(vv.value()));
 
             String edn = history.toEdn();
-            assertFalse(Jepsen.check(edn, "linearizable", "register"));
-            assertFalse(Jepsen.check(edn, "sequential", "register"));
+            assertFalse(ConsistencyChecker.check(edn, "linearizable", "register"));
+            assertFalse(ConsistencyChecker.check(edn, "sequential", "register"));
         }
     }
 }

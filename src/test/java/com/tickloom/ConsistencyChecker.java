@@ -4,16 +4,16 @@ import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 
 // ----- Clojure/Jepsen interop helpers -----
-public class Jepsen {
+public class ConsistencyChecker {
     static final IFn REQUIRE = Clojure.var("clojure.core", "require");
     static final IFn ENTRY_ANALYZE_Q;
     static final IFn ENTRY_ANALYZE_INDEPENDENT_Q;
     static final IFn SHUTDOWN_AGENTS;
 
     static {
-        REQUIRE.invoke(Clojure.read("com.tickloom.jepsen.jepsencaller"));
-        ENTRY_ANALYZE_Q = Clojure.var("com.tickloom.jepsen.jepsencaller", "analyze?");
-        ENTRY_ANALYZE_INDEPENDENT_Q = Clojure.var("com.tickloom.jepsen.jepsencaller", "analyze-independent?");
+        REQUIRE.invoke(Clojure.read("com.tickloom.checkers.consistency-checker"));
+        ENTRY_ANALYZE_Q = Clojure.var("com.tickloom.checkers.consistency-checker", "analyze?");
+        ENTRY_ANALYZE_INDEPENDENT_Q = Clojure.var("com.tickloom.checkers.consistency-checker", "analyze-independent?");
         SHUTDOWN_AGENTS = Clojure.var("clojure.core", "shutdown-agents");
     }
 

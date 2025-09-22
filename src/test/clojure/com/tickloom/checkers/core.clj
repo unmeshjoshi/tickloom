@@ -3,15 +3,6 @@
   (:require [jepsen.independent :as ind]
             [clojure.edn :as edn]))
 
-(defn prepare-kv-history
-  "Convert [k v] vectors to independent tuples for jepsen.independent"
-  [history]
-  (mapv (fn [op]
-          (if (and (vector? (:value op)) (= 2 (count (:value op))))
-            (let [[k v] (:value op)]
-              (assoc op :value (ind/tuple k v)))
-            op))
-        history))
 
 (defn parse-history
   "Parse EDN string to Clojure data structure"
@@ -21,15 +12,6 @@
     :else                       history-edn))                     ; already EDN data
 
 
-(defn detect-model
-  "Auto-detect model type based on history format
-   Returns :register if operations have no keys, :kv if operations have [k v] format"
-  [history]
-  (if (some (fn [op]
-              (and (vector? (:value op)) (= 2 (count (:value op)))))
-            history)
-    :kv
-    :register))
 
 (defn validate-history
   "Basic validation of history format"
@@ -48,8 +30,3 @@
       (throw (ex-info "Operation must have :f (function)" {:operation op}))))
   
   true)
-
-(defn default-opts
-  "Default options for consistency checking"
-  []
-  {:time-limit 60000})

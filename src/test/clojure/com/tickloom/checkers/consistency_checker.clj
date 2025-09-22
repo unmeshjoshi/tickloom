@@ -1,4 +1,4 @@
-(ns com.tickloom.jepsen.jepsencaller
+(ns com.tickloom.checkers.consistency-checker
   (:require [clojure.edn :as edn]
             [jepsen.checker :as checker]
             [jepsen.independent :as independent]

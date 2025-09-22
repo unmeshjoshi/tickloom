@@ -330,8 +330,8 @@ See `src/test/java/com/tickloom/SimulationRunnerTest.java` for determinism tests
 var runner = new QuorumSimulationRunner(123L);
 var history = runner.runAndGetHistory(5_000);
 
-var jepsen = new com.tickloom.Jepsen();
-boolean ok = jepsen.checkLinearizableRegister(history.toEdn());
+var consistencyChecker = new com.tickloom.ConsistencyChecker();
+boolean ok = consistencyChecker.checkLinearizableRegister(history.toEdn());
 System.out.println("Linearizable = " + ok);
 ```
 
