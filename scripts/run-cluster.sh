@@ -117,14 +117,17 @@ for ((i=1; i<=NODES; i++)); do
   fi
 done
 
-echo "Running client: SET then GET"
+echo "Running client: Financial transaction demonstration"
 echo "  Replicas: $replicas_csv"
 
 set -x
-"$JAVA_CMD" -jar "$CLIENT_JAR" --config "$CONFIG_FILE" --id client-1 --replicas "$replicas_csv" --set mykey --value myvalue --deadline-ms 10000
-"$JAVA_CMD" -jar "$CLIENT_JAR" --config "$CONFIG_FILE" --id client-1 --replicas "$replicas_csv" --get mykey --deadline-ms 10000
+# Store financial transaction (demonstrates critical consistency needs)
+"$JAVA_CMD" -jar "$CLIENT_JAR" --config "$CONFIG_FILE" --id client-1 --replicas "$replicas_csv" --set "txn:tx_001" --name '{"txnId":"tx_001","from":"acc_alice","to":"acc_bob","amount":250.00,"currency":"USD","timestamp":"2024-03-15T14:30:00Z","status":"pending"}' --deadline-ms 10000
+
+# Retrieve transaction to verify consistency
+"$JAVA_CMD" -jar "$CLIENT_JAR" --config "$CONFIG_FILE" --id client-1 --replicas "$replicas_csv" --get "txn:tx_001" --deadline-ms 10000
 set +x
 
-echo "Demo complete. Logs in $CLUSTER_DIR. Servers will now be stopped."
+echo "Demo complete. Financial transaction replicated across $NODES nodes. Logs in $CLUSTER_DIR. Servers will now be stopped."
 
 
