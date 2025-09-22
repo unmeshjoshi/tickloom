@@ -41,22 +41,41 @@ gpg --keyserver hkps://keys.openpgp.org --send-keys <LONG_KEY_ID>
 gpg --keyserver hkps://keyserver.ubuntu.com --send-keys <LONG_KEY_ID>
 ```
 
-### 3) Configure credentials and signing for Gradle
+### 3) Create Central Portal account and tokens
+
+Before configuring Gradle, you need to set up your Central Portal account:
+
+1. **Create account**: Go to [https://central.sonatype.com/](https://central.sonatype.com/) and sign up
+2. **Verify namespace**: Register your namespace (e.g., `io.github.unmeshjoshi`) 
+   - For GitHub namespaces: verify by creating a public repo named `OSSRH-XXXXX` (they'll provide the number)
+   - Or add a DNS TXT record for custom domains
+3. **Generate publishing token**:
+   - Go to [Account → View Account](https://central.sonatype.com/account)
+   - Click "Generate User Token" 
+   - Copy the username and password (this is what you'll use in Gradle, not your login credentials)
+
+### 4) Configure credentials and signing for Gradle
 
 Put secrets in your user Gradle properties file (preferred):
 
-`/Users/unmeshjoshi/.gradle/gradle.properties`
+`~/.gradle/gradle.properties` (or `/Users/unmeshjoshi/.gradle/gradle.properties`)
 
-Minimal OSSRH credentials (for legacy s01 staging from Gradle):
+Maven Central credentials (using the token from Central Portal):
 
 ```
-ossrhUsername=YOUR_SONATYPE_USER_TOKEN_USERNAME
-ossrhPassword=YOUR_SONATYPE_USER_TOKEN_PASSWORD
+mavenCentralUsername=YOUR_CENTRAL_PORTAL_USER_TOKEN_USERNAME
+mavenCentralPassword=YOUR_CENTRAL_PORTAL_USER_TOKEN_PASSWORD
 ```
 
-Signing options (pick one method):
+Signing configuration (required - pick one method):
 
-- In-memory key (recommended):
+**Option A: In-memory key via file (recommended - avoids newline escaping):**
+```
+signingKeyFile=/Users/unmeshjoshi/private-key.asc
+signingPassword=YOUR_KEY_PASSPHRASE
+```
+
+**Option B: In-memory key directly:**
 ```
 signingKey=-----BEGIN PGP PRIVATE KEY BLOCK-----
 ... your ASCII-armored private key ...
@@ -64,34 +83,41 @@ signingKey=-----BEGIN PGP PRIVATE KEY BLOCK-----
 signingPassword=YOUR_KEY_PASSPHRASE
 ```
 
-- In-memory key via file (avoids newline escaping):
-```
-signingKeyFile=/absolute/path/to/private-key.asc
-signingPassword=YOUR_KEY_PASSPHRASE
-```
-
-- Classic keyring file:
+**Option C: Classic keyring file:**
 ```
 signing.keyId=ABCD1234EF567890
 signing.password=YOUR_KEY_PASSPHRASE
-signing.secretKeyRingFile=/absolute/path/to/secring.gpg
+signing.secretKeyRingFile=/Users/unmeshjoshi/.gnupg/secring.gpg
+```
+
+**Important**: Make sure your `~/.gradle/gradle.properties` file includes both the Maven Central credentials AND the signing configuration. Example complete file:
+
+```
+# Central Portal publishing credentials
+mavenCentralUsername=abc123token
+mavenCentralPassword=xyz789password
+
+# PGP signing configuration
+signingKeyFile=/Users/unmeshjoshi/private-key.asc
+signingPassword=myStrongPassphrase
 ```
 
 Environment variable equivalents (useful in CI):
 
 ```
-export OSSRH_USERNAME=...
-export OSSRH_PASSWORD=...
+export ORG_GRADLE_PROJECT_mavenCentralUsername=...
+export ORG_GRADLE_PROJECT_mavenCentralPassword=...
 
-export OSSRH_GPG_SECRET_KEY="$(cat /absolute/path/private-key.asc)"
-export OSSRH_GPG_SECRET_KEY_FILE=/absolute/path/private-key.asc
-export OSSRH_GPG_SECRET_KEY_PASSWORD=YOUR_KEY_PASSPHRASE
+export ORG_GRADLE_PROJECT_signingInMemoryKey="$(cat /absolute/path/private-key.asc)"
+export ORG_GRADLE_PROJECT_signingInMemoryKeyPassword=YOUR_KEY_PASSPHRASE
 ```
 
 Notes:
-- For the new Central Portal (bundle upload), you will use a Central “Publishing Token” in the web UI; the OSSRH user token is specifically for the legacy `s01.oss.sonatype.org` Gradle deploy endpoint.
+- The vanniktech plugin handles Maven Central publishing automatically
+- User tokens should be generated from the Central Portal (not legacy OSSRH)
+- The `signingKeyFile` path should be absolute and point to your exported private key
 
-### 4) Sign artifacts and build the Central bundle
+### 5) Sign artifacts and build the Central bundle
 
 Generate signatures and the bundle zip:
 
@@ -114,7 +140,7 @@ gpg --verify build/central-bundle/.../tickloom-0.1.0-alpha.1.jar.asc \
     build/central-bundle/.../tickloom-0.1.0-alpha.1.jar
 ```
 
-### 5) Publish
+### 6) Publish
 
 Option A — Central Portal bundle upload (recommended):
 - Upload the bundle zip at [Central Portal Deployments](https://central.sonatype.com/publishing/deployments)
@@ -127,7 +153,21 @@ Option B — Legacy OSSRH staging from Gradle (s01):
 - Requires `ossrhUsername/ossrhPassword` to be the Sonatype “User Token” (not your login password).
 - Then close and release the staging repository in `https://s01.oss.sonatype.org/`.
 
-### 6) Troubleshooting
+### 7) Troubleshooting
+
+- 401 "Unauthorized" errors:
+  - Use Central Portal User Token, not your login password
+  - Generate tokens at: https://central.sonatype.com/account
+  - Ensure both `mavenCentralUsername` and `mavenCentralPassword` are set in `~/.gradle/gradle.properties`
+
+- Signing errors:
+  - Verify `signingKeyFile` points to the correct private key file
+  - Check that `signingPassword` matches your key's passphrase
+  - Ensure the private key file exists and is readable
+
+- Missing POM metadata errors:
+  - Ensure your `mavenPublishing { pom { ... } }` block includes all required fields:
+    - name, description, url, licenses, developers, scm
 
 - 401 “Content access is protected by token” on s01:
   - Use Sonatype User Token, not your login password.
