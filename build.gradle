@@ -1,3 +1,7 @@
+// =============================================================================
+// TickLoom: Distributed Systems Library Build Configuration
+// =============================================================================
+
 plugins {
     id 'java'
     id 'dev.clojurephant.clojure' version '0.8.0'
@@ -7,49 +11,128 @@ plugins {
     id 'com.vanniktech.maven.publish' version '0.34.0'
 }
 
-repositories {
-    maven { url "https://clojars.org/repo" }
-    mavenCentral()
-}
+// =============================================================================
+// Project Properties
+// =============================================================================
 
 group = 'io.github.unmeshjoshi'
 version = '0.1.0-alpha.6'
 
-dependencies {
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
-    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.17.0'
-
-    // Production-ready storage
-    implementation 'org.rocksdb:rocksdbjni:9.7.3'
-
-    // Jepsen pulls org.clojure:clojure transitively
-    testImplementation 'jepsen:jepsen:0.3.9'
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
-    testImplementation 'org.mockito:mockito-core:5.11.0'
+// Version catalog for dependency management
+ext {
+    versions = [
+        jackson: '2.17.0',
+        rocksdb: '9.7.3',
+        jepsen: '0.3.9',
+        junit: '5.10.2',
+        mockito: '5.11.0'
+    ]
+    
+    mainClasses = [
+        server: 'com.tickloom.cmd.ServerMain',
+        client: 'com.tickloom.cmd.ClientMain'
+    ]
+    
+    projectMetadata = [
+        name: 'TickLoom',
+        description: 'A distributed systems library implementing Raft consensus, quorum-based replication, and other distributed algorithms with comprehensive testing infrastructure',
+        url: 'https://github.com/unmeshjoshi/tickloom',
+        license: [
+            name: 'The Apache License, Version 2.0',
+            url: 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+        ],
+        developer: [
+            id: 'unmeshjoshi',
+            name: 'Unmesh Joshi',
+            email: 'unmeshjoshi@gmail.com'
+        ],
+        scm: [
+            connection: 'scm:git:git://github.com/unmeshjoshi/tickloom.git',
+            developerConnection: 'scm:git:ssh://github.com/unmeshjoshi/tickloom.git',
+            url: 'https://github.com/unmeshjoshi/tickloom'
+        ]
+    ]
 }
 
-// Configure the shadow plugin to create a fat JAR
+// =============================================================================
+// Repositories
+// =============================================================================
+
+repositories {
+    mavenCentral()
+    maven { url 'https://clojars.org/repo' }
+}
+
+// =============================================================================
+// Dependencies
+// =============================================================================
+
+dependencies {
+    // Core JSON/YAML processing
+    implementation "com.fasterxml.jackson.core:jackson-databind:${versions.jackson}"
+    implementation "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${versions.jackson}"
+
+    // Production-ready storage
+    implementation "org.rocksdb:rocksdbjni:${versions.rocksdb}"
+
+    // Testing framework (Jepsen pulls org.clojure:clojure transitively)
+    testImplementation "jepsen:jepsen:${versions.jepsen}"
+    testImplementation "org.junit.jupiter:junit-jupiter:${versions.junit}"
+    testImplementation "org.mockito:mockito-core:${versions.mockito}"
+}
+
+// =============================================================================
+// Java Configuration
+// =============================================================================
+
+java {
+    withSourcesJar()
+    // withJavadocJar() - handled by vanniktech plugin
+}
+
+// =============================================================================
+// Testing Configuration
+// =============================================================================
+
+test {
+    useJUnitPlatform()
+    
+    testLogging {
+        events 'passed', 'skipped', 'failed', 'standardOut', 'standardError'
+        outputs.upToDateWhen { false }
+        showStandardStreams = true
+    }
+}
+
+tasks.withType(Javadoc) {
+    options.addStringOption('Xdoclint:none', '-quiet')
+    failOnError = false
+}
+
+// =============================================================================
+// Shadow JAR Configuration
+// =============================================================================
+
+def configureMetaInfExclusions = { task ->
+    task.exclude 'META-INF/*.DSA'
+    task.exclude 'META-INF/*.RSA'
+    task.exclude 'META-INF/*.SF'
+}
+
 shadowJar {
     archiveBaseName.set('tickloom-server')
     archiveClassifier.set('all')
     archiveVersion.set('')
     
-    // Merge service files (important for RocksDB)
     mergeServiceFiles()
+    configureMetaInfExclusions(delegate)
     
-    // Exclude development dependencies
-    exclude 'META-INF/*.DSA'
-    exclude 'META-INF/*.RSA'
-    exclude 'META-INF/*.SF'
-    
-    // Set the main class for the JAR
     manifest {
-        attributes 'Main-Class': 'com.tickloom.cmd.ServerMain'
+        attributes 'Main-Class': mainClasses.server
     }
 }
 
-// Create a separate client JAR
-task shadowClientJar(type: com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+tasks.register('shadowClientJar', com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
     group = 'build'
     description = 'Creates a fat JAR for the client application'
     
@@ -60,188 +143,155 @@ task shadowClientJar(type: com.github.jengelman.gradle.plugins.shadow.tasks.Shad
     archiveClassifier.set('all')
     archiveVersion.set('')
     
-    // Merge service files
     mergeServiceFiles()
+    configureMetaInfExclusions(delegate)
     
-    // Exclude development dependencies
-    exclude 'META-INF/*.DSA'
-    exclude 'META-INF/*.RSA'
-    exclude 'META-INF/*.SF'
-    
-    // Set the main class for the client JAR
     manifest {
-        attributes 'Main-Class': 'com.tickloom.cmd.ClientMain'
+        attributes 'Main-Class': mainClasses.client
     }
 }
 
-// Do not tie library jar to shaded apps; keep shadow artifacts separate from the published library
+// =============================================================================
+// Application Tasks
+// =============================================================================
 
-test {
-    useJUnitPlatform()
-    
-    // Show test output including System.out.println
-    testLogging {
-        events "passed", "skipped", "failed", "standardOut", "standardError"
-        outputs.upToDateWhen {false}
-        showStandardStreams = true
-    }
-}
-
-// Task to run the distributed cluster test
-task runCluster(type: Exec) {
-    group = 'application'
-    description = 'Runs a 3-node distributed cluster test with client operations'
-    
-    // Ensure JARs are built first
-    dependsOn shadowJar, shadowClientJar
-    
-    // Make executable
-    doFirst {
-        exec {
-            commandLine 'chmod', '+x', 'scripts/run-cluster.sh'
+def createScriptExecutionTask = { taskName, scriptPath, taskGroup, taskDescription, extraArgs = [] ->
+    tasks.register(taskName, Exec) {
+        group = taskGroup
+        description = taskDescription
+        dependsOn shadowJar, shadowClientJar
+        
+        doFirst {
+            exec {
+                commandLine 'chmod', '+x', scriptPath
+                ignoreExitValue = true
+            }
         }
-    }
-    
-    commandLine './scripts/run-cluster.sh'
-    
-    // Handle cleanup on failure
-    doLast {
-        if (executionResult.get().exitValue != 0) {
-            println "Cluster test failed, ensuring cleanup..."
-            try {
-                exec {
-                    commandLine './scripts/kill-servers.sh'
-                    ignoreExitValue = true
+        
+        commandLine([scriptPath] + extraArgs)
+        
+        if (taskName == 'runCluster') {
+            doLast {
+                if (executionResult.get().exitValue != 0) {
+                    logger.warn("Cluster test failed, ensuring cleanup...")
+                    try {
+                        exec {
+                            commandLine './scripts/kill-servers.sh'
+                            ignoreExitValue = true
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Cleanup script failed: ${e.message}")
+                    }
                 }
-            } catch (Exception e) {
-                println "Cleanup script failed: ${e.message}"
             }
         }
     }
 }
 
-// Task to test individual servers
-task testIndividualServers(type: Exec) {
-    group = 'verification'
-    description = 'Tests each server individually to verify data replication'
-    
-    // Ensure JARs are built first
-    dependsOn shadowJar, shadowClientJar
-    
-    // Make executable
-    doFirst {
-        exec {
-            commandLine 'chmod', '+x', 'scripts/test-individual-servers.sh', 'scripts/run-cluster.sh', 'scripts/kill-servers.sh'
-        }
-    }
-    
-    commandLine './scripts/test-individual-servers.sh', '--nodes', '3', '--factory', 'com.tickloom.algorithms.replication.quorum.QuorumReplicaProcessFactory'
-}
+createScriptExecutionTask(
+    'runCluster', 
+    './scripts/run-cluster.sh', 
+    'application', 
+    'Runs a 3-node distributed cluster test with client operations'
+)
 
-// Task to inspect data directory
-task inspectData {
+createScriptExecutionTask(
+    'testIndividualServers', 
+    './scripts/test-individual-servers.sh', 
+    'verification', 
+    'Tests each server individually to verify data replication',
+    ['--nodes', '3', '--factory', 'com.tickloom.algorithms.replication.quorum.QuorumReplicaProcessFactory']
+)
+
+tasks.register('inspectData') {
     group = 'verification'
     description = 'Inspect the data directory to verify stored values'
     
     doLast {
         def dataDir = file('build/demo-data')
         if (!dataDir.exists()) {
-            println " Data directory does not exist: ${dataDir.absolutePath}"
-            println "   Run './gradlew runCluster' first to generate data"
+            logger.lifecycle("Data directory does not exist: ${dataDir.absolutePath}")
+            logger.lifecycle("Run './gradlew runCluster' first to generate data")
             return
         }
         
-        println " Data directory: ${dataDir.absolutePath}"
-        println " Inspecting RocksDB files..."
+        logger.lifecycle("Data directory: ${dataDir.absolutePath}")
+        logger.lifecycle("Inspecting RocksDB files...")
         
         dataDir.eachDir { replicaDir ->
-            println "\n Replica: ${replicaDir.name}"
+            logger.lifecycle("\nReplica: ${replicaDir.name}")
             if (replicaDir.exists()) {
                 def files = replicaDir.listFiles()
                 if (files) {
                     files.each { file ->
-                        println "   📄 ${file.name} (${file.length()} bytes)"
+                        logger.lifecycle("  📄 ${file.name} (${file.length()} bytes)")
                     }
                 } else {
-                    println " No files found"
+                    logger.lifecycle("  No files found")
                 }
             } else {
-                println "    Directory not found"
+                logger.lifecycle("  Directory not found")
             }
         }
         
-        println "\n💡 To inspect RocksDB contents, you can use:"
-        println "   - RocksDB CLI tools (if installed)"
-        println "   - Or run individual server tests: './gradlew testIndividualServers'"
+        logger.lifecycle("\n💡 To inspect RocksDB contents, you can use:")
+        logger.lifecycle("  - RocksDB CLI tools (if installed)")
+        logger.lifecycle("  - Or run individual server tests: './gradlew testIndividualServers'")
     }
 }
 
-// --- Publishing Configuration ---------------------------------------------
+// =============================================================================
+// Maven Central Publishing (Main Library)
+// =============================================================================
 
-// Project coordinates for Maven Central - using version declared at top of file
-
-// NOTE: Central Portal publishing for Gradle projects:
-// 1. Publish to OSSRH staging (below) - then promote via Central Portal UI
-// 2. Central Portal has Maven plugin but no official Gradle plugin yet
-// 3. Alternative: Create bundles manually and upload via Central Portal API
-
-java {
-    withSourcesJar()
-    // Remove withJavadocJar() to avoid conflict with vanniktech plugin's javadoc handling
-    // withJavadocJar()
-}
-
-// Vanniktech plugin v0.34.0 configuration - simplified API
 mavenPublishing {
     publishToMavenCentral()
     signAllPublications()
+    
     pom {
-        name = 'TickLoom'
-        description = 'A distributed systems library implementing Raft consensus, quorum-based replication, and other distributed algorithms with comprehensive testing infrastructure'
-        url = 'https://github.com/unmeshjoshi/tickloom'
+        name = projectMetadata.name
+        description = projectMetadata.description
+        url = projectMetadata.url
 
         licenses {
             license {
-                name = 'The Apache License, Version 2.0'
-                url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                name = projectMetadata.license.name
+                url = projectMetadata.license.url
             }
         }
 
         developers {
             developer {
-                id = 'unmeshjoshi'
-                name = 'Unmesh Joshi'
-                email = 'unmeshjoshi@gmail.com'
+                id = projectMetadata.developer.id
+                name = projectMetadata.developer.name
+                email = projectMetadata.developer.email
             }
         }
 
         scm {
-            connection = 'scm:git:git://github.com/unmeshjoshi/tickloom.git'
-            developerConnection = 'scm:git:ssh://github.com/unmeshjoshi/tickloom.git'
-            url = 'https://github.com/unmeshjoshi/tickloom'
+            connection = projectMetadata.scm.connection
+            developerConnection = projectMetadata.scm.developerConnection
+            url = projectMetadata.scm.url
         }
     }
 }
 
+// =============================================================================
+// Testkit Publishing Configuration
+// =============================================================================
 
-// Central Portal specific properties that might be required for the build service
-project.ext["centralPortalBaseUrl"] = "https://central.sonatype.com"
-project.ext["centralPortalPublishingType"] = "USER_MANAGED"
-
-// --- Testkit artifacts (packaged from src/test/java/com/tickloom/testkit/**) ---
-
-// Define what to include and exclude for comprehensive testkit
-def testkitIncludes = [
-    // Include ALL test packages - complete testing infrastructure
-    'com/tickloom/**'
-]
-
-def testkitExcludes = [
-    // Only exclude actual JUnit test classes, keep everything else
-    '**/*Test.class',
-    '**/*Test$*.class',        // Inner test classes
-    '**/*Tests.class',         // Alternative test naming
-    '**/*Tests$*.class'        // Alternative test inner classes
+def testkitConfig = [
+    includes: ['com/tickloom/**'],
+    classExcludes: [
+        '**/*Test.class',
+        '**/*Test$*.class',
+        '**/*Tests.class',
+        '**/*Tests$*.class'
+    ],
+    sourceExcludes: [
+        '**/*Test.java',
+        '**/*Tests.java'
+    ]
 ]
 
 tasks.register('testkitJar', Jar) {
@@ -251,22 +301,14 @@ tasks.register('testkitJar', Jar) {
     duplicatesStrategy = DuplicatesStrategy.WARN
     
     from(sourceSets.test.output) {
-        include testkitIncludes
-        exclude testkitExcludes
+        include testkitConfig.includes
+        exclude testkitConfig.classExcludes
     }
-    // IMPORTANT: Include Clojure compiled classes from build/clojure/test
     from(layout.buildDirectory.dir('clojure/test')) {
         include '**/*.class'
     }
     dependsOn tasks.named('testClasses')
 }
-
-// For sources, exclude Java test files but keep .clj files
-def testkitSourceExcludes = [
-    '**/*Test.java',
-    '**/*Tests.java'
-    // Note: Keep ALL .clj files - they contain valuable checkers and utilities
-]
 
 tasks.register('testkitSourcesJar', Jar) {
     group = 'publishing'
@@ -274,9 +316,8 @@ tasks.register('testkitSourcesJar', Jar) {
     archiveBaseName.set("${project.name}-testkit")
     archiveClassifier.set('sources')
     from(sourceSets.test.allSource) {
-        include testkitIncludes
-        exclude testkitSourceExcludes
-        // This automatically includes .clj files which are crucial
+        include testkitConfig.includes
+        exclude testkitConfig.sourceExcludes
     }
 }
 
@@ -284,12 +325,11 @@ tasks.register('testkitJavadoc', Javadoc) {
     group = 'documentation'
     description = 'Javadoc for complete testing infrastructure'
     source = sourceSets.test.allJava.matching {
-        include testkitIncludes
-        exclude testkitSourceExcludes
+        include testkitConfig.includes
+        exclude testkitConfig.sourceExcludes
     }
     classpath = sourceSets.test.compileClasspath + sourceSets.main.output
     destinationDir = layout.buildDirectory.dir('docs/testkitJavadoc').get().asFile
-    // Handle missing references gracefully (some classes reference Clojure types)
     options.addStringOption('Xdoclint:none', '-quiet')
     failOnError = false
 }
@@ -303,17 +343,19 @@ tasks.register('testkitJavadocJar', Jar) {
     dependsOn tasks.named('testkitJavadoc')
 }
 
-// Relax doclint to avoid failing the build on missing Javadoc and minor issues
-tasks.withType(Javadoc) {
-    options.addStringOption('Xdoclint:none', '-quiet')
-    // Ignore missing dependencies in testkit javadoc
-    failOnError = false
+def addTestkitDependency = { deps, groupId, artifactId, version, scope, optional = false ->
+    def dep = deps.appendNode('dependency')
+    dep.appendNode('groupId', groupId)
+    dep.appendNode('artifactId', artifactId)
+    dep.appendNode('version', version)
+    dep.appendNode('scope', scope)
+    if (optional) {
+        dep.appendNode('optional', 'true')
+    }
 }
 
-// Additional testkit publication (main library handled by vanniktech plugin)
 publishing {
     publications {
-        // Testkit publication (main publication handled by mavenPublishing block above)
         mavenTestkit(MavenPublication) {
             artifactId = "${project.name}-testkit"
 
@@ -324,82 +366,66 @@ publishing {
             pom {
                 name = 'TickLoom Testkit'
                 description = 'Complete distributed systems testing framework with Jepsen, SimulatedNetwork, consistency checkers, and Clojure integration'
-                url = 'https://github.com/unmeshjoshi/tickloom'
+                url = projectMetadata.url
+                
                 licenses {
                     license {
-                        name = 'The Apache License, Version 2.0'
-                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                        name = projectMetadata.license.name
+                        url = projectMetadata.license.url
                     }
                 }
+                
                 developers {
                     developer {
-                        id = 'unmeshjoshi'
-                        name = 'Unmesh Joshi'
-                        email = 'unmeshjoshi@gmail.com'
+                        id = projectMetadata.developer.id
+                        name = projectMetadata.developer.name
+                        email = projectMetadata.developer.email
                     }
                 }
+                
                 scm {
-                    connection = 'scm:git:git://github.com/unmeshjoshi/tickloom.git'
-                    developerConnection = 'scm:git:ssh://github.com/unmeshjoshi/tickloom.git'
-                    url = 'https://github.com/unmeshjoshi/tickloom'
+                    connection = projectMetadata.scm.connection
+                    developerConnection = projectMetadata.scm.developerConnection
+                    url = projectMetadata.scm.url
                 }
-                // CRITICAL: Include all necessary dependencies for complete testkit functionality
+                
                 withXml {
                     def deps = asNode().appendNode('dependencies')
                     
                     // Main TickLoom library dependency
-                    def mainDep = deps.appendNode('dependency')
-                    mainDep.appendNode('groupId', project.group.toString())
-                    mainDep.appendNode('artifactId', project.name)
-                    mainDep.appendNode('version', project.version.toString())
-                    mainDep.appendNode('scope', 'compile')
+                    addTestkitDependency(deps, project.group.toString(), project.name, project.version.toString(), 'compile')
                     
                     // Jepsen dependency (includes Clojure + Knossos transitively)
-                    def jepsenDep = deps.appendNode('dependency')
-                    jepsenDep.appendNode('groupId', 'jepsen')
-                    jepsenDep.appendNode('artifactId', 'jepsen')
-                    jepsenDep.appendNode('version', '0.3.9')
-                    jepsenDep.appendNode('scope', 'compile')
+                    addTestkitDependency(deps, 'jepsen', 'jepsen', versions.jepsen, 'compile')
                     
-                    // JUnit Jupiter for ClusterAssertions (optional for clients using different frameworks)
-                    def junitDep = deps.appendNode('dependency')
-                    junitDep.appendNode('groupId', 'org.junit.jupiter')
-                    junitDep.appendNode('artifactId', 'junit-jupiter')
-                    junitDep.appendNode('version', '5.10.2')
-                    junitDep.appendNode('scope', 'test')
-                    junitDep.appendNode('optional', 'true')
-                    
-                    // Mockito for testing utilities (optional)
-                    def mockitoDep = deps.appendNode('dependency')
-                    mockitoDep.appendNode('groupId', 'org.mockito')
-                    mockitoDep.appendNode('artifactId', 'mockito-core')
-                    mockitoDep.appendNode('version', '5.11.0')
-                    mockitoDep.appendNode('scope', 'test')
-                    mockitoDep.appendNode('optional', 'true')
+                    // Optional test dependencies
+                    addTestkitDependency(deps, 'org.junit.jupiter', 'junit-jupiter', versions.junit, 'test', true)
+                    addTestkitDependency(deps, 'org.mockito', 'mockito-core', versions.mockito, 'test', true)
                 }
             }
         }
     }
 }
 
-// Signing configuration - vanniktech plugin handles main library automatically
-// We only need to sign our custom testkit publication
+// =============================================================================
+// Signing Configuration
+// =============================================================================
+
 signing {
-    def localSigningKeyFile = findProperty("signingKeyFile")
-    def localSigningPassword = findProperty("signingPassword")
+    def localSigningKeyFile = findProperty('signingKeyFile')
+    def localSigningPassword = findProperty('signingPassword')
     
     if (localSigningKeyFile && localSigningPassword) {
         def keyFile = file(localSigningKeyFile.toString())
         if (keyFile.exists()) {
             def signingKey = keyFile.getText('UTF-8')
             useInMemoryPgpKeys(signingKey, localSigningPassword.toString())
-            // Only sign the testkit publication - vanniktech handles the main library
             sign publishing.publications.mavenTestkit
-            println "Configured signing for testkit publication"
+            logger.info('Configured signing for testkit publication')
+        } else {
+            logger.warn("Signing key file not found: ${keyFile.absolutePath}")
         }
+    } else {
+        logger.info('Signing configuration not found - publications will not be signed')
     }
 }
-
-// --- Modern Maven Central Publishing ---
-// Using vanniktech/gradle-maven-publish-plugin (recommended by Gradle Cookbook)
-// Supports both OSSRH and new Central Portal APIs
