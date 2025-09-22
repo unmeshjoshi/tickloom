@@ -1,5 +1,7 @@
 package com.tickloom;
 
+import com.tickloom.ConsistencyChecker.ConsistencyProperty;
+import com.tickloom.ConsistencyChecker.DataModel;
 import com.tickloom.algorithms.replication.quorum.QuorumSimulationRunner;
 import com.tickloom.history.History;
 import com.tickloom.history.JepsenHistory;
@@ -31,7 +33,7 @@ public class ConsistencyCheckerTest {
 
         String edn = h.toEdn();
         System.out.println("edn = " + edn);
-        boolean ok = ConsistencyChecker.checkIndependent(edn, "linearizable", "register");
+        boolean ok = ConsistencyChecker.checkIndependent(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
         assertTrue(ok, "Expected history to be linearizable");
     }
 
@@ -50,7 +52,7 @@ public class ConsistencyCheckerTest {
         h.ok    (ProcessId.of("p1"), Op.READ,  k, v2);
 
         String edn = h.toEdn();
-        boolean ok = ConsistencyChecker.check(edn, "linearizable", "register");
+        boolean ok = ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
         assertFalse(ok, "Expected history to be NON-linearizable");
     }
 
@@ -60,19 +62,19 @@ public class ConsistencyCheckerTest {
         History history = runner.runAndGetHistory(25);
         String edn = history.toEdn();
         TestUtils.writeEdnFile("linearizable-with-strict-quorum-history.edn", edn);
-        assertTrue(ConsistencyChecker.checkIndependent(edn, "linearizable", "register"));
+        assertTrue(ConsistencyChecker.checkIndependent(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER));
     }
 
     @Test
     void shouldBeValidForBuiltinModelsWithEmptyHistory() {
         String edn = "[]";
-        String[] models = new String[]{
-                "register",
-                "cas-register",
-                "set"
+        DataModel[] models = new DataModel[]{
+                DataModel.REGISTER,
+                DataModel.CAS_REGISTER,
+                DataModel.SET
         };
-        for (String model : models) {
-            boolean ok = ConsistencyChecker.check(edn, "linearizable", model);
+        for (DataModel model : models) {
+            boolean ok = ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, model);
             assertTrue(ok, "Empty history should be valid for model: " + model);
         }
     }
@@ -88,7 +90,7 @@ public class ConsistencyCheckerTest {
                 + "{:type :invoke, :f :read,  :process 1, :time 2, :index 2, :name nil},"
                 + "{:type :ok,     :f :read,  :process 1, :time 3, :index 3, :name \"v1\"}"
                 + "]";
-        boolean ok = ConsistencyChecker.check(edn, "linearizable", "cas-register");
+        boolean ok = ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.CAS_REGISTER);
         assertTrue(ok);
     }
 
@@ -104,7 +106,7 @@ public class ConsistencyCheckerTest {
                 + "{:type :invoke, :f :release, :process 1, :time 6, :index 6, :name nil},"
                 + "{:type :ok,     :f :release, :process 1, :time 7, :index 7, :name true}"
                 + "]";
-        boolean ok = ConsistencyChecker.check(edn, "linearizable", "mutex");
+        boolean ok = ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.MUTEX);
         assertTrue(ok);
     }
 
@@ -116,7 +118,7 @@ public class ConsistencyCheckerTest {
                 + "{:type :invoke, :f :dequeue, :process 1, :time 2, :index 2, :name nil},"
                 + "{:type :ok,     :f :dequeue, :process 1, :time 3, :index 3, :name \"x\"}"
                 + "]";
-        boolean ok = ConsistencyChecker.check(edn, "linearizable", "fifo-queue");
+        boolean ok = ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.FIFO_QUEUE);
         assertTrue(ok);
     }
 
@@ -128,7 +130,7 @@ public class ConsistencyCheckerTest {
                 + "{:type :invoke, :f :dequeue, :process 1, :time 2, :index 2, :value nil},"
                 + "{:type :ok,     :f :dequeue, :process 1, :time 3, :index 3, :value \"a\"}"
                 + "]";
-        boolean ok = ConsistencyChecker.check(edn, "linearizable", "unordered-queue");
+        boolean ok = ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.UNORDERED_QUEUE);
         assertTrue(ok);
     }
 
@@ -141,7 +143,7 @@ public class ConsistencyCheckerTest {
                         + "{:type :ok,     :f :read, :process 1, :time 3, :index 3, :value #{1}}"
                         + "]";
 
-        boolean ok = ConsistencyChecker.check(edn, "linearizable", "set");
+        boolean ok = ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.SET);
         assertTrue(ok);
     }
 
@@ -159,7 +161,7 @@ public class ConsistencyCheckerTest {
                 + "{:type :invoke, :f :read,  :process 3, :time 6, :index 6, :name [\"k2\" nil]},"
                 + "{:type :ok,     :f :read,  :process 3, :time 7, :index 7, :name [\"k2\" \"a\"]}"
                 + "]";
-        boolean ok = ConsistencyChecker.checkIndependent(edn, "linearizable", "register");
+        boolean ok = ConsistencyChecker.checkIndependent(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
         assertTrue(ok);
     }
 
@@ -171,7 +173,7 @@ public class ConsistencyCheckerTest {
                 + "{:type :invoke, :f :read,  :process 1, :time 2, :index 2, :value [\"k1\" nil]},"
                 + "{:type :ok,     :f :read,  :process 1, :time 3, :index 3, :value [\"k1\" \"WRONG\"]}"
                 + "]";
-        boolean ok = ConsistencyChecker.checkIndependent(edn, "linearizable", "register");
+        boolean ok = ConsistencyChecker.checkIndependent(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
         assertFalse(ok);
     }
 }

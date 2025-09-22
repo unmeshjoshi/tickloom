@@ -75,8 +75,8 @@ dependencies {
     // Production-ready storage
     implementation "org.rocksdb:rocksdbjni:${versions.rocksdb}"
 
-    // Testing framework (Jepsen pulls org.clojure:clojure transitively)
-    testImplementation "jepsen:jepsen:${versions.jepsen}"
+    testRuntimeOnly 'dev.clojurephant:jovial:0.4.2'
+    testImplementation "jepsen:jepsen:${versions.jepsen}"     // Testing framework (Jepsen pulls org.clojure:clojure transitively)
     testImplementation "org.junit.jupiter:junit-jupiter:${versions.junit}"
     testImplementation "org.mockito:mockito-core:${versions.mockito}"
 }

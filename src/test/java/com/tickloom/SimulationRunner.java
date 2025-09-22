@@ -17,6 +17,8 @@ import java.util.*;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 
+import static com.tickloom.ConsistencyChecker.*;
+
 
 public abstract class SimulationRunner {
     private final ArrayList<com.tickloom.SingleRequestIssuer<ClusterClient>> clients;
@@ -67,7 +69,7 @@ public abstract class SimulationRunner {
     }
 
     private static void shutdownClojureAgents() {
-        ConsistencyChecker.shutdownAgents();
+        shutdownAgents();
     }
 
     private void runClusterFor(long tickDuration) {
@@ -96,7 +98,7 @@ public abstract class SimulationRunner {
     private void checkLinearizability() {
         ConsistencyChecker consistencyChecker = new ConsistencyChecker();
         String edn = history.toEdn();
-        boolean isLinearizable = ConsistencyChecker.check(edn, "linearizable", "register");
+        boolean isLinearizable = check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
         System.out.println("The history is " + (isLinearizable ? "linearizable" : "not linearizable") + " = " + isLinearizable);
     }
 

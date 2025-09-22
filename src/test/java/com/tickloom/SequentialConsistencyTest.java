@@ -1,5 +1,7 @@
 package com.tickloom;
 
+import com.tickloom.ConsistencyChecker.ConsistencyProperty;
+import com.tickloom.ConsistencyChecker.DataModel;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -19,10 +21,10 @@ public class SequentialConsistencyTest {
                 + "]";
 
         // Linearizable should fail for the full interval history
-        boolean lin = ConsistencyChecker.check(ednFull, "linearizable", "register");
+        boolean lin = ConsistencyChecker.check(ednFull, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
         assertFalse(lin);
 
-        boolean seq = ConsistencyChecker.check(ednFull, "sequential", "register");
+        boolean seq = ConsistencyChecker.check(ednFull, ConsistencyProperty.SEQUENTIAL_CONSISTENCY, DataModel.REGISTER);
         assertTrue(seq);
     }
 
@@ -35,7 +37,7 @@ public class SequentialConsistencyTest {
                 + "{:type :ok,     :f :read,  :process 1, :time 30, :index 3, :value \"v1\"}"
                 + "]";
 
-        boolean seq = ConsistencyChecker.check(edn, "sequential", "register");
+        boolean seq = ConsistencyChecker.check(edn, ConsistencyProperty.SEQUENTIAL_CONSISTENCY, DataModel.REGISTER);
         assertFalse(seq);
     }
 }

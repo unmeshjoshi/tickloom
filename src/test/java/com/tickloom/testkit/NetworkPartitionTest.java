@@ -1,6 +1,8 @@
 package com.tickloom.testkit;
 
 import com.tickloom.ConsistencyChecker;
+import com.tickloom.ConsistencyChecker.ConsistencyProperty;
+import com.tickloom.ConsistencyChecker.DataModel;
 import com.tickloom.ProcessId;
 import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
@@ -124,8 +126,8 @@ public class NetworkPartitionTest {
             // Step 5: analyze: linearizable should fail; sequential should pass (different client)
             String edn = history.toEdn();
             System.out.println("edn = " + edn);
-            boolean lin = ConsistencyChecker.check(edn, "linearizable", "register");
-            boolean seq = ConsistencyChecker.check(edn, "sequential", "register");
+            boolean lin = ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
+            boolean seq = ConsistencyChecker.check(edn, ConsistencyProperty.SEQUENTIAL_CONSISTENCY, DataModel.REGISTER);
             assertFalse(lin, "Stale read after successful write should not be linearizable");
             assertTrue(seq, "Across clients, stale read can be sequential by reordering");
         }
@@ -195,10 +197,10 @@ public class NetworkPartitionTest {
             // - Sequential consistency fails: even ignoring real-time order, no single serial order yields the observed read.
             String edn = history.toEdn();
             System.out.println("edn = " + edn);
-            boolean linearizable = ConsistencyChecker.check(edn, "linearizable", "register");
+            boolean linearizable = ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
             assertFalse(linearizable, "History should be non-linearizable: failed write took effect");
 
-            boolean okSeq = ConsistencyChecker.check(edn, "sequential", "register");
+            boolean okSeq = ConsistencyChecker.check(edn, ConsistencyProperty.SEQUENTIAL_CONSISTENCY, DataModel.REGISTER);
             assertFalse(okSeq);
         }
     }
@@ -312,8 +314,8 @@ public class NetworkPartitionTest {
 //                    + "{:type :invoke, :f :read,  :process 1, :time 20, :index 4, :name [\"k\" nil]},"
 //                    + "{:type :ok,     :f :read,  :process 1, :time 21, :index 5, :name [\"k\" \"v1\"]}"
 //                    + "]";
-            boolean lin = ConsistencyChecker.check(synthetic, "linearizable", "register");
-            boolean seq = ConsistencyChecker.check(synthetic, "sequential", "register");
+            boolean lin = ConsistencyChecker.check(synthetic, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
+            boolean seq = ConsistencyChecker.check(synthetic, ConsistencyProperty.SEQUENTIAL_CONSISTENCY, DataModel.REGISTER);
             assertFalse(lin, "Synthetic stale read after own write should not be linearizable");
             assertFalse(seq, "Synthetic stale read after own write should not be sequential");
         }

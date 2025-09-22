@@ -1,6 +1,8 @@
 package com.tickloom.testkit;
 
 import com.tickloom.ConsistencyChecker;
+import com.tickloom.ConsistencyChecker.ConsistencyProperty;
+import com.tickloom.ConsistencyChecker.DataModel;
 import com.tickloom.ProcessId;
 import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
@@ -73,8 +75,8 @@ public class ConsistencyPropertiesTest {
 
             String edn = history.toEdn();
             System.out.println("edn = " + edn);
-            assertFalse(ConsistencyChecker.check(edn, "linearizable", "register"));
-            assertTrue(ConsistencyChecker.check(edn, "sequential", "register"));
+            assertFalse(ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER));
+            assertTrue(ConsistencyChecker.check(edn, ConsistencyProperty.SEQUENTIAL_CONSISTENCY, DataModel.REGISTER));
         }
     }
 
@@ -122,8 +124,8 @@ public class ConsistencyPropertiesTest {
             history.ok(ProcessId.of("clientX"), Op.READ, key, new String(vv.value()));
 
             String edn = history.toEdn();
-            assertFalse(ConsistencyChecker.check(edn, "linearizable", "register"));
-            assertFalse(ConsistencyChecker.check(edn, "sequential", "register"));
+            assertFalse(ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER));
+            assertFalse(ConsistencyChecker.check(edn, ConsistencyProperty.SEQUENTIAL_CONSISTENCY, DataModel.REGISTER));
         }
     }
 }
