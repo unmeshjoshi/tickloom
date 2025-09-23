@@ -8,12 +8,13 @@
 - [x] Design enums for ConsistencyChecker to replace string parameters
 - [x] Update SIGNING_README.md to replace OSSRH references with Maven Central
 - [x] Update run-cluster.sh with realistic financial transaction demo
+- [x] Add Clojure test integration with Gradle build
 
 ## In Progress
 
-- [ ] Add Clojure test integration with Gradle build
+- [ ] Move Jepsen specific history_edn handling in linearizability-checker
 
 ## TODO
 
-- [ ] Move Jepsen specific history_edn handling in linearizability-checker
 - [ ] Move history recording to QuorumKVClient or ClusterClient
+- [ ] Store mavencetral token and gpg key and write a script to setup gradle.properties required for the publish task to work.

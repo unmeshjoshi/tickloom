@@ -2,9 +2,9 @@
   <img src="logo.png" alt="Tickloom Logo" width="200"/>
 </p>
 
-## Tickloom
+## Tickloom - A Fabric Of Ticking Processes
 ![Java CI with Gradle](https://github.com/unmeshjoshi/tickloom/actions/workflows/gradle.yml/badge.svg)
-### A fabric of ticking processes
+### Deterministic Simulation with Jepsen-style Consistency Checking
 
 Tickloom is a lightweight Java framework for building **deterministic, testable distributed systems**.
 
@@ -111,35 +111,44 @@ public record EchoResponse(String message) {}
 
 Serialization uses JSON by default, but the framework can be extended to support other formats.
 
-## Installation
+## Using Tickloom as a library
 
-Artifacts are published to Maven Central under the `io.github.unmeshjoshi` group.
+Artifacts are on **Maven Central** under the `io.github.unmeshjoshi` group.
+There is an examples github repo which demonstrates how to use tickloom as a library.
+see **tickloomexamples**: https://github.com/unmeshjoshi/tickloomexamples
 
-**Gradle (Kotlin DSL)**:
+**Gradle (Kotlin DSL)**
+
 ```kotlin
 dependencies {
-  implementation("io.github.unmeshjoshi:tickloom:0.1.0-alpha.4")
-  testImplementation("io.github.unmeshjoshi:tickloom-testkit:0.1.0-alpha.4")
+  implementation("io.github.unmeshjoshi:tickloom:0.1.0-alpha.7")
+  testImplementation("io.github.unmeshjoshi:tickloom-testkit:0.1.0-alpha.7")
 }
 ```
 
-**Maven**:
+**Maven**
 ```xml
 <dependency>
   <groupId>io.github.unmeshjoshi</groupId>
   <artifactId>tickloom</artifactId>
-  <version>0.1.0-alpha.4</version>
+  <version>0.1.0-alpha.7</version>
 </dependency>
 <dependency>
   <groupId>io.github.unmeshjoshi</groupId>
   <artifactId>tickloom-testkit</artifactId>
-  <version>0.1.0-alpha.4</version>
+  <version>0.1.0-alpha.7</version>
   <scope>test</scope>
 </dependency>
 ```
 
-**Requirements**:
-- Java 21+
+**Requirements**: Java 21+
+
+**Compatibility**
+```
+| TickLoom        | tickloomexamples  |
+|-----------------|-------------------|
+| 0.1.0-alpha.7   | 0.1.0-alpha.7     |
+```
 
 ---
 
@@ -288,9 +297,9 @@ cluster.close();
 
 ---
 
-## Simulation Runner and Jepsen-Style Checking
+## Simulation Runner and Consistency Checking
 
-TickLoom includes a small simulation harness to drive repeatable workloads and verify correctness:
+TickLoom includes a simulation harness to drive repeatable workloads and verify correctness:
 
 - **`SimulationRunner`**: base class that runs a cluster for N ticks, issues client requests deterministically (by seed), and records a history.
 - **`QuorumSimulationRunner`**: concrete runner for the quorum key-value example (issues GET/SET).
@@ -335,6 +344,91 @@ boolean ok = consistencyChecker.checkLinearizableRegister(history.toEdn());
 System.out.println("Linearizable = " + ok);
 ```
 
+# Consistency Checking
+
+TickLoom provides comprehensive consistency verification through both **Jepsen integration** and **custom consistency checkers**. This allows you to verify that your distributed algorithms maintain the correct consistency properties under various failure scenarios.
+
+### Supported Consistency Models
+
+- **Linearizability**: Strongest consistency model - operations appear to execute atomically at some point between their invocation and response
+- **Sequential Consistency**: Operations appear to execute in some sequential order consistent with program order
+
+### Quickstart: Consistency Check
+
+```java
+// Record operation history during simulation
+var history = HistoryRecorder.newHistory();
+// ... run your simulation, record ops ...
+Path edn = history.writeEdn(Paths.get("build/history.edn"));
+
+// Check linearizability using Jepsen
+var resultLin = ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
+assert resultLin.valid();
+
+// Check sequential consistency using custom checker  
+var resultSeq = ConsistencyChecker.check(edn, ConsistencyProperty.SEQUENTIAL_CONSISTENCY, DataModel.REGISTER);
+assert resultSeq.valid();
+```
+
+### Advanced Usage
+
+#### Multiple Data Models
+
+```java
+// Register model (default)
+ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
+
+// Compare-and-swap register
+ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.CAS_REGISTER);
+
+// Set operations
+ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.SET);
+
+// Mutex operations
+ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.MUTEX);
+```
+
+#### Independent Operations
+
+```java
+// For multi-key operations (Jepsen independent checker)
+boolean valid = ConsistencyChecker.checkIndependent(
+    edn, 
+    ConsistencyProperty.LINEARIZABILITY, 
+    DataModel.REGISTER
+);
+```
+
+### Integration with Tests
+
+```java
+@Test
+void testConsistencyUnderPartition() throws IOException {
+    try (var cluster = new Cluster()
+            .withProcessIds(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA))
+            .useSimulatedNetwork()
+            .build(QuorumReplica::new)
+            .start()) {
+        
+        // Run operations with network partitions
+        cluster.partitionNodes(NodeGroup.of(ATHENS, BYZANTIUM), NodeGroup.of(CYRENE, DELPHI, SPARTA));
+        
+        // Record history
+        History<String, String> history = new History<>();
+        // ... perform operations ...
+        
+        // Verify consistency properties
+        String edn = history.toEdn();
+        boolean linearizable = ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
+        boolean sequential = ConsistencyChecker.check(edn, ConsistencyProperty.SEQUENTIAL_CONSISTENCY, DataModel.REGISTER);
+        
+        // Assertions based on expected behavior
+        assertFalse(linearizable, "Split-brain should violate linearizability");
+        assertTrue(sequential, "Should maintain sequential consistency");
+    }
+}
+```
+
 Notes:
 - The simulation uses a single-threaded tick model; randomness is fully controlled by the seed for reproducibility.
 - EDN histories are stable and suitable for external analysis tools.
@@ -372,11 +466,28 @@ For more examples of using Jepsen, see `src/test/java/com/tickloom/JepsenTest.ja
 Tickloom is for you if you:
 - Build distributed algorithms in Java
 - Need deterministic, reproducible tests
-- Want to simulate failures without non-deterministic chaos   using single-threaded event loop architecture
+- Want to simulate failures without non-deterministic chaos using single-threaded event loop architecture
+- **Want to learn and understand distributed systems concepts used in state-of-the-art production systems**
+- **Need deterministic simulation testing capabilities**
+- **Want to implement Jepsen-style consistency checking to verify your algorithms maintain correctness under failures**
 
 ---
+## Working with LLMs
 
-  
+LLMs are fascinating, but as we discussed in the article
+on [conversational abstractions for LLMs](https://martinfowler.com/articles/convo-llm-abstractions.html), having stable
+abstractions helps us quickly build code by using them as vocabulary in prompts. With the primitive abstractions
+available in the TickLoom framework, I’ve found it relatively easy to quickly build example code for algorithms I want
+to try out. Here’s an example prompt:
+```
+Refer to TickLoom QuorumKVStoreTest code and create tests that demonstrate clock-skew scenarios where a minority partition with higher 
+timestamps can overwrite majority values after healing. 
+Use Jepsen history recording to prove the system violates 
+linearizability but maintains sequential consistency.
+```
+This prompt uses words like “TickLoom” and “Jepsen” but refers to a concrete implementation, making it easier for LLMs to have a
+strong context to work with. LLMs are very new, and everyone is experimenting with them—let’s continue and see what the 
+future holds.
 
 ## Acknowledgements
 - Tickloom’s tick model and deterministic simulation approach are inspired by the excellent [TigerBeetle](https://github.com/tigerbeetle/tigerbeetle) project.
