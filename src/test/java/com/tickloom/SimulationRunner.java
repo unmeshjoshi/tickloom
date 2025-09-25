@@ -51,7 +51,7 @@ public abstract class SimulationRunner {
     public static void main(String[] args) throws IOException {
         int randomSeed = 111111;
         int runForTicks = 10000;
-        SimulationRunner simulationRunner = new QuorumSimulationRunner(randomSeed);
+        SimulationRunner simulationRunner = new QuorumKVScenarioRunner(randomSeed);
         simulationRunner.runForTicks(runForTicks);
     }
 
@@ -96,9 +96,7 @@ public abstract class SimulationRunner {
     }
 
     private void checkLinearizability() {
-        ConsistencyChecker consistencyChecker = new ConsistencyChecker();
-        String edn = history.toEdn();
-        boolean isLinearizable = check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
+        boolean isLinearizable = check(history, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
         System.out.println("The history is " + (isLinearizable ? "linearizable" : "not linearizable") + " = " + isLinearizable);
     }
 
@@ -131,6 +129,8 @@ public abstract class SimulationRunner {
             }
         });
     }
+
+    //ResponseRecorr
 
     //history recording for set calls which have both key and a writtenValue.
     protected <T> ListenableFuture<T> recordResponse(ListenableFuture<T> future,

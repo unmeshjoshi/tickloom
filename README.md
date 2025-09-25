@@ -311,7 +311,7 @@ TickLoom includes a simulation harness to drive repeatable workloads and verify 
 long seed = 111_111L;
 long ticks = 10_000L;
 
-var runner = new com.tickloom.algorithms.replication.quorum.QuorumSimulationRunner(seed);
+var runner = new com.tickloom.algorithms.replication.quorum.QuorumKVScenarioRunner(seed);
 runner.runForTicks(ticks); // writes EDN to build/history_*.edn and runs Jepsen checker
 ```
 

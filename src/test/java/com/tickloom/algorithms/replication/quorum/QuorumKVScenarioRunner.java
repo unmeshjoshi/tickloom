@@ -1,6 +1,5 @@
 package com.tickloom.algorithms.replication.quorum;
 
-import com.tickloom.history.History;
 import com.tickloom.history.Op;
 import com.tickloom.SimulationRunner;
 import com.tickloom.algorithms.replication.ClusterClient;
@@ -9,13 +8,13 @@ import com.tickloom.future.ListenableFuture;
 import java.io.IOException;
 import java.util.Random;
 
-public class QuorumSimulationRunner extends SimulationRunner {
+public class QuorumKVScenarioRunner extends SimulationRunner {
 
-    public QuorumSimulationRunner(long randomSeed, int clusterSize, int numClients) throws IOException {
+    public QuorumKVScenarioRunner(long randomSeed, int clusterSize, int numClients) throws IOException {
         super(randomSeed, clusterSize, numClients, QuorumReplica::new, QuorumReplicaClient::new);
     }
 
-    public QuorumSimulationRunner(long randomSeed) throws IOException {
+    public QuorumKVScenarioRunner(long randomSeed) throws IOException {
         this(randomSeed, 3, 3);
     }
 
@@ -41,7 +40,13 @@ public class QuorumSimulationRunner extends SimulationRunner {
             QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;
             System.out.println("Issuing request for key = " + key  + " from client " + quorumReplicaClient.id.name() + ": " + history.getProcessIndex(quorumReplicaClient.id));
             ListenableFuture<GetResponse> getFuture = quorumReplicaClient.get(key.getBytes());//clients.get(0)
+
             recordReadInvocation(quorumReplicaClient.id, Op.READ, key);
+
+            //responseFuture = sendRequest
+            //recordInvocation(clientId, op, key);
+            //future = historyRecordingWrapper(responseFuture)
+
             opFuture = recordReadResponse(
                     getFuture, Op.READ, key,
                     (getResponse) -> {

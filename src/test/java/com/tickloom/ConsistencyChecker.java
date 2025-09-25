@@ -2,6 +2,7 @@ package com.tickloom;
 
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
+import com.tickloom.history.History;
 
 // ----- Clojure/Jepsen interop helpers -----
 public class ConsistencyChecker {
@@ -17,12 +18,20 @@ public class ConsistencyChecker {
         SHUTDOWN_AGENTS = Clojure.var("clojure.core", "shutdown-agents");
     }
 
-    public static boolean check(String edn, ConsistencyProperty consistencyProperty, DataModel model) {
-        Object valid = ENTRY_ANALYZE_Q.invoke(edn,
+    public static boolean check(History history, ConsistencyProperty consistencyProperty, DataModel model) {
+        return check(history.toEdn(), consistencyProperty, model);
+    }
+
+    public static boolean check(String ednStr, ConsistencyProperty consistencyProperty, DataModel model) {
+        Object valid = ENTRY_ANALYZE_Q.invoke(ednStr,
                 consistencyProperty.getKeyword(),
                 model.getKeyword(),
                 "{:time-limit 60000}");
         return Boolean.TRUE.equals(valid);
+    }
+
+    public static boolean checkIndependent(History history, ConsistencyProperty consistencyProperty, DataModel model) {
+        return checkIndependent(history.toEdn(), consistencyProperty, model);
     }
 
     public static boolean checkIndependent(String edn, ConsistencyProperty consistencyProperty, DataModel model) {

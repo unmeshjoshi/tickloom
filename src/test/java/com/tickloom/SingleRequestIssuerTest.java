@@ -2,7 +2,7 @@ package com.tickloom;
 
 import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
-import com.tickloom.algorithms.replication.quorum.QuorumSimulationRunner;
+import com.tickloom.algorithms.replication.quorum.QuorumKVScenarioRunner;
 import com.tickloom.testkit.Cluster;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class SingleRequestIssuerTest {
 
     private Cluster cluster;
-    private QuorumSimulationRunner simulationRunner;
+    private QuorumKVScenarioRunner simulationRunner;
     private QuorumReplicaClient client;
     private SingleRequestIssuer<QuorumReplicaClient> requestIssuer;
 
@@ -30,7 +30,7 @@ public class SingleRequestIssuerTest {
                 .start();
 
         // The simulation runner needs a cluster to direct the client requests to.
-        simulationRunner = new QuorumSimulationRunner(123L);
+        simulationRunner = new QuorumKVScenarioRunner(123L);
 
         client = cluster.newClient(ProcessId.of("test-client"), QuorumReplicaClient::new);
         requestIssuer = new SingleRequestIssuer<>(simulationRunner, client, new Random(42L));

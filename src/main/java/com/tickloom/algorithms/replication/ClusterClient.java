@@ -28,6 +28,8 @@ public abstract class ClusterClient extends Process {
     // class HistoryWritingClient extends ClusterClient {
 
 
+
+
     public List<ProcessId> getReplicaEndpoints() {
         return replicaEndpoints;
     }

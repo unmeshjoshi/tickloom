@@ -2,12 +2,13 @@ package com.tickloom;
 
 import com.tickloom.ConsistencyChecker.ConsistencyProperty;
 import com.tickloom.ConsistencyChecker.DataModel;
-import com.tickloom.algorithms.replication.quorum.QuorumSimulationRunner;
+import com.tickloom.algorithms.replication.quorum.QuorumKVScenarioRunner;
 import com.tickloom.history.History;
 import com.tickloom.history.JepsenHistory;
 import com.tickloom.history.Op;
 import com.tickloom.util.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
 
@@ -33,7 +34,7 @@ public class ConsistencyCheckerTest {
 
         String edn = h.toEdn();
         System.out.println("edn = " + edn);
-        boolean ok = ConsistencyChecker.checkIndependent(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
+        boolean ok = ConsistencyChecker.checkIndependent(h, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
         assertTrue(ok, "Expected history to be linearizable");
     }
 
@@ -52,17 +53,28 @@ public class ConsistencyCheckerTest {
         h.ok    (ProcessId.of("p1"), Op.READ,  k, v2);
 
         String edn = h.toEdn();
-        boolean ok = ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
+        boolean ok = ConsistencyChecker.check(h, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
         assertFalse(ok, "Expected history to be NON-linearizable");
     }
 
     @Test
-    public void shouldBeLinearizableForStrictQuorumImplementation() throws IOException {
-        SimulationRunner runner = new QuorumSimulationRunner(123L);
-        History history = runner.runAndGetHistory(25);
-        String edn = history.toEdn();
-        TestUtils.writeEdnFile("linearizable-with-strict-quorum-history.edn", edn);
-        assertTrue(ConsistencyChecker.checkIndependent(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER));
+    public void strictMajorityQuorumMaintainsLinearizabilityForKVStore(TestInfo testInfo) throws IOException {
+        // Deterministic inputs: same values ⇒ identical history
+        final long seed  = 123L;
+        final long simulationDurationInTicks = 1_000L;
+
+        /**
+         * Executes multiple clients reading and writing to a distributed kv store,
+         * introducing failures like network partitions, packet loss, crashes, etc..
+         * for the given duration in ticks (logical time) and returns the
+         * recorded operation history. The run is fully deterministic for a fixed seed.
+         */
+        SimulationRunner runner = new QuorumKVScenarioRunner(seed);
+        History history = runner.runAndGetHistory(simulationDurationInTicks);
+        assertTrue(ConsistencyChecker.checkIndependent(history, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER));
+
+        //write history to file if you want to take a look.
+        TestUtils.writeEdnFile(testInfo, history);
     }
 
     @Test
