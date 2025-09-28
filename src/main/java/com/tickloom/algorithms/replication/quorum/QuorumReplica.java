@@ -220,9 +220,9 @@ public class QuorumReplica extends Replica {
 
     private static void logInternalGetResponse(VersionedValue value, Throwable error, InternalGetRequest getRequest) {
         if (error == null) {
-            String valueStr = value != null ? "found" : "not found";
+            String valueStr = value != null ? value + "found" : "not found";
             System.out.println("QuorumReplica: Internal GET completed - key: " + getRequest.key() +
-                    ", name: " + valueStr );
+                    ", value: " + valueStr);
 
         } else {
             System.out.println("QuorumReplica: Internal GET failed - key: " + getRequest.key() +

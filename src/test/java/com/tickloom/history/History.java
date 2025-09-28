@@ -19,19 +19,19 @@ public class History<K, V> {
         return jepsenHistory.getProcessIndex(processId);
     }
 
-    public void invoke(ProcessId processId, Op op, K key, V value) {
+    public void invoke(ProcessId processId, Op op, V value) {
         jepsenHistory.invoke(processId, op, value);
     }
 
-    public void ok(ProcessId processId, Op op, K key, V value) {
+    public void ok(ProcessId processId, Op op, V value) {
         jepsenHistory.ok(processId, op, value);
     }
 
-    public void timeout(ProcessId processId, Op op, K key, V value) {
+    public void timeout(ProcessId processId, Op op, V value) {
         jepsenHistory.info(processId, op, value);
     }
 
-    public void fail(ProcessId processId, Op op, Object key, Object value) {
+    public void fail(ProcessId processId, Op op, Object value) {
         jepsenHistory.fail(processId, op, value);
     }
 

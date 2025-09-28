@@ -44,11 +44,11 @@ public class ConsistencyPropertiesTest {
             History<String, String> history = new History();
 
             // Initialize to v0 under full connectivity
-            history.invoke(ProcessId.of("client1"), Op.WRITE, key, v0);
+            history.invoke(ProcessId.of("client1"), Op.WRITE, v0);
             var init = clientWriter.set(key.getBytes(), v0.getBytes());
             assertEventually(cluster, init::isCompleted);
             assertTrue(init.getResult().success());
-            history.ok(ProcessId.of("client1"), Op.WRITE, key, v0);
+            history.ok(ProcessId.of("client1"), Op.WRITE, v0);
 
             assertEventually(cluster, () -> {
                 var v = cluster.getStorageValue(ATHENS, key.getBytes());
@@ -60,18 +60,18 @@ public class ConsistencyPropertiesTest {
             cluster.partitionNodes(writerSide, otherSide);
 
             // Quorum write v1 on writer side
-            history.invoke(ProcessId.of("client1"), Op.WRITE, key, v1);
+            history.invoke(ProcessId.of("client1"), Op.WRITE, v1);
             var w1 = clientWriter.set(key.getBytes(), v1.getBytes());
             assertEventually(cluster, () -> w1.isCompleted() && w1.getResult().success());
             assertTrue(w1.getResult().success());
-            history.ok(ProcessId.of("client1"), Op.WRITE, key, v1);
+            history.ok(ProcessId.of("client1"), Op.WRITE, v1);
 
             // Local read from ATHENS (read-one), returns stale v0
-            history.invoke(ProcessId.of("client2"), Op.READ, key, null);
+            history.invoke(ProcessId.of("client2"), Op.READ, null);
             var vv = cluster.getStorageValue(ATHENS, key.getBytes());
             assertNotNull(vv);
             assertArrayEquals(v0.getBytes(), vv.value());
-            history.ok(ProcessId.of("client2"), Op.READ, key, new String(vv.value()));
+            history.ok(ProcessId.of("client2"), Op.READ, new String(vv.value()));
 
             String edn = history.toEdn();
             System.out.println("edn = " + edn);
@@ -98,11 +98,11 @@ public class ConsistencyPropertiesTest {
             History<String, String> history = new History();
 
             // Initialize v0
-            history.invoke(ProcessId.of("clientX"), Op.WRITE, key, v0);
+            history.invoke(ProcessId.of("clientX"), Op.WRITE, v0);
             var init = client.set(key.getBytes(), v0.getBytes());
             assertEventually(cluster, init::isCompleted);
             assertTrue(init.getResult().success());
-            history.ok(ProcessId.of("clientX"), Op.WRITE, key, v0);
+            history.ok(ProcessId.of("clientX"), Op.WRITE, v0);
 
             // Partition to isolate ATHENS
             var writerSide = NodeGroup.of(CYRENE, DELPHI, SPARTA);
@@ -110,18 +110,18 @@ public class ConsistencyPropertiesTest {
             cluster.partitionNodes(writerSide, otherSide);
 
             // Same client quorum write v1
-            history.invoke(ProcessId.of("clientX"), Op.WRITE, key, v1);
+            history.invoke(ProcessId.of("clientX"), Op.WRITE, v1);
             var w1 = client.set(key.getBytes(), v1.getBytes());
             assertEventually(cluster, () -> w1.isCompleted() && w1.getResult().success());
             assertTrue(w1.getResult().success());
-            history.ok(ProcessId.of("clientX"), Op.WRITE, key, v1);
+            history.ok(ProcessId.of("clientX"), Op.WRITE, v1);
 
             // Same client performs local read from ATHENS (read-one) -> stale v0
-            history.invoke(ProcessId.of("clientX"), Op.READ, key, null);
+            history.invoke(ProcessId.of("clientX"), Op.READ, null);
             var vv = cluster.getStorageValue(ATHENS, key.getBytes());
             assertNotNull(vv);
             assertArrayEquals(v0.getBytes(), vv.value());
-            history.ok(ProcessId.of("clientX"), Op.READ, key, new String(vv.value()));
+            history.ok(ProcessId.of("clientX"), Op.READ, new String(vv.value()));
 
             String edn = history.toEdn();
             assertFalse(ConsistencyChecker.check(edn, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER));

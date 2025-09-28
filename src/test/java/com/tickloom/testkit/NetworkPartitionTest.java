@@ -99,11 +99,11 @@ public class NetworkPartitionTest {
             History<String, String> history = new History();
 
             // Step 1: initialize name via quorum so all nodes converge to v0
-            history.invoke(ProcessId.of("client1"), Op.WRITE, key, v0);
+            history.invoke(ProcessId.of("client1"), Op.WRITE, v0);
             var init = clientWriter.set(key.getBytes(), v0.getBytes());
             assertEventually(cluster, init::isCompleted);
             assertTrue(init.getResult().success());
-            history.ok(ProcessId.of("client1"), Op.WRITE, key, v0);
+            history.ok(ProcessId.of("client1"), Op.WRITE, v0);
 
             // Step 2: partition nodes so writer's majority excludes ATHENS
             var writerSide = NodeGroup.of(CYRENE, DELPHI, SPARTA);
@@ -111,17 +111,17 @@ public class NetworkPartitionTest {
             cluster.partitionNodes(writerSide, otherSide);
 
             // Step 3: quorum write v1 on writer side
-            history.invoke(ProcessId.of("client1"), Op.WRITE, key, v1);
+            history.invoke(ProcessId.of("client1"), Op.WRITE, v1);
             var w1 = clientWriter.set(key.getBytes(), v1.getBytes());
             assertEventually(cluster, () -> w1.isCompleted() && w1.getResult().success());
-            history.ok(ProcessId.of("client1"), Op.WRITE, key, v1);
+            history.ok(ProcessId.of("client1"), Op.WRITE, v1);
 
             // Step 4: different client performs local read on ATHENS (single-node read), sees stale v0
-            history.invoke(ProcessId.of("client2"), Op.READ, key, null);
+            history.invoke(ProcessId.of("client2"), Op.READ, null);
             var vv = cluster.getStorageValue(ATHENS, key.getBytes());
             assertNotNull(vv);
             assertArrayEquals(v0.getBytes(), vv.value());
-            history.ok(ProcessId.of("client2"), Op.READ, key, new String(vv.value()));
+            history.ok(ProcessId.of("client2"), Op.READ, new String(vv.value()));
 
             // Step 5: analyze: linearizable should fail; sequential should pass (different client)
             String edn = history.toEdn();
@@ -154,42 +154,42 @@ public class NetworkPartitionTest {
             History<String, String> history = new History<>();
 
             // Step 1: majority-side write of initialValue; cluster converges on v0
-            history.invoke(ProcessId.of("majority_client"), Op.WRITE, new String(key), initialValue);
+            history.invoke(ProcessId.of("majority_client"), Op.WRITE, initialValue);
             var initialSet = majorityClient.set(key.getBytes(), initialValue.getBytes());
             assertEventually(cluster, initialSet::isCompleted);
             assertTrue(initialSet.getResult().success(), "Initial write should succeed");
             assertAllNodeStoragesContainValue(cluster, key.getBytes(), initialValue.getBytes());
-            history.ok(ProcessId.of("majority_client"), Op.WRITE, key, initialValue);
+            history.ok(ProcessId.of("majority_client"), Op.WRITE, initialValue);
 
             // Step 2: partition cluster into minority (2) and majority (3)
             cluster.partitionNodes(NodeGroup.of(ATHENS, BYZANTIUM), NodeGroup.of(CYRENE, DELPHI, SPARTA));
 
             // Step 3: minority write times out at client but persists locally in its partition
-            history.invoke(ProcessId.of("minority_client"), Op.WRITE, key, minorityValue);
+            history.invoke(ProcessId.of("minority_client"), Op.WRITE, minorityValue);
             var minorityWrite = minorityClient.set(key.getBytes(), minorityValue.getBytes());
             assertEventually(cluster, minorityWrite::isFailed);
             assertNodesContainValue(cluster, List.of(ATHENS, BYZANTIUM), key.getBytes(), minorityValue.getBytes());
-            history.fail(ProcessId.of("minority_client"), Op.WRITE, key, minorityValue);
+            history.fail(ProcessId.of("minority_client"), Op.WRITE, minorityValue);
 
             // Step 4: skew majority clock behind minority; majority write now has lower timestamp
             var athensTs = cluster.getStorageValue(ATHENS, key.getBytes()).timestamp();
             cluster.setTimeForProcess(CYRENE, athensTs - SKEW_TICKS);
 
-            history.invoke(ProcessId.of("majority_client"), Op.WRITE, key, majorityValue);
+            history.invoke(ProcessId.of("majority_client"), Op.WRITE, majorityValue);
             var majorityWrite = majorityClient.set(key.getBytes(), majorityValue.getBytes());
             assertEventually(cluster, () -> majorityWrite.isCompleted() && majorityWrite.getResult().success());
-            history.ok(ProcessId.of("majority_client"), Op.WRITE, key, majorityValue);
+            history.ok(ProcessId.of("majority_client"), Op.WRITE, majorityValue);
 
             // Step 5: heal partitions; higher timestamp (minority) should prevail cluster-wide
             cluster.healAllPartitions();
 
-            history.invoke(ProcessId.of("minority_client"), Op.READ, key, null);
+            history.invoke(ProcessId.of("minority_client"), Op.READ, null);
             var healedRead = minorityClient.get(key.getBytes());
             assertEventually(cluster, healedRead::isCompleted);
             assertTrue(healedRead.getResult().found(), "Data should be retrievable after healing");
             assertArrayEquals(minorityValue.getBytes(), healedRead.getResult().value(),
                     "Minority name (higher timestamp) should win after heal with clock skew");
-            history.ok(ProcessId.of("minority_client"), Op.READ, key, new String(healedRead.getResult().value()));
+            history.ok(ProcessId.of("minority_client"), Op.READ, new String(healedRead.getResult().value()));
 
             // Step 6: prove not linearizable (real-time precedence) and not sequential (no serial order preserves results)
             // - Linearizability fails: after healing, the read observes the minority name written in a different
@@ -278,7 +278,7 @@ public class NetworkPartitionTest {
 
             // Step 3: client2 writes v2 successfully, but by connecting to ATHENS, which has
             //clock lagging behind the other nodes.
-            history.invoke(ProcessId.of("client2"), Op.WRITE, key, v2);
+            history.invoke(ProcessId.of("client2"), Op.WRITE, v2);
             // Step 4: skew clock behind; majority write now has lower timestamp
             //The write succeeds because the writes are 'permissive'. If a node has
             //a name with higher timestamp and gets a request with lower timestamp, it does
@@ -287,7 +287,7 @@ public class NetworkPartitionTest {
             cluster.setTimeForProcess(ATHENS, athensTs - SKEW_TICKS);
             var w2 = client2.set(key, v2);
             assertEventually(cluster, () -> w2.isCompleted() && w2.getResult().success());
-            history.ok(ProcessId.of("client2"), Op.WRITE, key, v2);
+            history.ok(ProcessId.of("client2"), Op.WRITE, v2);
 
             ClusterAssertions.assertNodesContainValue(cluster, List.of(ATHENS, BYZANTIUM), key, v2);
             ClusterAssertions.assertNodesContainValue(cluster, List.of(CYRENE), key, v1);
@@ -297,10 +297,10 @@ public class NetworkPartitionTest {
             // Step 4: client2 performs a read
             // (new connection bound to CYRENE). This read gets an older name.
             var client2OtherSide = cluster.newClientConnectedTo(MINORITY_CLIENT, CYRENE, QuorumReplicaClient::new);
-            history.invoke(ProcessId.of("client2"), Op.READ, key, null);
+            history.invoke(ProcessId.of("client2"), Op.READ, null);
             var r2 = client2OtherSide.get(key);
             assertEventually(cluster, r2::isCompleted);
-            history.ok(ProcessId.of("client2"), Op.READ, key, r2.getResult().value());
+            history.ok(ProcessId.of("client2"), Op.READ, r2.getResult().value());
 
             String synthetic = history.toEdn();
             System.out.println("synthetic = " + synthetic);

@@ -39,8 +39,8 @@ public abstract class ClusterClient extends Process {
     }
 
 
-    protected <T> ListenableFuture<T> sendRequest(Object request, ProcessId destination, 
-                                                 MessageType messageType) {
+    public <T> ListenableFuture<T> sendRequest(Object request, ProcessId destination,
+                                               MessageType messageType) {
         String correlationId = generateCorrelationId();
         ListenableFuture<T> future = new ListenableFuture<>();
         

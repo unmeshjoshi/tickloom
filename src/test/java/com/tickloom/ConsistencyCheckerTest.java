@@ -26,11 +26,11 @@ public class ConsistencyCheckerTest {
         String v3 = "3";
 
         ProcessId clien1 = ProcessId.of("clien1");
-        h.invoke(clien1, Op.WRITE, k, JepsenHistory.tuple(k, v3));
-        h.ok    (clien1, Op.WRITE, k, JepsenHistory.tuple(k, v3));
+        h.invoke(clien1, Op.WRITE, JepsenHistory.tuple(k, v3));
+        h.ok    (clien1, Op.WRITE, JepsenHistory.tuple(k, v3));
 
-        h.invoke(ProcessId.of("1"), Op.READ,  k, JepsenHistory.tuple(k, null));
-        h.ok(ProcessId.of("1"), Op.READ,  k, JepsenHistory.tuple(k, v3));
+        h.invoke(ProcessId.of("1"), Op.READ, JepsenHistory.tuple(k, null));
+        h.ok(ProcessId.of("1"), Op.READ, JepsenHistory.tuple(k, v3));
 
         String edn = h.toEdn();
         System.out.println("edn = " + edn);
@@ -46,11 +46,11 @@ public class ConsistencyCheckerTest {
         String v1 = "1";
         String v2 = "2";
 
-        h.invoke(ProcessId.of("p0"), Op.WRITE, k, v1);
-        h.ok    (ProcessId.of("p0"), Op.WRITE, k, v1);
+        h.invoke(ProcessId.of("p0"), Op.WRITE, v1);
+        h.ok    (ProcessId.of("p0"), Op.WRITE, v1);
 
-        h.invoke(ProcessId.of("p1"), Op.READ,  k, null);
-        h.ok    (ProcessId.of("p1"), Op.READ,  k, v2);
+        h.invoke(ProcessId.of("p1"), Op.READ, null);
+        h.ok    (ProcessId.of("p1"), Op.READ, v2);
 
         String edn = h.toEdn();
         boolean ok = ConsistencyChecker.check(h, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);

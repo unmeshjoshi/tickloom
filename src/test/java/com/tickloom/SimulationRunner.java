@@ -5,6 +5,7 @@ import com.tickloom.algorithms.replication.ClusterClient;
 import com.tickloom.algorithms.replication.quorum.*;
 import com.tickloom.future.ListenableFuture;
 import com.tickloom.history.History;
+import com.tickloom.history.HistoryRecorder;
 import com.tickloom.history.JepsenHistory;
 import com.tickloom.history.Op;
 import com.tickloom.testkit.Cluster;
@@ -40,12 +41,13 @@ public abstract class SimulationRunner {
             clients.add(new SingleRequestIssuer<>(this, clusterClient, clusterSeedRandom));
         }
     }
+    protected HistoryRecorder<String, IPersistentVector> historyRecorder = new HistoryRecorder();
 
     public History runAndGetHistory(long tickDuration) {
         runClusterFor(tickDuration);
         waitForPendingRequests();
         // optionally skip file write + knossos here for tests
-        return history;
+        return historyRecorder.getHistory();
     }
 
     public static void main(String[] args) throws IOException {
@@ -102,11 +104,11 @@ public abstract class SimulationRunner {
 
 
     protected void recordReadInvocation(ProcessId processId, Op op, String key) {
-        history.invoke(processId, op, key, JepsenHistory.tuple(key, null));
+        history.invoke(processId, op, JepsenHistory.tuple(key, null));
     }
 
     protected void recordInvocation(ProcessId processId, Op op, String key, String value) {
-        history.invoke(processId, op, key, JepsenHistory.tuple(key, value));
+        history.invoke(processId, op, JepsenHistory.tuple(key, value));
     }
     //history recording for get calls, with only key.
     protected <T> ListenableFuture<T> recordReadResponse(ListenableFuture<T> future,
@@ -119,10 +121,10 @@ public abstract class SimulationRunner {
 
                 if (exception == null) {
                     String responseValue = valueFromResponse.apply(setResponse);
-                    history.ok(processId, op, key, JepsenHistory.tuple(key, responseValue));
+                    history.ok(processId, op, JepsenHistory.tuple(key, responseValue));
                 } else {
                     //For reads, any exception including timeouts is considered a failure.
-                    history.fail(processId, op, key, JepsenHistory.tuple(key, null));
+                    history.fail(processId, op, JepsenHistory.tuple(key, null));
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -144,12 +146,12 @@ public abstract class SimulationRunner {
 
                 if (exception == null) {
                     String responseValue = valueFromResponse.apply(setResponse);
-                    history.ok(processId, op, key, JepsenHistory.tuple(key, responseValue));
+                    history.ok(processId, op, JepsenHistory.tuple(key, responseValue));
                 } else if (exception instanceof TimeoutException) {
-                    history.timeout(processId, op, key, JepsenHistory.tuple(key, writtenValue));
+                    history.timeout(processId, op, JepsenHistory.tuple(key, writtenValue));
                     System.out.println("Timeout for key = " + key + " writtenValue: ");
                 } else {
-                    history.fail(processId, op, key, JepsenHistory.tuple(key, writtenValue));
+                    history.fail(processId, op, JepsenHistory.tuple(key, writtenValue));
                 }
             } catch (Exception e) {
                 e.printStackTrace();

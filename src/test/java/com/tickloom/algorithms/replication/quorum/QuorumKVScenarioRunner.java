@@ -1,5 +1,6 @@
 package com.tickloom.algorithms.replication.quorum;
 
+import com.tickloom.history.JepsenHistory;
 import com.tickloom.history.Op;
 import com.tickloom.SimulationRunner;
 import com.tickloom.algorithms.replication.ClusterClient;
@@ -18,6 +19,15 @@ public class QuorumKVScenarioRunner extends SimulationRunner {
         this(randomSeed, 3, 3);
     }
 
+
+    //TODO: Revisit this design of HistoryRecorder and SimulationRunner. etc.
+    //In general each implementation would have a client.. like the QuorumReplicaClient in this case.
+    //The implementation needs to have its own Simulationrunner to implement issueRequest and
+    //actually invoke a particular request based on the mix of supported operations we need (e.g. 20% writes
+    //80% reads. etc.
+    //The historyrecorder for jepsen history, needs to have a invoked value for each operation
+    //and once we get a response, we need to be able to extract the value from that response.
+    //Historyrecorder handles the values to be recorded in case of failures and timeouts.
     @Override
     protected ListenableFuture issueRequest(ClusterClient client, Random clusterSeededRandom) {
         String key = randomKey();
@@ -25,47 +35,32 @@ public class QuorumKVScenarioRunner extends SimulationRunner {
         // Pick operation.
         boolean doSet = clusterSeededRandom.nextBoolean();
         ListenableFuture opFuture = null;
-        if (doSet) {
+        QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;
 
-            QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;
+        if (doSet) {
             System.out.println("Issuing request for key = " + key + " value = " + value + " from client " + quorumReplicaClient.id.name() + ": " + history.getProcessIndex(quorumReplicaClient.id));
 
-            ListenableFuture<SetResponse> setFuture = quorumReplicaClient.set(key.getBytes(), value.getBytes());//clients.get(0)
-            recordInvocation(quorumReplicaClient.id, Op.WRITE, key, value);
-            opFuture = recordResponse(setFuture, Op.WRITE, key, value,
-                    (setResponse) -> value, quorumReplicaClient.id);
-
-
+            var writtenKv = JepsenHistory.tuple(key, value);
+            opFuture = historyRecorder.invoke(quorumReplicaClient.id,
+                    Op.WRITE,
+                    writtenKv,
+                    () -> quorumReplicaClient.set(key.getBytes(), value.getBytes()),
+                    (msg) -> writtenKv
+            );
         } else {
-            QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;
-            System.out.println("Issuing request for key = " + key  + " from client " + quorumReplicaClient.id.name() + ": " + history.getProcessIndex(quorumReplicaClient.id));
-            ListenableFuture<GetResponse> getFuture = quorumReplicaClient.get(key.getBytes());//clients.get(0)
+            System.out.println("Issuing request for key = " + key + " from client " + quorumReplicaClient.id.name() + ": " + history.getProcessIndex(quorumReplicaClient.id));
 
-            recordReadInvocation(quorumReplicaClient.id, Op.READ, key);
-
-            //responseFuture = sendRequest
-            //recordInvocation(clientId, op, key);
-            //future = historyRecordingWrapper(responseFuture)
-
-            opFuture = recordReadResponse(
-                    getFuture, Op.READ, key,
-                    (getResponse) -> {
-                        try {
-                            System.out.println("Received response for key = " + key + " value = " + getResponse);
-                            byte[] responseValue = getResponse.value();
-                            return (responseValue != null) ?
-                                    new String(responseValue) : null; //TODO: Need to fix null handling
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                            return null;
-                        }
-                    }
-            , quorumReplicaClient.id);
+            opFuture = historyRecorder.invoke(quorumReplicaClient.id,
+                    Op.READ,
+                    JepsenHistory.tuple(key, null),
+                    () -> quorumReplicaClient.get(key.getBytes()),
+                    (msg) -> {
+                        byte[] readValue = ((GetResponse) msg).value();
+                        return JepsenHistory.tuple(key, JepsenHistory.tuple(key, new String(readValue)));
+                    });
         }
 
         return opFuture;
     }
 
 }
-
-
