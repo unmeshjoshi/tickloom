@@ -11,10 +11,8 @@
 - [x] Add Clojure test integration with Gradle build
 
 ## In Progress
-
-- [ ] Move Jepsen specific history_edn handling in linearizability-checker
-
-## TODO
-
 - [ ] Move history recording to QuorumKVClient or ClusterClient
+## TODO
+- [ ] Move Jepsen specific history_edn handling in linearizability-checker
+- [ ] Use Jepsen's generator in the SimulationRunner.
 - [ ] Store mavencetral token and gpg key and write a script to setup gradle.properties required for the publish task to work.

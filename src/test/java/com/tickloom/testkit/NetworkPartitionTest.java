@@ -96,7 +96,7 @@ public class NetworkPartitionTest {
             String v0  = "v0";
             String v1  = "v1";
 
-            History<String, String> history = new History();
+            History<String> history = new History();
 
             // Step 1: initialize name via quorum so all nodes converge to v0
             history.invoke(ProcessId.of("client1"), Op.WRITE, v0);
@@ -151,7 +151,7 @@ public class NetworkPartitionTest {
             String majorityValue = "majority_success";
 
             // Step 0: start recording a client-observed history for Jepsen analysis
-            History<String, String> history = new History<>();
+            History<String> history = new History<>();
 
             // Step 1: majority-side write of initialValue; cluster converges on v0
             history.invoke(ProcessId.of("majority_client"), Op.WRITE, initialValue);

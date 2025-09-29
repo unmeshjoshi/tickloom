@@ -41,7 +41,7 @@ public class ConsistencyPropertiesTest {
             String v0  = "v0";
             String v1  = "v1";
 
-            History<String, String> history = new History();
+            History<String> history = new History();
 
             // Initialize to v0 under full connectivity
             history.invoke(ProcessId.of("client1"), Op.WRITE, v0);
@@ -95,7 +95,7 @@ public class ConsistencyPropertiesTest {
             String v0  = "v0";
             String v1  = "v1";
 
-            History<String, String> history = new History();
+            History<String> history = new History();
 
             // Initialize v0
             history.invoke(ProcessId.of("clientX"), Op.WRITE, v0);

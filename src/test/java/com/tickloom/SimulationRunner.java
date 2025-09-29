@@ -2,7 +2,8 @@ package com.tickloom;
 
 import clojure.lang.IPersistentVector;
 import com.tickloom.algorithms.replication.ClusterClient;
-import com.tickloom.algorithms.replication.quorum.*;
+import com.tickloom.algorithms.replication.quorum.QuorumKVScenarioRunner;
+import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
 import com.tickloom.future.ListenableFuture;
 import com.tickloom.history.History;
 import com.tickloom.history.HistoryRecorder;
@@ -14,9 +15,8 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.time.Instant;
-import java.util.*;
-import java.util.concurrent.TimeoutException;
-import java.util.function.Function;
+import java.util.ArrayList;
+import java.util.Random;
 
 import static com.tickloom.ConsistencyChecker.*;
 
@@ -41,7 +41,7 @@ public abstract class SimulationRunner {
             clients.add(new SingleRequestIssuer<>(this, clusterClient, clusterSeedRandom));
         }
     }
-    protected HistoryRecorder<String, IPersistentVector> historyRecorder = new HistoryRecorder();
+    protected HistoryRecorder<IPersistentVector> historyRecorder = new HistoryRecorder();
 
     public History runAndGetHistory(long tickDuration) {
         runClusterFor(tickDuration);
@@ -58,7 +58,7 @@ public abstract class SimulationRunner {
     }
 
     //KV histories use tuple for values in jepsen history. e.g. [key value]
-    protected History<String, IPersistentVector> history = new History<>();
+    protected History<IPersistentVector> history = new History<>();
 
     public void runForTicks(long runForTicks) {
         history = runAndGetHistory(runForTicks);
@@ -109,54 +109,6 @@ public abstract class SimulationRunner {
 
     protected void recordInvocation(ProcessId processId, Op op, String key, String value) {
         history.invoke(processId, op, JepsenHistory.tuple(key, value));
-    }
-    //history recording for get calls, with only key.
-    protected <T> ListenableFuture<T> recordReadResponse(ListenableFuture<T> future,
-                                                         Op op,
-                                                         String key,
-                                                         Function<T, String> valueFromResponse, ProcessId processId) {
-        return future.andThen((setResponse, exception) -> {
-            try {
-                System.out.println("Received response in client for key = " + key + " response: " + setResponse + " exception:" + exception);
-
-                if (exception == null) {
-                    String responseValue = valueFromResponse.apply(setResponse);
-                    history.ok(processId, op, JepsenHistory.tuple(key, responseValue));
-                } else {
-                    //For reads, any exception including timeouts is considered a failure.
-                    history.fail(processId, op, JepsenHistory.tuple(key, null));
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
-    }
-
-    //ResponseRecorr
-
-    //history recording for set calls which have both key and a writtenValue.
-    protected <T> ListenableFuture<T> recordResponse(ListenableFuture<T> future,
-                                                     Op op,
-                                                     String key,
-                                                     String writtenValue,
-                                                     Function<T, String> valueFromResponse, ProcessId processId) {
-        return future.andThen((setResponse, exception) -> {
-            try {
-                System.out.println("Received response in client for key = " + key + " response: " + setResponse + " exception:" + exception);
-
-                if (exception == null) {
-                    String responseValue = valueFromResponse.apply(setResponse);
-                    history.ok(processId, op, JepsenHistory.tuple(key, responseValue));
-                } else if (exception instanceof TimeoutException) {
-                    history.timeout(processId, op, JepsenHistory.tuple(key, writtenValue));
-                    System.out.println("Timeout for key = " + key + " writtenValue: ");
-                } else {
-                    history.fail(processId, op, JepsenHistory.tuple(key, writtenValue));
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
     }
 
     protected abstract ListenableFuture issueRequest(ClusterClient client, Random clusterSeededRandom);

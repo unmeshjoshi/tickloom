@@ -3,19 +3,31 @@ package com.tickloom.history;
 import com.tickloom.ProcessId;
 import com.tickloom.future.ListenableFuture;
 
+import java.util.concurrent.Callable;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-public class HistoryRecorder<K, V> {
-    History<K, V> history = new History<K, V>();
+/**
+ * V is the type of :value in the jepsen history
+ * It can be simple string or a tuple e.g. [key value]
+ * Example history looks as follows
+ * For HistoryRecorcer<IPersistentVector>
+ * [:process 0 :op :invoke f: :write :value ["key" "value"]]
+ * For HistoryRecorcer<String>
+ * [:process 0 :op :ok :f :read :value "value"]
+ *
+ *
+ */
+public class HistoryRecorder<V> {
+    History<V> history = new History<V>();
 
-    public <T> ListenableFuture invoke(ProcessId process, final Op op,
-                                       V invokedValue,
-                                       Supplier<ListenableFuture<?>> requestInvoker,
-                                       Function<Object, V> valueFromMessage) {
+    public <Response> ListenableFuture<Response> invoke(ProcessId process, final Op op,
+                                                        V invokedValue,
+                                                        Supplier<ListenableFuture<Response>> requestInvoker,
+                                                        Function<Response, V> valueFromMessage) {
         history.invoke(process, op, invokedValue);
-        ListenableFuture<Object> fut = (ListenableFuture<Object>) requestInvoker.get();
+        ListenableFuture<Response> fut = requestInvoker.get();
         return fut.andThen((resp, ex) -> {
             try {
                 if (ex == null) {
@@ -25,7 +37,9 @@ public class HistoryRecorder<K, V> {
                 }
                 recordTimeoutOrFailure(op, ex, process, invokedValue);
 
-            } catch (Exception e) { e.printStackTrace(); }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         });
     }
 

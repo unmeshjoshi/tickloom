@@ -32,16 +32,17 @@ public class QuorumKVScenarioRunner extends SimulationRunner {
     protected ListenableFuture issueRequest(ClusterClient client, Random clusterSeededRandom) {
         String key = randomKey();
         String value = randomValue();
+        QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;
+
+        //TODO: Once Jepsen generator is integrated , we will not need this.
         // Pick operation.
         boolean doSet = clusterSeededRandom.nextBoolean();
-        ListenableFuture opFuture = null;
-        QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;
 
         if (doSet) {
             System.out.println("Issuing request for key = " + key + " value = " + value + " from client " + quorumReplicaClient.id.name() + ": " + history.getProcessIndex(quorumReplicaClient.id));
 
             var writtenKv = JepsenHistory.tuple(key, value);
-            opFuture = historyRecorder.invoke(quorumReplicaClient.id,
+            return historyRecorder.invoke(quorumReplicaClient.id,
                     Op.WRITE,
                     writtenKv,
                     () -> quorumReplicaClient.set(key.getBytes(), value.getBytes()),
@@ -50,17 +51,15 @@ public class QuorumKVScenarioRunner extends SimulationRunner {
         } else {
             System.out.println("Issuing request for key = " + key + " from client " + quorumReplicaClient.id.name() + ": " + history.getProcessIndex(quorumReplicaClient.id));
 
-            opFuture = historyRecorder.invoke(quorumReplicaClient.id,
+            return historyRecorder.invoke(quorumReplicaClient.id,
                     Op.READ,
                     JepsenHistory.tuple(key, null),
                     () -> quorumReplicaClient.get(key.getBytes()),
-                    (msg) -> {
-                        byte[] readValue = ((GetResponse) msg).value();
-                        return JepsenHistory.tuple(key, JepsenHistory.tuple(key, new String(readValue)));
+                    (getResponse) -> {
+                        byte[] readValue = getResponse.value();
+                        return JepsenHistory.tuple(key, new String(readValue));
                     });
         }
-
-        return opFuture;
     }
 
 }

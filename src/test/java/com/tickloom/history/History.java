@@ -11,7 +11,7 @@ import com.tickloom.ProcessId;
 //Wrapper class for History.n
 //The new implementation is JepsenHistory
 //we will step by step replace this class.
-public class History<K, V> {
+public class History<V> {
     //Make jepsen history parameterised. For KV store, we can have value as JepsenHistory.tuple.
     JepsenHistory jepsenHistory = new JepsenHistory();
 
