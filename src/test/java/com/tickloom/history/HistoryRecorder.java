@@ -3,16 +3,19 @@ package com.tickloom.history;
 import com.tickloom.ProcessId;
 import com.tickloom.future.ListenableFuture;
 
-import java.util.concurrent.Callable;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
+ * This is more like a proxy or an 'around' aspect,
+ * which records Jepsen history events for the
+ * requests made to the server.
+ *  *
  * V is the type of :value in the jepsen history
  * It can be simple string or a tuple e.g. [key value]
  * Example history looks as follows
- * For HistoryRecorcer<IPersistentVector>
+ * For HistoryRecorder<IPersistentVector>
  * [:process 0 :op :invoke f: :write :value ["key" "value"]]
  * For HistoryRecorcer<String>
  * [:process 0 :op :ok :f :read :value "value"]
