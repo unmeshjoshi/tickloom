@@ -39,7 +39,7 @@ public class ClockSkewTests extends ClusterTest<QuorumReplicaClient, GetResponse
 
     @Test
     @DisplayName("Stale read because of clock skew after own write breaks linearizability and sequential consistency")
-    void clockSkewNoPartition_staleReads_breaksLinAndSeq(TestInfo testInfo) throws IOException {
+    void clockSkewCausesStaleReads_BreaksLinearizabilityAndSequentialConsistency() throws IOException {
         // Step 0: clients connected to different servers
         var client1 = clientConnectedTo(clientId1, CYRENE);
         var client2 = clientConnectedTo(clientId2, ATHENS);
@@ -54,7 +54,7 @@ public class ClockSkewTests extends ClusterTest<QuorumReplicaClient, GetResponse
                 .write(withWriter(client1, key, v1))
                 // Minority (ATHENS/BYZANTIUM) never received v1
                 .assertNoValue(key, Arrays.asList(ATHENS, BYZANTIUM))
-                // Reconfigure partitions: ATHENS joins CYRENE majority
+                //Step 2: Reconfigure partitions: ATHENS joins CYRENE majority
                 .healAllPartitions()
                 .partition(NodeGroup.of(ATHENS, BYZANTIUM, CYRENE), NodeGroup.of(DELPHI, SPARTA))
                 // Step 3: skew ATHENS behind; permissive LWW will accept lower-ts write
@@ -99,12 +99,12 @@ public class ClockSkewTests extends ClusterTest<QuorumReplicaClient, GetResponse
 
             @Override
             public String attemptedValue() {
-                return value;
+                return this.value;
             }
 
             @Override
             public Supplier<ListenableFuture<?>> getSupplier() {
-                return () -> client.set(key.getBytes(), value.getBytes());
+                return () -> client.set(this.key.getBytes(), this.value.getBytes());
             }
         };
     }
