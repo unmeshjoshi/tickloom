@@ -283,7 +283,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
      * Helpers
      * ============================== */
 
-    private static String pretty(byte[] b) {
+    static String pretty(byte[] b) {
         if (b == null) return "null";
         var s = new String(b, StandardCharsets.UTF_8);
         boolean printable = s.chars().allMatch(ch -> ch >= 32 && ch < 127);
@@ -291,5 +291,10 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
         var sb = new StringBuilder("0x");
         for (byte x : b) sb.append(String.format("%02x", x));
         return sb.toString();
+    }
+
+
+    static String maskNull(byte[] val) {
+        return val == null ? null : new String(val);
     }
 }

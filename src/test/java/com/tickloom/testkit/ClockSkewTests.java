@@ -8,7 +8,6 @@ import com.tickloom.future.ListenableFuture;
 import com.tickloom.history.History;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -33,18 +32,19 @@ public class ClockSkewTests extends ClusterTest<QuorumReplicaClient, GetResponse
     private static final int SKEW_TICKS = 10;
 
     public ClockSkewTests() throws IOException {
-        super(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA), QuorumReplica::new, QuorumReplicaClient::new, (response) -> new String(response.value()));
+        super(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA), QuorumReplica::new, QuorumReplicaClient::new, (response) ->
+                maskNull(response.value()));
     }
 
 
     @Test
-    @DisplayName("Stale read because of clock skew after own write breaks linearizability and sequential consistency")
-    void clockSkewCausesStaleReads_BreaksLinearizabilityAndSequentialConsistency() throws IOException {
+    @DisplayName("Stale read because of clock skew after own write breaks both, linearizability and sequential consistency")
+        void clockSkewCausesStaleReadsIn_LWW_QuorumImplementations() {
         // Step 0: clients connected to different servers
         var client1 = clientConnectedTo(clientId1, CYRENE);
         var client2 = clientConnectedTo(clientId2, ATHENS);
 
-        byte[] key = "kv".getBytes();
+        byte[] key = "k".getBytes();
         byte[] v1 = "v1".getBytes();
         byte[] v2 = "v2".getBytes();
 
@@ -66,7 +66,8 @@ public class ClockSkewTests extends ClusterTest<QuorumReplicaClient, GetResponse
                 .assertNodesContainValue(List.of(CYRENE), key, v1);
 
         var reconnectedClient2 = clientConnectedTo(clientId2, CYRENE);
-        // Step 5: client2 reconnects and reads from CYRENE (stale v1)
+        // Step 5: client2 reconnects and sends reads to CYRENE which has (stale v1)
+        // at higher timestamp. So Last Write Wins rule picks up v1 over v2.
         read(withReader(reconnectedClient2, key));
 
         assertEquals("[{:process 0, :process-name \"client1\", :type :invoke, :f :write, :value \"v1\"} " +
@@ -77,7 +78,10 @@ public class ClockSkewTests extends ClusterTest<QuorumReplicaClient, GetResponse
                         "{:process 1, :process-name \"client2\", :type :ok, :f :read, :value \"v1\"}]",
                 getHistory().toEdn());
 
+        //Invoke Jepsen's linearizability checker.
         assertLinearizability(false);
+
+        //Invoke sequential consistency checker.
         assertSequentialConsistency(false);
     }
 
