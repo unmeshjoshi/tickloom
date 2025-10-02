@@ -6,6 +6,7 @@ import com.tickloom.ProcessId;
 import com.tickloom.algorithms.replication.ClusterClient;
 import com.tickloom.future.ListenableFuture;
 import com.tickloom.history.History;
+import com.tickloom.messaging.MessageType;
 import com.tickloom.storage.VersionedValue;
 import com.tickloom.util.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -15,8 +16,10 @@ import org.junit.jupiter.api.TestInfo;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -58,6 +61,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
                 .useSimulatedNetwork()
                 .build(serverFactory)
                 .start();
+
     }
 
     @AfterEach
@@ -156,6 +160,24 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
         return this;
     }
 
+    protected ClusterTest<C, RGet, JepsenValue> writeAndWaitUntil(Writer<C, JepsenValue> writer, BooleanSupplier cond) {
+        var fut = H.write(writer.client.id, writer.attemptedValue(), writer.getSupplier());
+        assertEventually(cond);
+        return this;
+    }
+
+    protected void delay(ProcessId processId, List<ProcessId> toProcesses, int propDelayTicks) {
+        for (ProcessId toProcess : toProcesses) {
+            cluster.setNetworkDelay(processId, toProcess, propDelayTicks);
+        }
+    }
+
+
+    protected void delayForMessageType(MessageType messageType, ProcessId processId, List<ProcessId> toProcessIds, int propDelayTicks) {
+        cluster.delayForMessageType(messageType, processId, toProcessIds, propDelayTicks);
+    }
+
+
     static abstract class Writer<C extends ClusterClient, HistVal> {
         C client;
         final String key;
@@ -194,6 +216,12 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
     protected ClusterTest<C, RGet, JepsenValue> read(Reader reader) {
         var fut = H.read(reader.client.id, reader.getSupplier());
         assertEventually(() -> isSuccessful(fut));
+        return this;
+    }
+
+    protected ClusterTest<C, RGet, JepsenValue> read(Reader reader, Predicate cond) {
+        var fut = H.read(reader.client.id, reader.getSupplier());
+        assertEventually(() -> isSuccessful(fut) && cond.test(fut));
         return this;
     }
 
@@ -256,6 +284,14 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
         return this;
     }
 
+    protected Optional<byte[]> getNodeValue(ProcessId node, byte[] key) {
+        VersionedValue storageValue = cluster.getStorageValue(node, key);
+        if (null == storageValue) {
+            return Optional.empty();
+        }
+        return Optional.of(storageValue.value());
+    }
+
     /** String sugar for assertNodesContainValue. */
     protected void assertNodesContainValue(List<ProcessId> nodes, String key, String expected) {
         assertNodesContainValue(
@@ -297,4 +333,11 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
     static String maskNull(byte[] val) {
         return val == null ? null : new String(val);
     }
+
+
+    protected History getHistory() {
+        return H.history();
+    }
+
+
 }

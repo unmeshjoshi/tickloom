@@ -29,22 +29,38 @@ public class SimulatedNetwork extends Network {
     // Network partitioning state
     private final Set<NetworkLink> partitionedLinks = new HashSet<>();
 
+    private record DelayConfig(MessageType messageType, Long delayTicks){
+        public DelayConfig(Long delayTicks) {
+            this(null, delayTicks); //by default apply delay for all message types
+        }
+
+        public boolean matches(MessageType messageType) {
+            return matchesAllTypes() || messageType.equals(this.messageType);
+        }
+
+        private boolean matchesAllTypes() {
+            return this.messageType == null;
+        }
+    }
     // Per-link configuration
     private final Map<NetworkLink, Double> linkPacketLoss = new HashMap<>();
-    private final Map<NetworkLink, Long> cloggedUntilTick = new HashMap<>();
+    private final Map<NetworkLink, DelayConfig> cloggedUntilTick = new HashMap<>();
     private final Map<NetworkLink, FaultRule> linkFaultRules = new HashMap<>();
     //Should use LinkedHashset for determinstic ordering while iterating for introducing
     //network partitions
     private LinkedHashSet<ProcessId> knownNodes = new LinkedHashSet<>();
 
-    private boolean isClogged(NetworkLink link) {
-        return cloggedUntilTick.getOrDefault(link, 0L) > currentTick;
+    private boolean isClogged(NetworkLink link, MessageType messageType) {
+        DelayConfig delayConfig = cloggedUntilTick.getOrDefault(link, new DelayConfig(0l));
+        return (delayConfig.matches(messageType) && delayConfig.delayTicks() > currentTick);
     }
 
     private void clogFor(NetworkLink link, long durationTicks) {
         if (durationTicks <= 0) return;
         long until = currentTick + durationTicks;
-        cloggedUntilTick.merge(link, until, Math::max); // extend if already clogged
+        cloggedUntilTick.merge(link, new DelayConfig(until), (existing, replacement) -> {
+            return new DelayConfig(Math.max(existing.delayTicks(), replacement.delayTicks()));
+        }); // extend if already clogged
     }
 
     private boolean shouldClog() {
@@ -156,7 +172,7 @@ public class SimulatedNetwork extends Network {
         }
 
         // Use internal counter to calculate delivery tick (TigerBeetle pattern)
-        long deliveryTick = calculateDeliveryTick(link, currentTick);
+        long deliveryTick = calculateDeliveryTick(link, message, currentTick);
         queueForDelivery(message, deliveryTick);
     }
 
@@ -403,12 +419,12 @@ public class SimulatedNetwork extends Network {
         return effectivePacketLoss > 0.0 && random.nextDouble() < effectivePacketLoss;
     }
 
-    private long calculateDeliveryTick(NetworkLink link, long currentTick) {
+    private long calculateDeliveryTick(NetworkLink link, Message message, long currentTick) {
         // If the path is clogged now, delay to cloggedUntil and requeue.
         long scheduleAtTick = currentTick + 1;
-        if (isClogged(link)) {
+        if (isClogged(link, message.messageType())) {
             scheduleAtTick =
-                    currentTick + cloggedUntilTick.getOrDefault(link, defaultDelayTicks);
+                    currentTick + cloggedUntilTick.getOrDefault(link, new DelayConfig(defaultDelayTicks)).delayTicks();
 
 
         }
@@ -485,7 +501,19 @@ public class SimulatedNetwork extends Network {
             throw new IllegalArgumentException("Delay ticks cannot be negative");
         }
 
-        cloggedUntilTick.put(new NetworkLink(source, destination), delayTicks);
+        cloggedUntilTick.put(new NetworkLink(source, destination), new DelayConfig(delayTicks));
+    }
+
+    public void setDelayForMessageType(ProcessId source, ProcessId destination, long delayTicks, MessageType messageType) {
+        if (source == null || destination == null) {
+            throw new IllegalArgumentException("Source and destination addresses cannot be null");
+        }
+        if (delayTicks < 0) {
+            throw new IllegalArgumentException("Delay ticks cannot be negative");
+        }
+
+        NetworkLink link = new NetworkLink(source, destination);
+        cloggedUntilTick.put(link, new DelayConfig(messageType, delayTicks));
     }
 
     public void setPacketLoss(ProcessId source, ProcessId destination, double lossRate) {

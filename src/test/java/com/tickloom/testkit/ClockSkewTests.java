@@ -85,10 +85,6 @@ public class ClockSkewTests extends ClusterTest<QuorumReplicaClient, GetResponse
         assertSequentialConsistency(false);
     }
 
-    private History getHistory() {
-        return super.H.history();
-    }
-
     private static Reader<QuorumReplicaClient, GetResponse, String> withReader(QuorumReplicaClient reconnectedClient2, byte[] key) {
         return new Reader<>(reconnectedClient2) {
             @Override

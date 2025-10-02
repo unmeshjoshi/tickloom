@@ -397,6 +397,18 @@ public class Cluster implements Tickable, AutoCloseable {
         return random;
     }
 
+    public Network getNetwork() {
+        return sharedNetwork;
+    }
+
+    public void delayForMessageType(MessageType messageType, ProcessId processId, List<ProcessId> toProcessIds, int propDelayTicks) {
+        ensureSimulatedNetwork();
+
+        toProcessIds.forEach((toProcessId)->
+        ((SimulatedNetwork)getNetwork()).setDelayForMessageType(processId, toProcessId, propDelayTicks, messageType));
+
+    }
+
     public interface ClientFactory<T extends ClusterClient> {
         T create(ProcessId clientId, List<ProcessId> replicaEndpoints,
                  MessageBus messageBus, MessageCodec messageCodec,
