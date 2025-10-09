@@ -16,7 +16,7 @@ plugins {
 // =============================================================================
 
 group = 'io.github.unmeshjoshi'
-version = '0.1.0-alpha.7'
+version = '0.1.0-alpha.14'
 
 // Version catalog for dependency management
 ext {
@@ -281,7 +281,7 @@ mavenPublishing {
 // =============================================================================
 
 def testkitConfig = [
-    includes: ['com/tickloom/**'],
+    includes: ['com/tickloom/**', 'com/tickloom/testkit/ClusterTest**'],
     classExcludes: [
         '**/*Test.class',
         '**/*Test$*.class',
@@ -300,9 +300,15 @@ tasks.register('testkitJar', Jar) {
     archiveBaseName.set("${project.name}-testkit")
     duplicatesStrategy = DuplicatesStrategy.WARN
     
+    // Include everything except test classes
     from(sourceSets.test.output) {
         include testkitConfig.includes
         exclude testkitConfig.classExcludes
+    }
+    // Explicitly include ClusterTest which was excluded above
+    from(sourceSets.test.output) {
+        include '**/testkit/ClusterTest.class'
+        include '**/testkit/ClusterTest$*.class'
     }
     from(layout.buildDirectory.dir('clojure/test')) {
         include '**/*.class'
@@ -315,19 +321,30 @@ tasks.register('testkitSourcesJar', Jar) {
     description = 'Sources for complete testing infrastructure including Clojure checkers'
     archiveBaseName.set("${project.name}-testkit")
     archiveClassifier.set('sources')
+    // Include everything except test sources
     from(sourceSets.test.allSource) {
         include testkitConfig.includes
         exclude testkitConfig.sourceExcludes
+    }
+    // Explicitly include ClusterTest which was excluded above
+    from(sourceSets.test.allJava) {
+        include '**/testkit/ClusterTest.java'
     }
 }
 
 tasks.register('testkitJavadoc', Javadoc) {
     group = 'documentation'
     description = 'Javadoc for complete testing infrastructure'
-    source = sourceSets.test.allJava.matching {
+    // Include everything except test sources
+    def mainSource = sourceSets.test.allJava.matching {
         include testkitConfig.includes
         exclude testkitConfig.sourceExcludes
     }
+    // Explicitly include ClusterTest which was excluded above
+    def clusterTestSource = sourceSets.test.allJava.matching {
+        include '**/testkit/ClusterTest.java'
+    }
+    source = mainSource + clusterTestSource
     classpath = sourceSets.test.compileClasspath + sourceSets.main.output
     destinationDir = layout.buildDirectory.dir('docs/testkitJavadoc').get().asFile
     options.addStringOption('Xdoclint:none', '-quiet')
