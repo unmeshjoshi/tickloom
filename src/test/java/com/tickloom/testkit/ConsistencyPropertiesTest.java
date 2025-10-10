@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.List;
 
+import static com.tickloom.testkit.Cluster.createSimulated;
 import static org.junit.jupiter.api.Assertions.*;
 import static com.tickloom.testkit.ClusterAssertions.assertEventually;
 
@@ -29,11 +30,7 @@ public class ConsistencyPropertiesTest {
     @Test
     @DisplayName("Stale local read after quorum write: linearizable=false, sequential=false in this model")
     void shouldBeSequentialButNotLinearizableForStaleLocalRead() throws IOException {
-        try (var cluster = new Cluster()
-                .withProcessIds(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA))
-                .useSimulatedNetwork()
-                .build(QuorumReplica::new)
-                .start()) {
+        try (var cluster = Cluster.createSimulated(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA), QuorumReplica::new)) {
 
             var clientWriter = cluster.newClientConnectedTo(ProcessId.of("client1"), CYRENE, QuorumReplicaClient::new);
 
@@ -83,11 +80,7 @@ public class ConsistencyPropertiesTest {
     @Test
     @DisplayName("Same client stale read after own write: linearizable=false, sequential=false")
     void shouldBeNonLinearizableAndNonSequentialForSameClientStaleRead() throws IOException {
-        try (var cluster = new Cluster()
-                .withProcessIds(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA))
-                .useSimulatedNetwork()
-                .build(QuorumReplica::new)
-                .start()) {
+        try (var cluster = Cluster.createSimulated(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA), QuorumReplica::new)) {
 
             var client = cluster.newClientConnectedTo(ProcessId.of("clientX"), CYRENE, QuorumReplicaClient::new);
 

@@ -1,21 +1,18 @@
 package com.tickloom.algorithms.replication.quorum;
 
 import com.tickloom.ProcessId;
+import com.tickloom.ProcessParams;
 import com.tickloom.algorithms.replication.ClusterClient;
 import com.tickloom.future.ListenableFuture;
 import com.tickloom.messaging.*;
-import com.tickloom.network.MessageCodec;
-import com.tickloom.util.Clock;
 
 import java.util.List;
 import java.util.Map;
 
 public class QuorumReplicaClient extends ClusterClient {
     
-    public QuorumReplicaClient(ProcessId clientId, List<ProcessId> replicaEndpoints,
-                               MessageBus messageBus, MessageCodec messageCodec,
-                               Clock clock, int timeoutTicks) {
-        super(clientId, replicaEndpoints, messageBus, messageCodec, clock, timeoutTicks);
+    public QuorumReplicaClient(List<ProcessId> replicaEndpoints, ProcessParams processParams) {
+        super(replicaEndpoints, processParams);
     }
     
     public ListenableFuture<GetResponse> get(byte[] key) {

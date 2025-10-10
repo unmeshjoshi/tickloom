@@ -2,7 +2,7 @@ package com.tickloom.testkit;
 
 import com.tickloom.ProcessId;
 import com.tickloom.algorithms.replication.quorum.QuorumReplica;
-import com.tickloom.util.StubClock;
+import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -15,11 +15,7 @@ class ClusterInitialTimeTest {
     @Test
     @DisplayName("Should use default initial clock time of 1000ms")
     void shouldUseDefaultInitialClockTime() throws IOException {
-        try (Cluster cluster = new Cluster()
-                .withNumProcesses(2)
-                .useSimulatedNetwork()
-                .build(QuorumReplica::new)
-                .start()) {
+        try (Cluster cluster = Cluster.createSimulated(2, QuorumReplica::new)) {
 
             ProcessId p1 = ProcessId.of("process-1");
             ProcessId p2 = ProcessId.of("process-2");
@@ -35,12 +31,8 @@ class ClusterInitialTimeTest {
     void shouldAllowConfiguringInitialClockTime() throws IOException {
         long customInitialTime = 5000L;
         
-        try (Cluster cluster = new Cluster()
-                .withNumProcesses(2)
-                .withInitialClockTime(customInitialTime)
-                .useSimulatedNetwork()
-                .build(QuorumReplica::new)
-                .start()) {
+        try (Cluster cluster = Cluster.createSimulated(2, QuorumReplica::new)) {
+            cluster.setTimeForAllProcesses(customInitialTime);
 
             ProcessId p1 = ProcessId.of("process-1");
             ProcessId p2 = ProcessId.of("process-2");
@@ -71,7 +63,7 @@ class ClusterInitialTimeTest {
         long customInitialTime = 2500L;
         
         try (Cluster cluster = new Cluster()
-                .withNumProcesses(2)
+                .withProcessIds(ProcessId.of("process-1"), ProcessId.of("process-2"))
                 .withInitialClockTime(customInitialTime)
                 .useSimulatedNetwork()
                 .build(QuorumReplica::new)
@@ -83,9 +75,7 @@ class ClusterInitialTimeTest {
 
             // Create a clientId and verify it also uses the same initial time
             ProcessId clientId = ProcessId.of("test-clientId");
-            cluster.newClient(clientId, (id, endpoints, bus, codec, clock, timeout) -> 
-                new com.tickloom.algorithms.replication.quorum.QuorumReplicaClient(
-                    id, endpoints, bus, codec, clock, timeout));
+            cluster.newClient(clientId, QuorumReplicaClient::new);
             
             assertEquals(customInitialTime, cluster.getClockForProcess(clientId).now());
         }

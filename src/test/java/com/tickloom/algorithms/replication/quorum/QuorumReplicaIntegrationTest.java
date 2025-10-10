@@ -17,11 +17,7 @@ public class QuorumReplicaIntegrationTest {
         var key = "test-key".getBytes();
         var value = "test-name".getBytes();
 
-        try (Cluster cluster = new Cluster()
-                .withNumProcesses(3)
-                .useSimulatedNetwork() //use simulated network
-                .build(QuorumReplica::new)
-                .start()) {
+        try (Cluster cluster = Cluster.createSimulated(3, QuorumReplica::new)) {
 
             var client = cluster.newClient(ProcessId.of("Client1"), QuorumReplicaClient::new);
             // Test SET operation
@@ -50,10 +46,7 @@ public class QuorumReplicaIntegrationTest {
         var key = "test-key".getBytes();
         var value = "test-name".getBytes();
 
-        try (Cluster cluster = new Cluster()
-                .withNumProcesses(3)
-                .build(QuorumReplica::new)
-                .start()) {
+        try (Cluster cluster = Cluster.create(3, QuorumReplica::new)) {
 
             var client = cluster.newClient(ProcessId.of("Client1"), QuorumReplicaClient::new);
             // Test SET operation

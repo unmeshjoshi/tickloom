@@ -4,6 +4,7 @@ import com.tickloom.messaging.*;
 import com.tickloom.network.MessageCodec;
 import com.tickloom.network.PeerType;
 import com.tickloom.util.Clock;
+import com.tickloom.util.IdGen;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -20,15 +21,17 @@ public abstract class Process implements Tickable, AutoCloseable {
     protected final int timeoutTicks;
 
     protected final Clock clock;
+    protected final IdGen idGen;
 
-    public Process(ProcessId id, MessageBus messageBus, MessageCodec messageCodec, int timeoutTicks, Clock clock) {
-        this.messageBus = messageBus;
-        this.id = id;
-        this.clock = clock;
-        this.messageCodec = messageCodec;
-        this.timeoutTicks = timeoutTicks;
-        this.waitingList = new RequestWaitingList<>(timeoutTicks);
-        messageBus.register(this);
+    public Process(ProcessParams processParams) {
+        this.messageBus = processParams.messageBus();
+        this.id = processParams.id();
+        this.clock = processParams.clock();
+        this.messageCodec = processParams.messageCodec();
+        this.timeoutTicks = processParams.timeoutTicks();
+        this.waitingList = new RequestWaitingList<>(processParams.timeoutTicks());
+        this.idGen = processParams.idGenerator();
+        processParams.messageBus().register(this);
         initialiseMessageHandlers();
     }
 

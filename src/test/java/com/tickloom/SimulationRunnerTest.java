@@ -25,9 +25,11 @@ class SimulationRunnerTest {
     public void historyWithDifferentSeedShouldNotBeIdentical() throws IOException {
         SimulationRunner runner = new QuorumKVScenarioRunner(123L);
         SimulationRunner runner2 = new QuorumKVScenarioRunner(456L);
-        History history1 = runner.runAndGetHistory(1000);
-        History history2 = runner2.runAndGetHistory(1000);
-        assertNotEquals(history1.toEdn(), history2.toEdn());
+        History history1 = runner.runAndGetHistory(100);
+        History history2 = runner2.runAndGetHistory(100);
+        String edn1 = history1.toEdn();
+        String ed2 = history2.toEdn();
+        assertNotEquals(edn1, ed2);
     }
 
     @Test

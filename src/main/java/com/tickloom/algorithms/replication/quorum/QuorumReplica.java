@@ -1,14 +1,11 @@
 package com.tickloom.algorithms.replication.quorum;
 
+import com.tickloom.ProcessParams;
 import com.tickloom.ProcessId;
 import com.tickloom.Replica;
-import com.tickloom.future.ListenableFuture;
 import com.tickloom.messaging.*;
-import com.tickloom.network.MessageCodec;
-import com.tickloom.network.PeerType;
 import com.tickloom.storage.Storage;
 import com.tickloom.storage.VersionedValue;
-import com.tickloom.util.Clock;
 
 import java.util.List;
 import java.util.Map;
@@ -22,8 +19,8 @@ import java.util.Map;
  */
 public class QuorumReplica extends Replica {
 
-    public QuorumReplica(ProcessId id, List<ProcessId> peerIds, MessageBus messageBus, MessageCodec messageCodec, Storage storage, Clock clock, int requestTimeoutTicks) {
-        super(id, peerIds, messageBus, messageCodec, storage, clock, requestTimeoutTicks);
+    public QuorumReplica(List<ProcessId> peerIds, Storage storage, ProcessParams processParams) {
+        super(peerIds, storage, processParams);
     }
     
     @Override

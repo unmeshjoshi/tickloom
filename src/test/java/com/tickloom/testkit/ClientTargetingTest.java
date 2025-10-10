@@ -1,6 +1,7 @@
 package com.tickloom.testkit;
 
 import static com.tickloom.testkit.ClusterAssertions.assertEventually;
+import static com.tickloom.testkit.Cluster.createSimulated;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
@@ -26,17 +27,10 @@ public class ClientTargetingTest {
     @DisplayName("Should allow clients to connect to specific nodes for targeted failure scenarios")
     void shouldAllowTargetedClientConnections() throws IOException {
         List<ProcessId> processIds = List.of(ProcessId.of("athens"), ProcessId.of("byzantium"), ProcessId.of("cyrene"), ProcessId.of("delphi"), ProcessId.of("sparta")); // <"athens", "byzantium", "cyrene", "delphi", "sparta">
-        try (Cluster cluster = new Cluster()
-                .withProcessIds(processIds)
-                .useSimulatedNetwork()
-                .build(QuorumReplica::new)
-                .start()) {
+        try (Cluster cluster = Cluster.createSimulated(processIds, QuorumReplica::new)) {
 
             ProcessId athens = ProcessId.of("athens");
             ProcessId byzantium = ProcessId.of("byzantium");
-            ProcessId cyrene = ProcessId.of("cyrene");
-            ProcessId delphi = ProcessId.of("delphi");
-            ProcessId sparta = ProcessId.of("sparta");
 
             // Create clients connected to specific nodes
             ProcessId client1 = ProcessId.of("clientId-connected-to-athens");

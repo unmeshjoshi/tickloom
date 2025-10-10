@@ -7,7 +7,7 @@ import com.tickloom.network.MessageDispatcher;
 import com.tickloom.network.MessageCodec;
 import com.tickloom.network.Network;
 import com.tickloom.network.PeerType;
-import com.tickloom.util.Utils;
+import com.tickloom.util.IdGen;
 
 
 import java.io.IOException;
@@ -108,33 +108,6 @@ public class MessageBus implements MessageDispatcher, Tickable, AutoCloseable {
     public void tick() {
     }
 
-    /**
-     * Broadcasts a message from the source to all recipients in the list.
-     * The sender (source) will not receive the message - only the other recipients.
-     *
-     * @param source      the source address sending the broadcast
-     * @param recipients  the list of addresses to send the message to
-     * @param messageType the type of message to broadcast
-     * @param payload     the message payload
-     */
-    public void broadcast(ProcessId source, PeerType sourcePeerType, List<ProcessId> recipients,
-                          MessageType messageType, byte[] payload) throws IOException {
-        for (ProcessId recipient : recipients) {
-            if (!recipient.equals(source)) {  // Don't send to self
-                String correlationId = generateCorrelationId();
-                Message message = Message.of(source, recipient, sourcePeerType, messageType, payload, correlationId);
-                sendMessage(message);
-            }
-        }
-    }
-
-
-    /**
-     * Generates a unique correlation ID for message tracking.
-     */
-    protected String generateCorrelationId() {
-        return Utils.generateCorrelationId("msg");
-    }
 
     //Visibility for testing
     public Map<ProcessId, com.tickloom.Process> getHandlers() {

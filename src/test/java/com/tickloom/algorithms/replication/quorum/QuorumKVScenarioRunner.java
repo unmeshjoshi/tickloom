@@ -1,5 +1,6 @@
 package com.tickloom.algorithms.replication.quorum;
 
+import com.tickloom.ProcessParams;
 import com.tickloom.history.JepsenHistory;
 import com.tickloom.history.Op;
 import com.tickloom.SimulationRunner;
@@ -12,7 +13,7 @@ import java.util.Random;
 public class QuorumKVScenarioRunner extends SimulationRunner {
 
     public QuorumKVScenarioRunner(long randomSeed, int clusterSize, int numClients) throws IOException {
-        super(randomSeed, clusterSize, numClients, QuorumReplica::new, QuorumReplicaClient::new);
+        super(randomSeed, clusterSize, numClients, (peerIds, storage, processParams) -> new QuorumReplica(peerIds, storage, processParams), (replicaEndpoints, processParams) -> new QuorumReplicaClient(replicaEndpoints, processParams));
     }
 
     public QuorumKVScenarioRunner(long randomSeed) throws IOException {
@@ -56,10 +57,15 @@ public class QuorumKVScenarioRunner extends SimulationRunner {
                     JepsenHistory.tuple(key, null),
                     () -> quorumReplicaClient.get(key.getBytes()),
                     (getResponse) -> {
-                        byte[] readValue = getResponse.value();
-                        return JepsenHistory.tuple(key, new String(readValue));
+                        var s = maskNull(getResponse.value());
+                        return JepsenHistory.tuple(key, s);
                     });
         }
+    }
+
+
+    static String maskNull(byte[] val) {
+        return val == null ? null : new String(val);
     }
 
 }

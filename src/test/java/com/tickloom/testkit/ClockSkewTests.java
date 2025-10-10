@@ -1,11 +1,11 @@
 package com.tickloom.testkit;
 
+import com.tickloom.ProcessParams;
 import com.tickloom.ProcessId;
 import com.tickloom.algorithms.replication.quorum.GetResponse;
 import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
 import com.tickloom.future.ListenableFuture;
-import com.tickloom.history.History;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

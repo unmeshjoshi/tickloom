@@ -3,6 +3,7 @@ package com.tickloom.cmd;
 import com.tickloom.ProcessId;
 import com.tickloom.Process;
 import com.tickloom.ProcessFactory;
+import com.tickloom.ProcessParams;
 import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.config.ClusterTopology;
 import com.tickloom.config.Config;
@@ -13,10 +14,12 @@ import com.tickloom.network.NioNetwork;
 import com.tickloom.storage.RocksDbStorage;
 import com.tickloom.storage.Storage;
 import com.tickloom.util.Clock;
+import com.tickloom.util.IdGen;
 import com.tickloom.util.SystemClock;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Random;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -93,7 +96,8 @@ public class ServerMain {
                                          Clock clock,
                                          int timeoutTicks) {
         if (factoryClassName == null || factoryClassName.isBlank()) {
-            return new QuorumReplica(processId, peerIds, messageBus, codec, storage, clock, timeoutTicks);
+            IdGen idGen = new IdGen(processId.name(), new Random());
+            return new QuorumReplica(peerIds, storage, new ProcessParams(processId, messageBus, codec, timeoutTicks, clock, idGen));
         }
         try {
             Class<?> clazz = Class.forName(factoryClassName);
@@ -102,7 +106,8 @@ public class ServerMain {
                 throw new IllegalArgumentException("Factory class does not implement ProcessFactory: " + factoryClassName);
             }
             ProcessFactory factory = (ProcessFactory) instance;
-            return factory.create(processId, peerIds, messageBus, codec, storage, clock, timeoutTicks);
+            IdGen idGen = new IdGen(processId.name(), new Random());
+            return factory.create(peerIds, storage, new ProcessParams(processId, messageBus, codec, timeoutTicks, clock, idGen));
         } catch (Exception e) {
             throw new RuntimeException("Failed to instantiate factory: " + factoryClassName, e);
         }

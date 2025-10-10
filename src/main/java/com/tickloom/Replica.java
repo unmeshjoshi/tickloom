@@ -1,10 +1,8 @@
 package com.tickloom;
 
 import com.tickloom.messaging.*;
-import com.tickloom.network.MessageCodec;
 import com.tickloom.storage.Storage;
-import com.tickloom.util.Utils;
-import com.tickloom.util.Clock;
+import com.tickloom.util.IdGen;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -18,8 +16,8 @@ public abstract class Replica extends Process {
     // Request tracking infrastructure
     protected final AtomicLong requestIdGenerator = new AtomicLong(0);
     
-    public Replica(ProcessId id, List<ProcessId> peerIds, MessageBus messageBus, MessageCodec messageCodec, Storage storage, Clock clock, int requestTimeoutTicks) {
-        super(id, messageBus, messageCodec, requestTimeoutTicks, clock);
+    public Replica(List<ProcessId> peerIds, Storage storage, ProcessParams processParams) {
+        super(processParams);
         this.peerIds = List.copyOf(peerIds);
         this.storage = storage;
     }
@@ -39,7 +37,7 @@ public abstract class Replica extends Process {
      * for replica to replica communication.
      */
     private String internalCorrelationId() {
-        return Utils.generateCorrelationId("internal");
+        return idGen.generateCorrelationId("internal");
     }
     /**
      * Gets all nodes in the cluster (peers + self).

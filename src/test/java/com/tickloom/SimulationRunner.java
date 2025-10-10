@@ -25,15 +25,8 @@ public abstract class SimulationRunner {
     private final ArrayList<com.tickloom.SingleRequestIssuer<ClusterClient>> clients;
     private Cluster cluster;
 
-    public SimulationRunner(long randomSeed, ProcessFactory processFactory, Cluster.ClientFactory<QuorumReplicaClient> clientFactory) throws IOException {
-        this(randomSeed, 3, 3, processFactory, clientFactory);
-    }
     public SimulationRunner(long randomSeed, int clusterSize, int numClients, ProcessFactory processFactory, Cluster.ClientFactory<QuorumReplicaClient> clientFactory) throws IOException {
-        this.cluster = new Cluster()
-                .withSeed(randomSeed)
-                .withNumProcesses(clusterSize)
-                .withLossySimulatedNetwork()
-                .build(processFactory);
+        this.cluster = Cluster.createSimulated(clusterSize, processFactory, randomSeed);
         Random clusterSeedRandom = cluster.getRandom();
         this.clients = new ArrayList<>();
         for (int i = 0; i < numClients; i++) {

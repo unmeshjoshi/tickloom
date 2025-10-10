@@ -178,7 +178,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
     }
 
 
-    static abstract class Writer<C extends ClusterClient, HistVal> {
+    public static abstract class Writer<C extends ClusterClient, HistVal> {
         C client;
         final String key;
         final String value;
@@ -196,7 +196,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
 
     /** Record a READ in history and await completion (generic over client/response). */
 
-    static abstract class Reader<C extends ClusterClient, RGet, HistVal> {
+    public  static abstract class Reader<C extends ClusterClient, RGet, HistVal> {
         C client;
         private final HistVal attemptedValue;
 

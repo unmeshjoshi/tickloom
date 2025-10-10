@@ -3,28 +3,22 @@ package com.tickloom.testkit;
 import com.tickloom.ConsistencyChecker;
 import com.tickloom.ConsistencyChecker.ConsistencyProperty;
 import com.tickloom.ConsistencyChecker.DataModel;
-import com.tickloom.ProcessFactory;
 import com.tickloom.ProcessId;
-import com.tickloom.algorithms.replication.quorum.GetResponse;
 import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
 import com.tickloom.algorithms.replication.quorum.SetResponse;
 import com.tickloom.future.ListenableFuture;
 import com.tickloom.history.History;
-import com.tickloom.history.HistoryRecorder;
 import com.tickloom.history.Op;
-import com.tickloom.util.TestUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.function.BooleanSupplier;
-import java.util.function.Supplier;
 
 import static com.tickloom.testkit.ClusterAssertions.*;
+import static com.tickloom.testkit.Cluster.createSimulated;
 import static org.junit.jupiter.api.Assertions.*;
 
 
@@ -45,11 +39,7 @@ public class NetworkPartitionTest {
     @Test
     @DisplayName("Split-brain prevention: majority name persists after heal")
     void shouldPreventSplitBrainDuringNetworkPartition() throws IOException {
-        try (var cluster = new Cluster()
-                .withProcessIds(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA))
-                .useSimulatedNetwork()
-                .build(QuorumReplica::new)
-                .start()) {
+        try (var cluster = Cluster.createSimulated(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA), QuorumReplica::new)) {
 
             // clients
             var minorityClient = cluster.newClientConnectedTo(MINORITY_CLIENT, ATHENS, QuorumReplicaClient::new);
@@ -95,11 +85,7 @@ public class NetworkPartitionTest {
     @Test
     @DisplayName("Local stale read after quorum write: linearizable=false, sequential=true")
     void localReadAfterQuorumWrite_breaksLin_passesSeq() throws IOException {
-        try (var cluster = new Cluster()
-                .withProcessIds(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA))
-                .useSimulatedNetwork()
-                .build(QuorumReplica::new)
-                .start()) {
+        try (var cluster = Cluster.createSimulated(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA), QuorumReplica::new)) {
 
             var clientWriter = cluster.newClientConnectedTo(ProcessId.of("client1"), CYRENE, QuorumReplicaClient::new);
 
@@ -147,11 +133,7 @@ public class NetworkPartitionTest {
     @Test
     @DisplayName("Clock skew: minority (higher timestamp) wins after heal")
     void clockSkewOverwritesMajorityValue() throws IOException {
-        try (var cluster = new Cluster()
-                .withProcessIds(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA))
-                .useSimulatedNetwork()
-                .build(QuorumReplica::new)
-                .start()) {
+        try (var cluster = Cluster.createSimulated(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA), QuorumReplica::new)) {
 
             var minorityClient = cluster.newClientConnectedTo(MINORITY_CLIENT, ATHENS, QuorumReplicaClient::new);
             var majorityClient = cluster.newClientConnectedTo(MAJORITY_CLIENT, CYRENE, QuorumReplicaClient::new);
@@ -223,11 +205,7 @@ public class NetworkPartitionTest {
         var NEWYORK = ProcessId.of("newyork");
         var LONDON = ProcessId.of("london");
 
-        try (var cluster = new Cluster()
-                .withProcessIds(List.of(CALIFORNIA, NEWYORK, LONDON))
-                .useSimulatedNetwork()
-                .build(QuorumReplica::new)
-                .start()) {
+        try (var cluster = Cluster.createSimulated(List.of(CALIFORNIA, NEWYORK, LONDON), QuorumReplica::new)) {
 
             // symmetric delays (ticks)
             cluster.setNetworkDelay(CALIFORNIA, NEWYORK, 5);

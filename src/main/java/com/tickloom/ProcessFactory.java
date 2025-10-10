@@ -42,22 +42,13 @@ public interface ProcessFactory {
     /**
      * Constructs a configured {@link Process} instance for the given server id and cluster context.
      *
-     * @param id            this server's {@link ProcessId}
      * @param peerIds       other server ids in the cluster (excludes {@code id})
-     * @param messageBus    shared {@link MessageBus} registered with the network
-     * @param messageCodec  message serializer/deserializer used by the transport
      * @param storage       server's {@link Storage} (e.g., RocksDB-backed)
-     * @param clock         time source (e.g., {@link com.tickloom.util.SystemClock})
-     * @param timeoutTicks  request timeout in ticks for the process
+     * @param processParams
      * @return a fully constructed {@link Process} ready to participate in the event loop
      */
-    Process create(ProcessId id,
-                   List<ProcessId> peerIds,
-                   MessageBus messageBus,
-                   MessageCodec messageCodec,
-                   Storage storage,
-                   Clock clock,
-                   int timeoutTicks);
+    Process create(List<ProcessId> peerIds,
+                   Storage storage, ProcessParams processParams);
 }
 
 

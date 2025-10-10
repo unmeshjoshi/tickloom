@@ -2,7 +2,9 @@ package com.tickloom.testkit;
 
 import com.tickloom.ProcessFactory;
 import com.tickloom.ProcessId;
+import com.tickloom.ProcessParams;
 import com.tickloom.Tickable;
+import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.future.ListenableFuture;
 import com.tickloom.algorithms.replication.ClusterClient;
 import com.tickloom.config.ClusterTopology;
@@ -15,6 +17,7 @@ import com.tickloom.storage.SimulatedStorage;
 import com.tickloom.storage.Storage;
 import com.tickloom.storage.VersionedValue;
 import com.tickloom.util.Clock;
+import com.tickloom.util.IdGen;
 import com.tickloom.util.StubClock;
 
 import java.io.IOException;
@@ -37,10 +40,12 @@ class OrderedTicker implements Tickable {
         OrderedTicker ticker = new OrderedTicker(Arrays.asList(tickables));
         return ticker;
     }
+
     public void tick() {
         tickables.forEach(Tickable::tick);
     }
 }
+
 public class Cluster implements Tickable, AutoCloseable {
     long seed = 0;
     Random random;
@@ -58,11 +63,57 @@ public class Cluster implements Tickable, AutoCloseable {
     private MessageBus sharedMessageBus;
     private boolean useLossyNetwork = false;
 
-    public Cluster withNumProcesses(int numProcesses) {
-        this.numProcesses = numProcesses;
-        return this;
+
+    //Convenient cluster creation methods with defaults. If anything specific like initialTime needs
+    // to be set, use the builder API.
+    public static Cluster create(int numProcesses, ProcessFactory factory) throws IOException {
+        return createSimulated(generateDefaultIds(numProcesses), factory);
     }
 
+    //Creates a cluster with processes communicating over NIO network
+    public static Cluster create(List<ProcessId> processIds, ProcessFactory factory) throws IOException {
+        return create(processIds, factory, randomSeed());
+    }
+
+    private static int randomSeed() {
+        return new Random().nextInt();
+    }
+
+    public static Cluster create(List<ProcessId> processIds, ProcessFactory factory, long seed) throws IOException {
+        return new Cluster()
+                .withSeed(seed)
+                .withProcessIds(processIds)
+                .build(factory)
+                .start();
+    }
+
+    /**
+     * Creates a cluster with processes communicating over a simulated network.
+     *
+     * @see SimulatedNetwork
+     */
+    public static Cluster createSimulated(List<ProcessId> processIds, ProcessFactory factory) throws IOException {
+        return new Cluster()
+                .withProcessIds(processIds)
+                .useSimulatedNetwork()
+                .build(factory)
+                .start();
+    }
+
+    public static Cluster createSimulated(int numServers, ProcessFactory factory) throws IOException {
+        return createSimulated(numServers, factory, randomSeed());
+    }
+
+    public static Cluster createSimulated(int numServers, ProcessFactory factory, long seed) throws IOException {
+        return new Cluster()
+                .withProcessIds(generateDefaultIds(numServers))
+                .useSimulatedNetwork()
+                .withSeed(seed)
+                .build(factory)
+                .start();
+    }
+
+    //Following methods are the builder API for creating the cluster.
     public Cluster withSeed(long seed) {
         this.seed = seed;
         return this;
@@ -76,11 +127,6 @@ public class Cluster implements Tickable, AutoCloseable {
     private Cluster useSimulatedNetwork(boolean isLossy) {
         this.useSimulatedNetwork = true;
         this.useLossyNetwork = isLossy;
-        return this;
-    }
-
-    public Cluster withLossySimulatedNetwork() {
-        useSimulatedNetwork(true);
         return this;
     }
 
@@ -100,7 +146,7 @@ public class Cluster implements Tickable, AutoCloseable {
         if (processIds == null || processIds.isEmpty()) {
             throw new IllegalArgumentException("Process IDs cannot be null or empty");
         }
-        
+
         // Validate ProcessIds are unique
         Set<ProcessId> uniqueIds = new HashSet<>();
         for (ProcessId processId : processIds) {
@@ -111,7 +157,7 @@ public class Cluster implements Tickable, AutoCloseable {
                 throw new IllegalArgumentException("Duplicate process ID: " + processId);
             }
         }
-        
+
         this.customProcessIds = processIds;
         this.numProcesses = processIds.size(); // Override numProcesses
         return this;
@@ -137,7 +183,7 @@ public class Cluster implements Tickable, AutoCloseable {
 
     /**
      * Gets the clock for a specific process.
-     * 
+     *
      * @param processId the ID of the process
      * @return the StubClock for the process
      * @throws IllegalArgumentException if the process ID is not found
@@ -151,10 +197,9 @@ public class Cluster implements Tickable, AutoCloseable {
     }
 
 
-
     /**
      * Gets clocks for all processes.
-     * 
+     *
      * @return map of process IDs to their clocks
      */
     public Map<ProcessId, StubClock> getAllProcessClocks() {
@@ -163,31 +208,29 @@ public class Cluster implements Tickable, AutoCloseable {
 
     /**
      * Sets the time for a specific process.
-     * 
+     *
      * @param processId the ID of the process
-     * @param time the time to set in milliseconds
+     * @param time      the time to set in milliseconds
      */
     public void setTimeForProcess(ProcessId processId, long time) {
         getClockForProcess(processId).setTime(time);
     }
 
 
-
     /**
      * Advances the time for a specific process.
-     * 
+     *
      * @param processId the ID of the process
-     * @param millis the number of milliseconds to advance
+     * @param millis    the number of milliseconds to advance
      */
     public void advanceTimeForProcess(ProcessId processId, long millis) {
         getClockForProcess(processId).advance(millis);
     }
 
 
-
     /**
      * Sets the same time for all processes.
-     * 
+     *
      * @param time the time to set in milliseconds for all processes
      */
     public void setTimeForAllProcesses(long time) {
@@ -196,7 +239,7 @@ public class Cluster implements Tickable, AutoCloseable {
 
     /**
      * Advances the time for all processes by the same amount.
-     * 
+     *
      * @param millis the number of milliseconds to advance for all processes
      */
     public void advanceTimeForAllProcesses(long millis) {
@@ -206,11 +249,10 @@ public class Cluster implements Tickable, AutoCloseable {
     // ========== Network Partition and Delay Controls ==========
 
 
-
     /**
      * Creates a network partition between two processes (bidirectional).
      * Messages in both directions will be dropped.
-     * 
+     *
      * @param process1 the first process ID
      * @param process2 the second process ID
      */
@@ -229,12 +271,11 @@ public class Cluster implements Tickable, AutoCloseable {
     }
 
 
-
     /**
      * Creates a one-way network partition (unidirectional).
      * Messages from source to destination will be dropped.
-     * 
-     * @param source the source process ID
+     *
+     * @param source      the source process ID
      * @param destination the destination process ID
      */
     public void partitionOneWay(ProcessId source, ProcessId destination) {
@@ -256,7 +297,7 @@ public class Cluster implements Tickable, AutoCloseable {
     /**
      * Heals a network partition between two processes (bidirectional).
      * Messages in both directions will be restored.
-     * 
+     *
      * @param process1 the first process ID
      * @param process2 the second process ID
      */
@@ -266,13 +307,12 @@ public class Cluster implements Tickable, AutoCloseable {
     }
 
 
-
     /**
      * Sets network delay between two processes.
-     * 
-     * @param source the source process ID
+     *
+     * @param source      the source process ID
      * @param destination the destination process ID
-     * @param delayTicks the number of ticks to delay messages
+     * @param delayTicks  the number of ticks to delay messages
      */
     public void setNetworkDelay(ProcessId source, ProcessId destination, int delayTicks) {
         ensureSimulatedNetwork();
@@ -280,13 +320,12 @@ public class Cluster implements Tickable, AutoCloseable {
     }
 
 
-
     /**
      * Sets packet loss rate between two processes.
-     * 
-     * @param source the source process ID
+     *
+     * @param source      the source process ID
      * @param destination the destination process ID
-     * @param lossRate the packet loss rate (0.0 to 1.0)
+     * @param lossRate    the packet loss rate (0.0 to 1.0)
      */
     public void setPacketLoss(ProcessId source, ProcessId destination, double lossRate) {
         ensureSimulatedNetwork();
@@ -295,26 +334,26 @@ public class Cluster implements Tickable, AutoCloseable {
 
     /**
      * Isolates a process from all other processes (creates partitions to all others).
-     * 
+     *
      * @param processId the process to isolate
      */
     public void isolateProcess(ProcessId processId) {
         // Get all other processes and partition from the target
         getAllProcessClocks().keySet().stream()
-            .filter(id -> !id.equals(processId))
-            .forEach(otherProcess -> partitionNodes(processId, otherProcess));
+                .filter(id -> !id.equals(processId))
+                .forEach(otherProcess -> partitionNodes(processId, otherProcess));
     }
 
     /**
      * Reconnects an isolated process to all other processes.
-     * 
+     *
      * @param processId the process to reconnect
      */
     public void reconnectProcess(ProcessId processId) {
         // Get all other processes and heal partitions to the target
         getAllProcessClocks().keySet().stream()
-            .filter(id -> !id.equals(processId))
-            .forEach(otherProcess -> healPartition(processId, otherProcess));
+                .filter(id -> !id.equals(processId))
+                .forEach(otherProcess -> healPartition(processId, otherProcess));
     }
 
     private void ensureSimulatedNetwork() {
@@ -328,7 +367,7 @@ public class Cluster implements Tickable, AutoCloseable {
     /**
      * Gets the storage instance for a specific process.
      * Useful for direct storage assertions in tests.
-     * 
+     *
      * @param processId the ID of the process
      * @return the Storage instance for the process
      * @throws IllegalArgumentException if the process ID is not found
@@ -344,7 +383,7 @@ public class Cluster implements Tickable, AutoCloseable {
     /**
      * Gets the process instance for a specific process ID.
      * Useful for accessing process-specific state in tests.
-     * 
+     *
      * @param processId the ID of the process
      * @return the Process instance
      * @throws IllegalArgumentException if the process ID is not found
@@ -359,28 +398,28 @@ public class Cluster implements Tickable, AutoCloseable {
 
     private Node findServerNode(ProcessId processId) {
         return serverNodes.stream()
-            .filter(node -> node.id.equals(processId))
-            .findFirst()
-            .orElse(null);
+                .filter(node -> node.id.equals(processId))
+                .findFirst()
+                .orElse(null);
     }
 
     /**
      * Retrieves a name from storage on a specific process for testing.
      * This method handles the asynchronous nature of storage operations.
-     * 
+     *
      * @param processId the ID of the process
-     * @param key the key to retrieve
+     * @param key       the key to retrieve
      * @return the VersionedValue if found, null otherwise
      */
     public VersionedValue getStorageValue(ProcessId processId, byte[] key) {
         Storage storage = getStorageForProcess(processId);
         ListenableFuture<VersionedValue> future = storage.get(key);
-        
+
         // Tick until the storage operation completes
         while (!future.isCompleted()) {
             tick();
         }
-        
+
         return future.getResult();
     }
 
@@ -404,21 +443,19 @@ public class Cluster implements Tickable, AutoCloseable {
     public void delayForMessageType(MessageType messageType, ProcessId processId, List<ProcessId> toProcessIds, int propDelayTicks) {
         ensureSimulatedNetwork();
 
-        toProcessIds.forEach((toProcessId)->
-        ((SimulatedNetwork)getNetwork()).setDelayForMessageType(processId, toProcessId, propDelayTicks, messageType));
+        toProcessIds.forEach((toProcessId) ->
+                ((SimulatedNetwork) getNetwork()).setDelayForMessageType(processId, toProcessId, propDelayTicks, messageType));
 
     }
 
     public interface ClientFactory<T extends ClusterClient> {
-        T create(ProcessId clientId, List<ProcessId> replicaEndpoints,
-                 MessageBus messageBus, MessageCodec messageCodec,
-                 Clock clock, int timeoutTicks);
+        T create(List<ProcessId> replicaEndpoints, ProcessParams processParams);
     }
 
     /**
      * Creates a clientId that connects to all server nodes (default behavior).
-     * 
-     * @param id the clientId ID
+     *
+     * @param id      the clientId ID
      * @param factory the factory to create the clientId
      * @return the created clientId
      * @throws IOException if network creation fails
@@ -430,10 +467,10 @@ public class Cluster implements Tickable, AutoCloseable {
     /**
      * Creates a clientId that connects to a specific target node.
      * This allows simulating scenarios where clients connect to specific nodes.
-     * 
-     * @param id the clientId ID
+     *
+     * @param id         the clientId ID
      * @param targetNode the specific server node to connect to
-     * @param factory the factory to create the clientId
+     * @param factory    the factory to create the clientId
      * @return the created clientId
      * @throws IOException if network creation fails
      */
@@ -443,20 +480,21 @@ public class Cluster implements Tickable, AutoCloseable {
 
     /**
      * Creates a clientId that connects to specific target nodes.
-     * 
-     * @param id the clientId ID
+     *
+     * @param id          the clientId ID
      * @param targetNodes the specific server nodes to connect to
-     * @param factory the factory to create the clientId
+     * @param factory     the factory to create the clientId
      * @return the created clientId
      * @throws IOException if network creation fails
      */
     private <T extends ClusterClient> T newClient(ProcessId id, List<ProcessId> targetNodes, Cluster.ClientFactory<T> factory) throws IOException {
-        Network network = useSimulatedNetwork ? sharedNetwork: createNetwork(messageCodec);
-        MessageBus messageBus = useSimulatedNetwork ? sharedMessageBus: new MessageBus(network, messageCodec);
+        Network network = useSimulatedNetwork ? sharedNetwork : createNetwork(messageCodec);
+        MessageBus messageBus = useSimulatedNetwork ? sharedMessageBus : new MessageBus(network, messageCodec);
         // Create a StubClock for the clientId as well
         StubClock clientClock = new StubClock(initialClockTime);
         processClocks.put(id, clientClock);
-        T clusterClient = factory.create(id, targetNodes, messageBus, messageCodec, clientClock, 10000);
+        IdGen idGen = new IdGen(id.name(), random);
+        T clusterClient = factory.create(targetNodes, new ProcessParams(id, messageBus, messageCodec, 10000, clientClock, idGen));
         clientNodes.add(new ClientNode(id, network, messageBus, clusterClient));
         return clusterClient;
     }
@@ -468,13 +506,13 @@ public class Cluster implements Tickable, AutoCloseable {
 
     private Network createNetwork(MessageCodec messageCodec) throws IOException {
         //as of now creating simulated network with no packet loss or delay
-        return useSimulatedNetwork? createSimulatedNetwork()
-                :NioNetwork.create(topo, messageCodec);
+        return useSimulatedNetwork ? createSimulatedNetwork()
+                : NioNetwork.create(topo, messageCodec);
     }
 
     private SimulatedNetwork createSimulatedNetwork() {
         //Packet loss rate needs to be moved to NetworkOptions.
-        return useLossyNetwork? SimulatedNetwork.lossyNetwork(random, 0) : SimulatedNetwork.noLossNetwork(random);
+        return useLossyNetwork ? SimulatedNetwork.lossyNetwork(random, 0) : SimulatedNetwork.noLossNetwork(random);
     }
 
     private List<ProcessId> serverProcessIds() {
@@ -504,10 +542,10 @@ public class Cluster implements Tickable, AutoCloseable {
 
         public void tick() {
             OrderedTicker.of(
-                    network,
-                    messageBus,
-                    process,
-                    storage)
+                            network,
+                            messageBus,
+                            process,
+                            storage)
                     .tick();
         }
 
@@ -561,8 +599,7 @@ public class Cluster implements Tickable, AutoCloseable {
         //Seed the random number generator
         random = new Random(seed);
 
-        List<ProcessId> processIds = customProcessIds.isEmpty() ?
-                generateDefaultIds(numProcesses): customProcessIds;
+        List<ProcessId> processIds = customProcessIds;
 
         var basePort = 8000;
         Map<ProcessId, ProcessConfig> endpoints = new HashMap<>();
@@ -592,13 +629,14 @@ public class Cluster implements Tickable, AutoCloseable {
             StubClock stubClock = new StubClock(initialClockTime);
             processClocks.put(processId, stubClock);
             Clock clock = stubClock;
-            com.tickloom.Process process = factory.create(processId, peers, messageBus, messageCodec, storage, clock, 10000);
+            IdGen idGen = new IdGen(processId.name(), random);
+            com.tickloom.Process process = factory.create(peers, storage, new ProcessParams(processId, messageBus, messageCodec, 10000, clock, idGen));
             serverNodes.add(new Node(processId, network, messageBus, process, storage));
         }
         return this;
     }
 
-    private List<ProcessId> generateDefaultIds(int numProcesses) {
+    private static List<ProcessId> generateDefaultIds(int numProcesses) {
         // Use custom process names
         // Use default process-1, process-2, etc.
         List<ProcessId> processIds = new ArrayList<>(numProcesses);

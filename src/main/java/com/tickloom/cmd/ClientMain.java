@@ -1,6 +1,7 @@
 package com.tickloom.cmd;
 
 import com.tickloom.ProcessId;
+import com.tickloom.ProcessParams;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
 import com.tickloom.config.ClusterTopology;
 import com.tickloom.config.Config;
@@ -10,6 +11,7 @@ import com.tickloom.messaging.MessageBus;
 import com.tickloom.network.JsonMessageCodec;
 import com.tickloom.network.NioNetwork;
 import com.tickloom.util.Clock;
+import com.tickloom.util.IdGen;
 import com.tickloom.util.SystemClock;
 
 import java.io.IOException;
@@ -78,8 +80,9 @@ public class ClientMain {
             MessageBus bus = new MessageBus(network, codec);
 
             Clock clock = new SystemClock();
+            IdGen idGen = new IdGen(clientId.name(), new Random());
 
-            QuorumReplicaClient client = new QuorumReplicaClient(clientId, replicas, bus, codec, clock, timeoutTicks);
+            QuorumReplicaClient client = new QuorumReplicaClient(replicas, new ProcessParams(clientId, bus, codec, timeoutTicks, clock, idGen));
 
             addShutdownHook(network);
 

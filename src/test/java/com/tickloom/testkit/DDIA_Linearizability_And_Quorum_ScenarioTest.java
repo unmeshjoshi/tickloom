@@ -1,5 +1,6 @@
 package com.tickloom.testkit;
 
+import com.tickloom.ProcessParams;
 import com.tickloom.ProcessId;
 import com.tickloom.algorithms.replication.quorum.GetResponse;
 import com.tickloom.algorithms.replication.quorum.QuorumMessageTypes;
@@ -35,12 +36,13 @@ public final class DDIA_Linearizability_And_Quorum_ScenarioTest
     private static final int PROP_DELAY_TICKS = 100;
 
     public DDIA_Linearizability_And_Quorum_ScenarioTest() throws IOException {
-        super(
-                List.of(ATHENS, BYZANTIUM, CYRENE),
-                QuorumReplica::new,
-                QuorumReplicaClient::new,
-                r -> r == null || r.value() == null ? null : new String(r.value(), StandardCharsets.UTF_8)
+        super(List.of(ATHENS, BYZANTIUM, CYRENE), QuorumReplica::new, QuorumReplicaClient::new,
+                response -> maskNull(response)
         );
+    }
+
+    private static String maskNull(GetResponse response) {
+        return response == null || response.value() == null ? null : new String(response.value(), StandardCharsets.UTF_8);
     }
 
     @Test

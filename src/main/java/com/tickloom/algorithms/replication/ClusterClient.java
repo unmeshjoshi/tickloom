@@ -1,26 +1,22 @@
 package com.tickloom.algorithms.replication;
 
 import com.tickloom.Process;
+import com.tickloom.ProcessParams;
 import com.tickloom.ProcessId;
 import com.tickloom.future.ListenableFuture;
 import com.tickloom.messaging.*;
-import com.tickloom.network.MessageCodec;
 import com.tickloom.network.PeerType;
-import com.tickloom.util.Clock;
-import com.tickloom.util.Utils;
+import com.tickloom.util.IdGen;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.function.Function;
 
 public abstract class ClusterClient extends Process {
     
     protected final List<ProcessId> replicaEndpoints;
 
-    public ClusterClient(ProcessId clientId, List<ProcessId> replicaEndpoints,
-                         MessageBus messageBus, MessageCodec messageCodec,
-                         Clock clock, int timeoutTicks) {
-        super(clientId, messageBus, messageCodec, timeoutTicks, clock);
+    public ClusterClient(List<ProcessId> replicaEndpoints, ProcessParams processParams) {
+        super(processParams);
         this.replicaEndpoints = List.copyOf(replicaEndpoints);
     }
 
@@ -84,7 +80,7 @@ public abstract class ClusterClient extends Process {
     }
     
     protected String generateCorrelationId() {
-        return Utils.generateCorrelationId();
+        return idGen.generateCorrelationId();
     }
     
     @SuppressWarnings("unchecked")
