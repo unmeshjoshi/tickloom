@@ -16,3 +16,4 @@
 - [ ] Move Jepsen specific history_edn handling in linearizability-checker
 - [ ] Use Jepsen's generator in the SimulationRunner.
 - [ ] Store mavencetral token and gpg key and write a script to setup gradle.properties required for the publish task to work.
+- [ ] Add support for process initialization indicator.
