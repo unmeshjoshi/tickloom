@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.tickloom.messaging.MessageType;
 
 import java.io.IOException;
@@ -25,6 +26,9 @@ public class JsonMessageCodec implements MessageCodec {
      */
     public JsonMessageCodec() {
         this.objectMapper = new ObjectMapper();
+        
+        // Register JDK8 module for Optional support
+        objectMapper.registerModule(new Jdk8Module());
         
         // Create module for custom serializers
         SimpleModule module = new SimpleModule();

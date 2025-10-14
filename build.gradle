@@ -71,6 +71,7 @@ dependencies {
     // Core JSON/YAML processing
     implementation "com.fasterxml.jackson.core:jackson-databind:${versions.jackson}"
     implementation "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${versions.jackson}"
+    implementation "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:${versions.jackson}"
 
     // Production-ready storage
     implementation "org.rocksdb:rocksdbjni:${versions.rocksdb}"

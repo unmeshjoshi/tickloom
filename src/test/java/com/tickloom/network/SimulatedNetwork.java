@@ -447,7 +447,7 @@ public class SimulatedNetwork extends Network {
 
             dispatchReceivedMessage(message);
 
-            System.out.println("SimNet: delivered " + message);
+            System.out.println("SimNet: delivered " + message + " for tick " + tickTime);
         }
     }
 
