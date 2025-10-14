@@ -48,6 +48,7 @@ public class QuorumReplicaClient extends ClusterClient {
 
     }
 
+
     private ProcessId firstReplica() {
         return replicaEndpoints.get(0);
     }

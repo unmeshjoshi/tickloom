@@ -72,6 +72,16 @@ public class SimulatedStorage implements Storage {
     }
     
     @Override
+    public ListenableFuture<Void> sync() {
+        ListenableFuture<Void> future = new ListenableFuture<>();
+        
+        long completionTick = currentTick + defaultDelayTicks;
+        pendingOperations.offer(new SyncOperation(future, completionTick));
+        
+        return future;
+    }
+    
+    @Override
     public ListenableFuture<Boolean> set(byte[] key, VersionedValue value) {
         if (key == null) {
             throw new IllegalArgumentException("Key cannot be null");
@@ -180,6 +190,26 @@ public class SimulatedStorage implements Storage {
 
             }
             future.complete(true);
+        }
+        
+        @Override
+        void fail(RuntimeException exception) {
+            future.fail(exception);
+        }
+    }
+    
+    private static class SyncOperation extends PendingOperation {
+        private final ListenableFuture<Void> future;
+        
+        SyncOperation(ListenableFuture<Void> future, long completionTick) {
+            super(null, completionTick); // Sync doesn't need a key
+            this.future = future;
+        }
+        
+        @Override
+        void execute(Map<BytesKey, VersionedValue> dataStore) {
+            System.out.println("SimulatedStorage: SYNC operation completed");
+            future.complete(null);
         }
         
         @Override

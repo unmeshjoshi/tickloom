@@ -27,7 +27,7 @@ class ReplicaTest {
         Network network = SimulatedNetwork.noLossNetwork(random);
         MessageBus messageBus = new MessageBus(network, messageCodec);
 
-        TestableReplica replica = new TestableReplica(mutablePeers, new SimulatedStorage(random), new ProcessParams(ProcessId.of("test"), messageBus, messageCodec, timeoutTicks, new SystemClock(), new IdGen(ProcessId.of("test").name(), new Random())));
+        TestableReplica replica = new TestableReplica(mutablePeers, new SimulatedStorage(random), new ProcessParams(ProcessId.of("test"), messageBus, messageCodec, timeoutTicks, new SystemClock(), new IdGen(ProcessId.of("test").name(), new Random()), new SimulatedStorage(random)));
         // When
         mutablePeers.clear();
 
@@ -44,7 +44,7 @@ class ReplicaTest {
         Network network = SimulatedNetwork.noLossNetwork(random);
         MessageBus messageBus = new MessageBus(network, messageCodec);
 
-        TestableReplica replica = new TestableReplica(List.of(), new SimulatedStorage(random), new ProcessParams(ProcessId.of("test"), messageBus, messageCodec, timeoutTicks, new SystemClock(), new IdGen(ProcessId.of("test").name(), new Random())));
+        TestableReplica replica = new TestableReplica(List.of(), new SimulatedStorage(random), new ProcessParams(ProcessId.of("test"), messageBus, messageCodec, timeoutTicks, new SystemClock(), new IdGen(ProcessId.of("test").name(), new Random()), new SimulatedStorage(random)));
         // When: perform tick
         replica.tick();
 
@@ -61,7 +61,7 @@ class ReplicaTest {
         Network network = SimulatedNetwork.noLossNetwork(random);
         MessageBus messageBus = new MessageBus(network, messageCodec);
 
-        TestableReplica replica = new TestableReplica(List.of(), new SimulatedStorage(random), new ProcessParams(ProcessId.of("test"), messageBus, messageCodec, timeoutTicks, new SystemClock(), new IdGen(ProcessId.of("test").name(), new Random())));
+        TestableReplica replica = new TestableReplica(List.of(), new SimulatedStorage(random), new ProcessParams(ProcessId.of("test"), messageBus, messageCodec, timeoutTicks, new SystemClock(), new IdGen(ProcessId.of("test").name(), new Random()), new SimulatedStorage(random)));
         String key = "dummy";
         replica.addDummyPendingRequest(key);
         assertEquals(1, replica.getWaitingListSize());
@@ -83,7 +83,7 @@ class ReplicaTest {
         Network network = SimulatedNetwork.noLossNetwork(random);
         MessageBus messageBus = new MessageBus(network, messageCodec);
 
-        TestableReplica replica = new TestableReplica(List.of(ProcessId.of("node1"), ProcessId.of("node2")), new SimulatedStorage(random), new ProcessParams(ProcessId.of("test"), messageBus, messageCodec, timeoutTicks, new SystemClock(), new IdGen(ProcessId.of("test").name(), new Random())));
+        TestableReplica replica = new TestableReplica(List.of(ProcessId.of("node1"), ProcessId.of("node2")), new SimulatedStorage(random), new ProcessParams(ProcessId.of("test"), messageBus, messageCodec, timeoutTicks, new SystemClock(), new IdGen(ProcessId.of("test").name(), new Random()), new SimulatedStorage(random)));
         // When
         List<String> corrIds = replica.broadcastInternal();
 
@@ -96,7 +96,7 @@ class ReplicaTest {
         boolean onTickCalled = false;
 
         public TestableReplica(List<ProcessId> peerIds, Storage storage, ProcessParams processParams) {
-            super(peerIds, storage, processParams);
+            super(peerIds, processParams);
         }
 
 
@@ -104,6 +104,7 @@ class ReplicaTest {
         protected void onTick() {
             onTickCalled = true;
         }
+
 
         @Override
         protected Map<MessageType, Handler> initialiseHandlers() {

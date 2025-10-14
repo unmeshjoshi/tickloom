@@ -23,7 +23,7 @@ public class SingleRequestIssuerTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        cluster = Cluster.createSimulated(3, QuorumReplica::new);
+        cluster = Cluster.createSimulated(3, (peerIds, processParams) -> new QuorumReplica(peerIds, processParams));
 
         // The simulation runner needs a cluster to direct the client requests to.
         simulationRunner = new QuorumKVScenarioRunner(123L);

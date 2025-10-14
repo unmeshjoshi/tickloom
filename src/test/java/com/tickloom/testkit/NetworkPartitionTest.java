@@ -39,7 +39,7 @@ public class NetworkPartitionTest {
     @Test
     @DisplayName("Split-brain prevention: majority name persists after heal")
     void shouldPreventSplitBrainDuringNetworkPartition() throws IOException {
-        try (var cluster = Cluster.createSimulated(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA), QuorumReplica::new)) {
+        try (var cluster = Cluster.createSimulated(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA), (peerIds, processParams) -> new QuorumReplica(peerIds, processParams))) {
 
             // clients
             var minorityClient = cluster.newClientConnectedTo(MINORITY_CLIENT, ATHENS, QuorumReplicaClient::new);
@@ -85,7 +85,7 @@ public class NetworkPartitionTest {
     @Test
     @DisplayName("Local stale read after quorum write: linearizable=false, sequential=true")
     void localReadAfterQuorumWrite_breaksLin_passesSeq() throws IOException {
-        try (var cluster = Cluster.createSimulated(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA), QuorumReplica::new)) {
+        try (var cluster = Cluster.createSimulated(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA), (peerIds, processParams) -> new QuorumReplica(peerIds, processParams))) {
 
             var clientWriter = cluster.newClientConnectedTo(ProcessId.of("client1"), CYRENE, QuorumReplicaClient::new);
 
@@ -133,7 +133,7 @@ public class NetworkPartitionTest {
     @Test
     @DisplayName("Clock skew: minority (higher timestamp) wins after heal")
     void clockSkewOverwritesMajorityValue() throws IOException {
-        try (var cluster = Cluster.createSimulated(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA), QuorumReplica::new)) {
+        try (var cluster = Cluster.createSimulated(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA), (peerIds, processParams) -> new QuorumReplica(peerIds, processParams))) {
 
             var minorityClient = cluster.newClientConnectedTo(MINORITY_CLIENT, ATHENS, QuorumReplicaClient::new);
             var majorityClient = cluster.newClientConnectedTo(MAJORITY_CLIENT, CYRENE, QuorumReplicaClient::new);
@@ -205,7 +205,7 @@ public class NetworkPartitionTest {
         var NEWYORK = ProcessId.of("newyork");
         var LONDON = ProcessId.of("london");
 
-        try (var cluster = Cluster.createSimulated(List.of(CALIFORNIA, NEWYORK, LONDON), QuorumReplica::new)) {
+        try (var cluster = Cluster.createSimulated(List.of(CALIFORNIA, NEWYORK, LONDON), (peerIds, processParams) -> new QuorumReplica(peerIds, processParams))) {
 
             // symmetric delays (ticks)
             cluster.setNetworkDelay(CALIFORNIA, NEWYORK, 5);

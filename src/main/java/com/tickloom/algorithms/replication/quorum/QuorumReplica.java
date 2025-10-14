@@ -4,7 +4,6 @@ import com.tickloom.ProcessParams;
 import com.tickloom.ProcessId;
 import com.tickloom.Replica;
 import com.tickloom.messaging.*;
-import com.tickloom.storage.Storage;
 import com.tickloom.storage.VersionedValue;
 
 import java.util.List;
@@ -19,8 +18,8 @@ import java.util.Map;
  */
 public class QuorumReplica extends Replica {
 
-    public QuorumReplica(List<ProcessId> peerIds, Storage storage, ProcessParams processParams) {
-        super(peerIds, storage, processParams);
+    public QuorumReplica(List<ProcessId> peerIds, ProcessParams processParams) {
+        super(peerIds, processParams);
     }
     
     @Override
@@ -33,6 +32,7 @@ public class QuorumReplica extends Replica {
                 QuorumMessageTypes.INTERNAL_GET_REQUEST, this::handleInternalGetRequest,
                 QuorumMessageTypes.INTERNAL_SET_REQUEST, this::handleInternalSetRequest);
     }
+
 
     // Client request handlers
 

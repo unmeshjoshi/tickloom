@@ -15,7 +15,7 @@ class ClusterInitialTimeTest {
     @Test
     @DisplayName("Should use default initial clock time of 1000ms")
     void shouldUseDefaultInitialClockTime() throws IOException {
-        try (Cluster cluster = Cluster.createSimulated(2, QuorumReplica::new)) {
+        try (Cluster cluster = Cluster.createSimulated(2, (peerIds, processParams) -> new QuorumReplica(peerIds, processParams))) {
 
             ProcessId p1 = ProcessId.of("process-1");
             ProcessId p2 = ProcessId.of("process-2");
@@ -31,7 +31,7 @@ class ClusterInitialTimeTest {
     void shouldAllowConfiguringInitialClockTime() throws IOException {
         long customInitialTime = 5000L;
         
-        try (Cluster cluster = Cluster.createSimulated(2, QuorumReplica::new)) {
+        try (Cluster cluster = Cluster.createSimulated(2, (peerIds, processParams) -> new QuorumReplica(peerIds, processParams))) {
             cluster.setTimeForAllProcesses(customInitialTime);
 
             ProcessId p1 = ProcessId.of("process-1");
@@ -66,7 +66,7 @@ class ClusterInitialTimeTest {
                 .withProcessIds(ProcessId.of("process-1"), ProcessId.of("process-2"))
                 .withInitialClockTime(customInitialTime)
                 .useSimulatedNetwork()
-                .build(QuorumReplica::new)
+                .build((peerIds, processParams) -> new QuorumReplica(peerIds, processParams))
                 .start()) {
 
             // Verify server processes

@@ -23,7 +23,7 @@ class ClusterClockTest {
     @DisplayName("Should allow individual process clock control")
     void shouldAllowIndividualProcessClockControl() throws IOException {
         // Given
-        try (Cluster cluster = Cluster.createSimulated(3, QuorumReplica::new)) {
+        try (Cluster cluster = Cluster.createSimulated(3, (peerIds, processParams) -> new QuorumReplica(peerIds, processParams))) {
 
             // When - Set different times for each process (note: all start at default 1000L)
             ProcessId process1 = ProcessId.of("process-1");
@@ -50,7 +50,7 @@ class ClusterClockTest {
     @Test
     @DisplayName("Should allow advancing individual process clocks")
     void shouldAllowAdvancingIndividualProcessClocks() throws IOException {
-        try (Cluster cluster = Cluster.createSimulated(3, QuorumReplica::new)) {
+        try (Cluster cluster = Cluster.createSimulated(3, (peerIds, processParams) -> new QuorumReplica(peerIds, processParams))) {
 
             ProcessId process1 = ProcessId.of("process-1");
             ProcessId process2 = ProcessId.of("process-2");
@@ -71,7 +71,7 @@ class ClusterClockTest {
     @Test
     @DisplayName("Should allow setting time for all processes")
     void shouldAllowSettingTimeForAllProcesses() throws IOException {
-        try (Cluster cluster = Cluster.createSimulated(3, QuorumReplica::new)) {
+        try (Cluster cluster = Cluster.createSimulated(3, (peerIds, processParams) -> new QuorumReplica(peerIds, processParams))) {
 
             // Set same time for all processes
             cluster.setTimeForAllProcesses(5000L);
@@ -86,7 +86,7 @@ class ClusterClockTest {
     @Test
     @DisplayName("Should allow advancing all process clocks")
     void shouldAllowAdvancingAllProcessClocks() throws IOException {
-        try (Cluster cluster = Cluster.createSimulated(3, QuorumReplica::new)) {
+        try (Cluster cluster = Cluster.createSimulated(3, (peerIds, processParams) -> new QuorumReplica(peerIds, processParams))) {
 
             // Set initial time for all
             cluster.setTimeForAllProcesses(1000L);
@@ -104,7 +104,7 @@ class ClusterClockTest {
     @Test
     @DisplayName("Should throw exception when accessing non-existent process")
     void shouldThrowExceptionWhenAccessingNonExistentProcess() throws IOException {
-        try (Cluster cluster = Cluster.createSimulated(3, QuorumReplica::new)) {
+        try (Cluster cluster = Cluster.createSimulated(3, (peerIds, processParams) -> new QuorumReplica(peerIds, processParams))) {
 
             ProcessId nonExistentProcess = ProcessId.of("process-999");
 
@@ -122,7 +122,7 @@ class ClusterClockTest {
     @Test
     @DisplayName("Should demonstrate timestamp ordering scenario")
     void shouldDemonstrateTimestampOrderingScenario() throws IOException {
-        try (Cluster cluster = Cluster.createSimulated(3, QuorumReplica::new)) {
+        try (Cluster cluster = Cluster.createSimulated(3, (peerIds, processParams) -> new QuorumReplica(peerIds, processParams))) {
 
             ProcessId process1 = ProcessId.of("process-1");
             ProcessId process2 = ProcessId.of("process-2");

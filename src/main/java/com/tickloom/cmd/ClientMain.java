@@ -13,6 +13,7 @@ import com.tickloom.network.NioNetwork;
 import com.tickloom.util.Clock;
 import com.tickloom.util.IdGen;
 import com.tickloom.util.SystemClock;
+import com.tickloom.storage.SimulatedStorage;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -81,8 +82,9 @@ public class ClientMain {
 
             Clock clock = new SystemClock();
             IdGen idGen = new IdGen(clientId.name(), new Random());
+            SimulatedStorage storage = new SimulatedStorage(new Random());
 
-            QuorumReplicaClient client = new QuorumReplicaClient(replicas, new ProcessParams(clientId, bus, codec, timeoutTicks, clock, idGen));
+            QuorumReplicaClient client = new QuorumReplicaClient(replicas, new ProcessParams(clientId, bus, codec, timeoutTicks, clock, idGen, storage));
 
             addShutdownHook(network);
 

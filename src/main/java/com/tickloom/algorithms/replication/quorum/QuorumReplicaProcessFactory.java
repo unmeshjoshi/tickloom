@@ -10,7 +10,7 @@ import java.util.List;
 
 public class QuorumReplicaProcessFactory implements ProcessFactory {
     @Override
-    public Process create(List<ProcessId> peerIds, Storage storage, ProcessParams processParams) {
-        return new QuorumReplica(peerIds, storage, processParams);
+    public Process create(List<ProcessId> peerIds, ProcessParams processParams) {
+        return new QuorumReplica(peerIds, processParams);
     }
 }

@@ -17,7 +17,7 @@ public class QuorumReplicaIntegrationTest {
         var key = "test-key".getBytes();
         var value = "test-name".getBytes();
 
-        try (Cluster cluster = Cluster.createSimulated(3, QuorumReplica::new)) {
+        try (Cluster cluster = Cluster.createSimulated(3, (peerIds, processParams) -> new QuorumReplica(peerIds, processParams))) {
 
             var client = cluster.newClient(ProcessId.of("Client1"), QuorumReplicaClient::new);
             // Test SET operation
@@ -46,7 +46,7 @@ public class QuorumReplicaIntegrationTest {
         var key = "test-key".getBytes();
         var value = "test-name".getBytes();
 
-        try (Cluster cluster = Cluster.create(3, QuorumReplica::new)) {
+        try (Cluster cluster = Cluster.create(3, (peerIds, processParams) -> new QuorumReplica(peerIds, processParams))) {
 
             var client = cluster.newClient(ProcessId.of("Client1"), QuorumReplicaClient::new);
             // Test SET operation

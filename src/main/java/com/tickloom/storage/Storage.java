@@ -28,6 +28,15 @@ public interface Storage extends Tickable, AutoCloseable {
     ListenableFuture<Boolean> set(byte[] key, VersionedValue value);
     
     /**
+     * Ensures all pending writes are flushed to disk for durability.
+     * This method should be called after critical operations to guarantee
+     * that data is persisted to stable storage.
+     * 
+     * @return a future that completes when the sync operation is finished
+     */
+    ListenableFuture<Void> sync();
+    
+    /**
      * Advances the storage simulation by one tick.
      * This method processes pending operations and completes their futures.
      * Should be called by the simulation loop.

@@ -4,7 +4,6 @@ import com.tickloom.ProcessFactory;
 import com.tickloom.ProcessId;
 import com.tickloom.ProcessParams;
 import com.tickloom.Tickable;
-import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.future.ListenableFuture;
 import com.tickloom.algorithms.replication.ClusterClient;
 import com.tickloom.config.ClusterTopology;
@@ -494,7 +493,7 @@ public class Cluster implements Tickable, AutoCloseable {
         StubClock clientClock = new StubClock(initialClockTime);
         processClocks.put(id, clientClock);
         IdGen idGen = new IdGen(id.name(), random);
-        T clusterClient = factory.create(targetNodes, new ProcessParams(id, messageBus, messageCodec, 10000, clientClock, idGen));
+        T clusterClient = factory.create(targetNodes, new ProcessParams(id, messageBus, messageCodec, 10000, clientClock, idGen, new SimulatedStorage(random)));
         clientNodes.add(new ClientNode(id, network, messageBus, clusterClient));
         return clusterClient;
     }
@@ -630,7 +629,7 @@ public class Cluster implements Tickable, AutoCloseable {
             processClocks.put(processId, stubClock);
             Clock clock = stubClock;
             IdGen idGen = new IdGen(processId.name(), random);
-            com.tickloom.Process process = factory.create(peers, storage, new ProcessParams(processId, messageBus, messageCodec, 10000, clock, idGen));
+            com.tickloom.Process process = factory.create(peers, new ProcessParams(processId, messageBus, messageCodec, 10000, clock, idGen, storage));
             serverNodes.add(new Node(processId, network, messageBus, process, storage));
         }
         return this;
@@ -654,4 +653,7 @@ public class Cluster implements Tickable, AutoCloseable {
         return this;
     }
 
+    public boolean areAllNodesInitialized() {
+        return serverNodes.stream().allMatch(node -> node.process.isInitialised());
+    }
 }

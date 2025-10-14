@@ -1,6 +1,5 @@
 package com.tickloom.testkit;
 
-import com.tickloom.ProcessParams;
 import com.tickloom.ProcessId;
 import com.tickloom.algorithms.replication.quorum.GetResponse;
 import com.tickloom.algorithms.replication.quorum.QuorumReplica;
@@ -32,7 +31,7 @@ public class ClockSkewTests extends ClusterTest<QuorumReplicaClient, GetResponse
     private static final int SKEW_TICKS = 10;
 
     public ClockSkewTests() throws IOException {
-        super(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA), QuorumReplica::new, QuorumReplicaClient::new, (response) ->
+        super(List.of(ATHENS, BYZANTIUM, CYRENE, DELPHI, SPARTA), (peerIds, processParams) -> new QuorumReplica(peerIds, processParams), QuorumReplicaClient::new, (response) ->
                 maskNull(response.value()));
     }
 

@@ -1,10 +1,6 @@
 package com.tickloom;
 
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaProcessFactory;
-import com.tickloom.messaging.MessageBus;
-import com.tickloom.network.MessageCodec;
-import com.tickloom.storage.Storage;
-import com.tickloom.util.Clock;
 
 import java.util.List;
 
@@ -43,12 +39,11 @@ public interface ProcessFactory {
      * Constructs a configured {@link Process} instance for the given server id and cluster context.
      *
      * @param peerIds       other server ids in the cluster (excludes {@code id})
-     * @param storage       server's {@link Storage} (e.g., RocksDB-backed)
      * @param processParams
      * @return a fully constructed {@link Process} ready to participate in the event loop
      */
     Process create(List<ProcessId> peerIds,
-                   Storage storage, ProcessParams processParams);
+                   ProcessParams processParams);
 }
 
 

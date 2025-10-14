@@ -4,6 +4,7 @@ import com.tickloom.ProcessParams;
 import com.tickloom.ProcessId;
 import com.tickloom.Tickable;
 import com.tickloom.config.ClusterTopology;
+import com.tickloom.future.ListenableFuture;
 import com.tickloom.messaging.Message;
 import com.tickloom.messaging.MessageBus;
 import com.tickloom.messaging.MessageType;
@@ -11,6 +12,7 @@ import com.tickloom.network.JsonMessageCodec;
 import com.tickloom.network.MessageCodec;
 import com.tickloom.network.NioNetwork;
 import com.tickloom.network.PeerType;
+import com.tickloom.storage.SimulatedStorage;
 import com.tickloom.util.SystemClock;
 import com.tickloom.util.IdGen;
 
@@ -27,7 +29,7 @@ class TestPeer extends com.tickloom.Process implements Tickable, AutoCloseable {
     protected final List<Message> receivedMessages = new ArrayList<>();
 
     protected TestPeer(ProcessId id, MessageBus messageBus, NioNetwork network, ClusterTopology topology, MessageCodec codec) {
-        super(new ProcessParams(id, messageBus, codec, 1, new SystemClock(), new IdGen(id.name(), new Random())));
+        super(new ProcessParams(id, messageBus, codec, 1, new SystemClock(), new IdGen(id.name(), new Random()), new SimulatedStorage(new Random())));
         this.network = network;
         this.topology = topology;
     }
@@ -91,6 +93,7 @@ class TestPeer extends com.tickloom.Process implements Tickable, AutoCloseable {
     protected Map<MessageType, Handler> initialiseHandlers() {
         return Map.of();
     }
+
 
     public List<Message> getReceivedMessages() {
         return receivedMessages;

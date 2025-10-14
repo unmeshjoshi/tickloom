@@ -27,7 +27,7 @@ public class ClientTargetingTest {
     @DisplayName("Should allow clients to connect to specific nodes for targeted failure scenarios")
     void shouldAllowTargetedClientConnections() throws IOException {
         List<ProcessId> processIds = List.of(ProcessId.of("athens"), ProcessId.of("byzantium"), ProcessId.of("cyrene"), ProcessId.of("delphi"), ProcessId.of("sparta")); // <"athens", "byzantium", "cyrene", "delphi", "sparta">
-        try (Cluster cluster = Cluster.createSimulated(processIds, QuorumReplica::new)) {
+        try (Cluster cluster = Cluster.createSimulated(processIds, (peerIds, processParams) -> new QuorumReplica(peerIds, processParams))) {
 
             ProcessId athens = ProcessId.of("athens");
             ProcessId byzantium = ProcessId.of("byzantium");
@@ -105,7 +105,7 @@ public class ClientTargetingTest {
                 .withProcessIds(processIds)
                 .withInitialClockTime(2000L)
                 .useSimulatedNetwork()
-                .build(QuorumReplica::new)
+                .build((peerIds, processParams) -> new QuorumReplica(peerIds, processParams))
                 .start()) {
 
             ProcessId fastNode = ProcessId.of("fast_node");

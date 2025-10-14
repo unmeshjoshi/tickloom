@@ -97,7 +97,7 @@ public class ServerMain {
                                          int timeoutTicks) {
         if (factoryClassName == null || factoryClassName.isBlank()) {
             IdGen idGen = new IdGen(processId.name(), new Random());
-            return new QuorumReplica(peerIds, storage, new ProcessParams(processId, messageBus, codec, timeoutTicks, clock, idGen));
+            return new QuorumReplica(peerIds, new ProcessParams(processId, messageBus, codec, timeoutTicks, clock, idGen, storage));
         }
         try {
             Class<?> clazz = Class.forName(factoryClassName);
@@ -107,7 +107,7 @@ public class ServerMain {
             }
             ProcessFactory factory = (ProcessFactory) instance;
             IdGen idGen = new IdGen(processId.name(), new Random());
-            return factory.create(peerIds, storage, new ProcessParams(processId, messageBus, codec, timeoutTicks, clock, idGen));
+            return factory.create(peerIds, new ProcessParams(processId, messageBus, codec, timeoutTicks, clock, idGen, storage));
         } catch (Exception e) {
             throw new RuntimeException("Failed to instantiate factory: " + factoryClassName, e);
         }

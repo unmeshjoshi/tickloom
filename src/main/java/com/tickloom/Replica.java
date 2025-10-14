@@ -1,25 +1,18 @@
 package com.tickloom;
 
 import com.tickloom.messaging.*;
-import com.tickloom.storage.Storage;
-import com.tickloom.util.IdGen;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiFunction;
 
 public abstract class Replica extends Process {
     protected final List<ProcessId> peerIds;
-    protected final Storage storage;
-    // Request tracking infrastructure
-    protected final AtomicLong requestIdGenerator = new AtomicLong(0);
-    
-    public Replica(List<ProcessId> peerIds, Storage storage, ProcessParams processParams) {
-        super(processParams);
+
+    public Replica(List<ProcessId> peerIds, ProcessParams processParams) {
+        super(processParams); // Storage is now handled by Process
         this.peerIds = List.copyOf(peerIds);
-        this.storage = storage;
     }
 
 
