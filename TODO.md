@@ -9,9 +9,14 @@
 - [x] Update SIGNING_README.md to replace OSSRH references with Maven Central
 - [x] Update run-cluster.sh with realistic financial transaction demo
 - [x] Add Clojure test integration with Gradle build
+- [x] Move history recording to QuorumKVClient or ClusterClient
+  - Added HistoryRecorder class and a ClusterTest base class to implement common methods for history recording.
 
 ## In Progress
-- [ ] Move history recording to QuorumKVClient or ClusterClient
+- [ ] Update Storage to have byte[] values, so that it can have generic values. 
+- [ ] The API should be updated to reflect datastores like RocksDB. It should have lastKey method, which will be used by WAL like implementations
+- [ ] Add WriteOptions perameter to set method which allows supporting 'sync' parameter. 
+
 ## TODO
 - [ ] Move Jepsen specific history_edn handling in linearizability-checker
 - [ ] Use Jepsen's generator in the SimulationRunner.
