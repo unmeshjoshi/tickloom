@@ -410,9 +410,9 @@ public class Cluster implements Tickable, AutoCloseable {
      * @param key       the key to retrieve
      * @return the VersionedValue if found, null otherwise
      */
-    public VersionedValue getStorageValue(ProcessId processId, byte[] key) {
+    public byte[] getStorageValue(ProcessId processId, byte[] key) {
         Storage storage = getStorageForProcess(processId);
-        ListenableFuture<VersionedValue> future = storage.get(key);
+        ListenableFuture<byte[]> future = storage.get(key);
 
         // Tick until the storage operation completes
         while (!future.isCompleted()) {
@@ -420,6 +420,11 @@ public class Cluster implements Tickable, AutoCloseable {
         }
 
         return future.getResult();
+    }
+
+    public <T> T getDecodedStoredValue(ProcessId processId, byte[] key, Class<T> clazz) {
+        var value = getStorageValue(processId, key);
+        return (value != null) ? messageCodec.decode(value, clazz) : null;//todo: use Optional
     }
 
     public void healAllPartitions() {

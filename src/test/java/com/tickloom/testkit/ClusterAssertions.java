@@ -36,7 +36,8 @@ public class ClusterAssertions {
      * @return true if the name matches, false otherwise
      */
     public static boolean storageContainsValue(Cluster cluster, ProcessId processId, byte[] key, byte[] expectedValue) {
-        VersionedValue actual = cluster.getStorageValue(processId, key);
+        //FIXME: We should not use VersionedValue here, it should be in the specific test for QuorumReplica
+        VersionedValue actual = cluster.getDecodedStoredValue(processId, key, VersionedValue.class);
         if (actual == null) {
             fail();
         }

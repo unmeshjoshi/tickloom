@@ -3,6 +3,7 @@ package com.tickloom.algorithms.replication.quorum;
 import com.tickloom.ProcessParams;
 import com.tickloom.ProcessId;
 import com.tickloom.Replica;
+import com.tickloom.future.ListenableFuture;
 import com.tickloom.messaging.*;
 import com.tickloom.storage.VersionedValue;
 
@@ -21,7 +22,7 @@ public class QuorumReplica extends Replica {
     public QuorumReplica(List<ProcessId> peerIds, ProcessParams processParams) {
         super(peerIds, processParams);
     }
-    
+
     @Override
     protected Map<MessageType, Handler> initialiseHandlers() {
         return Map.of(
@@ -177,10 +178,11 @@ public class QuorumReplica extends Replica {
 
         for (InternalGetResponse response : responses.values()) {
             if (response.value() != null) {
-                long timestamp = response.value().timestamp();
+                VersionedValue versionedValue = messageCodec.decode(response.value(), VersionedValue.class);
+                long timestamp = versionedValue.timestamp();
                 if (timestamp > latestTimestamp) {
                     latestTimestamp = timestamp;
-                    latestValue = response.value();
+                    latestValue = versionedValue;
                 }
             }
         }
@@ -201,7 +203,7 @@ public class QuorumReplica extends Replica {
         });
     }
 
-    private void sendInternalGetResponse(Message incomingMessage, VersionedValue value, Throwable error, InternalGetRequest getRequest) {
+    private void sendInternalGetResponse(Message incomingMessage, byte[] value, Throwable error, InternalGetRequest getRequest) {
 
         logInternalGetResponse(value, error, getRequest);
         //name will be null if not found or error
@@ -215,7 +217,7 @@ public class QuorumReplica extends Replica {
 
     }
 
-    private static void logInternalGetResponse(VersionedValue value, Throwable error, InternalGetRequest getRequest) {
+    private static void logInternalGetResponse(byte[] value, Throwable error, InternalGetRequest getRequest) {
         if (error == null) {
             String valueStr = value != null ? value + "found" : "not found";
             System.out.println("QuorumReplica: Internal GET completed - key: " + getRequest.key() +
@@ -233,12 +235,28 @@ public class QuorumReplica extends Replica {
 
         System.out.println("QuorumReplica: Processing internal SET request - keyLength: " + setRequest.key().length +
                 ", valueLength: " + setRequest.value().length + ", timestamp: " + setRequest.timestamp() +
-                 ", from: " + message.source());
+                ", from: " + message.source());
 
-        // Perform local storage operation
-        var future = storage.set(setRequest.key(), value);
-        future.handle((success, error)
-                -> sendInternalSetResponse(message, success, error, setRequest));
+        //First get the value and set only if it does not exist or its of lower timestamp.
+        ListenableFuture<byte[]> getFuture = storage.get(setRequest.key());
+        getFuture.handle((result, error) -> {
+            if (error != null) {
+                sendInternalSetResponse(message, false, error, setRequest);
+                return;
+            }
+            if (result != null) {
+                VersionedValue existingValue = messageCodec.decode(result, VersionedValue.class);
+                if (existingValue.timestamp() >= value.timestamp()) {
+                    //Already set with higher timestamp, so we return true, but dont overwrite the value.
+                    sendInternalSetResponse(message, true, null, setRequest);
+                    return;
+                }
+            }
+            // Perform local storage operation
+            var future = storage.set(setRequest.key(), messageCodec.encode(value));
+            future.handle((success, setError)
+                    -> sendInternalSetResponse(message, success, setError, setRequest));
+        });
     }
 
     private void sendInternalSetResponse(Message message, Boolean success, Throwable error, InternalSetRequest setRequest) {
@@ -268,7 +286,7 @@ public class QuorumReplica extends Replica {
         var response = deserializePayload(message.payload(), InternalGetResponse.class);
 
         System.out.println("QuorumReplica: Processing internal GET response - keyLength: " + response.key().length +
-                  ", from: " + message.source());
+                ", from: " + message.source());
 
         // Route the response to the RequestWaitingList
         waitingList.handleResponse(message.correlationId(), response, message.source());

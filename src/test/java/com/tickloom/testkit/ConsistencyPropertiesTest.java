@@ -8,6 +8,7 @@ import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
 import com.tickloom.history.History;
 import com.tickloom.history.Op;
+import com.tickloom.storage.VersionedValue;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -48,7 +49,7 @@ public class ConsistencyPropertiesTest {
             history.ok(ProcessId.of("client1"), Op.WRITE, v0);
 
             assertEventually(cluster, () -> {
-                var v = cluster.getStorageValue(ATHENS, key.getBytes());
+                var v = cluster.getDecodedStoredValue(ATHENS, key.getBytes(), VersionedValue.class);
                 return v != null && java.util.Arrays.equals(v.value(), v0.getBytes());
             });
             // Partition to isolate ATHENS from writer majority
@@ -65,7 +66,7 @@ public class ConsistencyPropertiesTest {
 
             // Local read from ATHENS (read-one), returns stale v0
             history.invoke(ProcessId.of("client2"), Op.READ, null);
-            var vv = cluster.getStorageValue(ATHENS, key.getBytes());
+            var vv = cluster.getDecodedStoredValue(ATHENS, key.getBytes(), VersionedValue.class);
             assertNotNull(vv);
             assertArrayEquals(v0.getBytes(), vv.value());
             history.ok(ProcessId.of("client2"), Op.READ, new String(vv.value()));
@@ -111,7 +112,7 @@ public class ConsistencyPropertiesTest {
 
             // Same client performs local read from ATHENS (read-one) -> stale v0
             history.invoke(ProcessId.of("clientX"), Op.READ, null);
-            var vv = cluster.getStorageValue(ATHENS, key.getBytes());
+            var vv = cluster.getDecodedStoredValue(ATHENS, key.getBytes(), VersionedValue.class);
             assertNotNull(vv);
             assertArrayEquals(v0.getBytes(), vv.value());
             history.ok(ProcessId.of("clientX"), Op.READ, new String(vv.value()));

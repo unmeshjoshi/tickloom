@@ -114,17 +114,11 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
         return this;
     }
 
-    /** Peek stored value at a node; throws if absent. */
-    protected long timestampOfStoredValue(ProcessId processId, byte[] key) {
-        var vv = storedValue(processId, key);
-        assertNotNull(vv, () -> "No value at " + processId + " for key=" + pretty(key));
-        return vv.timestamp();
+    /** Peek stored value at a node; may be null. */
+    protected <T> T storedValue(ProcessId processId, byte[] key, Class<T> clazz) {
+        return cluster.getDecodedStoredValue(processId, key, clazz);
     }
 
-    /** Peek stored value at a node; may be null. */
-    protected VersionedValue storedValue(ProcessId processId, byte[] key) {
-        return cluster.getStorageValue(processId, key);
-    }
 
     /**
      * Await a condition, ticking the cluster until it holds or times out.
@@ -272,20 +266,20 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
      */
     protected ClusterTest<C, RGet, JepsenValue> assertNodesContainValue(List<ProcessId> nodes, byte[] key, byte[] expected) {
         for (ProcessId node : nodes) {
-            var actual = cluster.getStorageValue(node, key);
+            var actual = cluster.getDecodedStoredValue(node, key, VersionedValue.class).value();
             assertNotNull(actual, () -> "No value at " + node + " for key=" + pretty(key));
-            assertArrayEquals(expected, actual.value(),
+            assertArrayEquals(expected, actual,
                     () -> "Mismatch at " + node +
-                            " key=" + pretty(key) +
-                            " expected=" + pretty(expected) +
-                            " actual=" + pretty(actual.value()) +
-                            " ts=" + actual.timestamp());
+                            " key=" + new String(key) +
+                            " expected=" + new String(expected) +
+                            " actual=" + new String(actual)
+                           );
         }
         return this;
     }
 
     protected Optional<byte[]> getNodeValue(ProcessId node, byte[] key) {
-        VersionedValue storageValue = cluster.getStorageValue(node, key);
+        VersionedValue storageValue = cluster.getDecodedStoredValue(node, key, VersionedValue.class);
         if (null == storageValue) {
             return Optional.empty();
         }
@@ -308,9 +302,9 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
      */
     protected ClusterTest<C, RGet, JepsenValue> assertNoValue(byte[] key, List<ProcessId> nodes) {
         for (ProcessId node : nodes) {
-            VersionedValue vv = cluster.getStorageValue(node, key);
+            byte[] vv = cluster.getStorageValue(node, key);
             assertNull(vv, () -> "Expected no value at " + node + " for key=" + pretty(key) +
-                    " but found=" + (vv == null ? "null" : pretty(vv.value()) + " ts=" + vv.timestamp()));
+                    " but found=" + (vv == null ? "null" : pretty(vv)));
         }
         return this;
     }

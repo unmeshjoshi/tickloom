@@ -5,6 +5,7 @@ import com.tickloom.algorithms.replication.quorum.GetResponse;
 import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
 import com.tickloom.future.ListenableFuture;
+import com.tickloom.storage.VersionedValue;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class ClockSkewTests extends ClusterTest<QuorumReplicaClient, GetResponse, String> {
     //Process Ids for cluster nodes
@@ -83,6 +85,16 @@ public class ClockSkewTests extends ClusterTest<QuorumReplicaClient, GetResponse
         //Invoke sequential consistency checker.
         assertSequentialConsistency(false);
     }
+
+
+    /** Peek stored value at a node; throws if absent. */
+    private long timestampOfStoredValue(ProcessId processId, byte[] key) {
+        var vv = storedValue(processId, key, VersionedValue.class);
+        assertNotNull(vv, () -> "No value at " + processId + " for key=" + pretty(key));
+
+        return vv.timestamp();
+    }
+
 
     private static Reader<QuorumReplicaClient, GetResponse, String> withReader(QuorumReplicaClient reconnectedClient2, byte[] key) {
         return new Reader<>(reconnectedClient2) {

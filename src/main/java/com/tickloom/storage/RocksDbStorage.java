@@ -37,7 +37,7 @@ public class RocksDbStorage implements Storage {
     private final double defaultFailureRate;
     
     // Internal state for tick-based operations
-    private final Map<BytesKey, VersionedValue> dataStore = new HashMap<>();
+    private final Map<BytesKey, byte[]> dataStore = new HashMap<>();
     private final PriorityQueue<PendingOperation> pendingOperations = new PriorityQueue<>();
     
     // Internal counter for operation timing
@@ -119,12 +119,12 @@ public class RocksDbStorage implements Storage {
     }
     
     @Override
-    public ListenableFuture<VersionedValue> get(byte[] key) {
+    public ListenableFuture<byte[]> get(byte[] key) {
         if (key == null) {
             throw new IllegalArgumentException("Key cannot be null");
         }
         
-        ListenableFuture<VersionedValue> future = new ListenableFuture<>();
+        ListenableFuture<byte[]> future = new ListenableFuture<>();
         BytesKey bytesKey = new BytesKey(key);
         
         long completionTick = currentTick + defaultDelayTicks;
@@ -134,7 +134,7 @@ public class RocksDbStorage implements Storage {
     }
     
     @Override
-    public ListenableFuture<Boolean> set(byte[] key, VersionedValue value) {
+    public ListenableFuture<Boolean> set(byte[] key, byte[] value) {
         if (key == null) {
             throw new IllegalArgumentException("Key cannot be null");
         }
@@ -171,48 +171,6 @@ public class RocksDbStorage implements Storage {
                 operation.fail(new RuntimeException("Storage operation failed", e));
             }
         }
-    }
-    
-    /**
-     * Serializes a VersionedValue to bytes for storage.
-     * Format: [8 bytes timestamp][remaining bytes: name]
-     */
-    private byte[] serializeVersionedValue(VersionedValue versionedValue) {
-        byte[] value = versionedValue.value();
-        long timestamp = versionedValue.timestamp();
-        
-        byte[] serialized = new byte[8 + value.length];
-        
-        // Write timestamp as 8 bytes (big-endian)
-        for (int i = 0; i < 8; i++) {
-            serialized[i] = (byte) (timestamp >>> (56 - i * 8));
-        }
-        
-        // Write name bytes
-        System.arraycopy(value, 0, serialized, 8, value.length);
-        
-        return serialized;
-    }
-    
-    /**
-     * Deserializes bytes back to a VersionedValue.
-     */
-    private VersionedValue deserializeVersionedValue(byte[] data) {
-        if (data.length < 8) {
-            throw new IllegalArgumentException("Invalid serialized data: too short");
-        }
-        
-        // Read timestamp from first 8 bytes (big-endian)
-        long timestamp = 0;
-        for (int i = 0; i < 8; i++) {
-            timestamp = (timestamp << 8) | (data[i] & 0xFF);
-        }
-        
-        // Read name from remaining bytes
-        byte[] value = new byte[data.length - 8];
-        System.arraycopy(data, 8, value, 0, value.length);
-        
-        return new VersionedValue(value, timestamp);
     }
     
     /**
@@ -270,7 +228,7 @@ public class RocksDbStorage implements Storage {
             this.completionTick = completionTick;
         }
         
-        abstract void execute(Map<BytesKey, VersionedValue> dataStore);
+        abstract void execute(Map<BytesKey, byte[]> dataStore);
         abstract void fail(RuntimeException exception);
         
         @Override
@@ -280,16 +238,16 @@ public class RocksDbStorage implements Storage {
     }
     
     private static class GetOperation extends PendingOperation {
-        private final ListenableFuture<VersionedValue> future;
+        private final ListenableFuture<byte[]> future;
         
-        GetOperation(BytesKey key, ListenableFuture<VersionedValue> future, long completionTick) {
+        GetOperation(BytesKey key, ListenableFuture<byte[]> future, long completionTick) {
             super(key, completionTick);
             this.future = future;
         }
         
         @Override
-        void execute(Map<BytesKey, VersionedValue> dataStore) {
-            VersionedValue value = dataStore.get(key);
+        void execute(Map<BytesKey, byte[]> dataStore) {
+            byte[] value = dataStore.get(key);
             System.out.println("RocksDbStorage: GET operation completed for key " + java.util.Arrays.toString(key.bytes()));
             future.complete(value);
         }
@@ -301,17 +259,17 @@ public class RocksDbStorage implements Storage {
     }
     
     private static class SetOperation extends PendingOperation {
-        private final VersionedValue value;
+        private final byte[] value;
         private final ListenableFuture<Boolean> future;
         
-        SetOperation(BytesKey key, VersionedValue value, ListenableFuture<Boolean> future, long completionTick) {
+        SetOperation(BytesKey key, byte[] value, ListenableFuture<Boolean> future, long completionTick) {
             super(key, completionTick);
             this.value = value;
             this.future = future;
         }
         
         @Override
-        void execute(Map<BytesKey, VersionedValue> dataStore) {
+        void execute(Map<BytesKey, byte[]> dataStore) {
             dataStore.put(key, value);
             System.out.println("RocksDbStorage: SET operation completed for key " + java.util.Arrays.toString(key.bytes()));
             future.complete(true);
@@ -332,7 +290,7 @@ public class RocksDbStorage implements Storage {
         }
         
         @Override
-        void execute(Map<BytesKey, VersionedValue> dataStore) {
+        void execute(Map<BytesKey, byte[]> dataStore) {
             System.out.println("RocksDbStorage: SYNC operation completed");
             future.complete(null);
         }

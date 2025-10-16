@@ -8,7 +8,7 @@ import java.util.Objects;
 /**
  * Internal response sent between replicas for GET requests.
  */
-public record InternalGetResponse(byte[] key, VersionedValue value) {
+public record InternalGetResponse(byte[] key, byte[] value) {
     public InternalGetResponse {
         Objects.requireNonNull(key, "Key cannot be null");
         // name can be null when not found

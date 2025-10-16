@@ -18,7 +18,7 @@ public class SimulatedStorage implements Storage {
     private final double defaultFailureRate;
     
     // Internal state
-    private final Map<BytesKey, VersionedValue> dataStore = new HashMap<>();
+    private final Map<BytesKey, byte[]> dataStore = new HashMap<>();
     private final PriorityQueue<PendingOperation> pendingOperations = new PriorityQueue<>();
     
     // Internal counter for operation timing (TigerBeetle pattern)
@@ -57,12 +57,12 @@ public class SimulatedStorage implements Storage {
     }
     
     @Override
-    public ListenableFuture<VersionedValue> get(byte[] key) {
+    public ListenableFuture<byte[]> get(byte[] key) {
         if (key == null) {
             throw new IllegalArgumentException("Key cannot be null");
         }
         
-        ListenableFuture<VersionedValue> future = new ListenableFuture<>();
+        ListenableFuture<byte[]> future = new ListenableFuture<>();
         BytesKey bytesKey = new BytesKey(key);
         
         long completionTick = currentTick + defaultDelayTicks;
@@ -82,7 +82,7 @@ public class SimulatedStorage implements Storage {
     }
     
     @Override
-    public ListenableFuture<Boolean> set(byte[] key, VersionedValue value) {
+    public ListenableFuture<Boolean> set(byte[] key, byte[] value) {
         if (key == null) {
             throw new IllegalArgumentException("Key cannot be null");
         }
@@ -140,23 +140,23 @@ public class SimulatedStorage implements Storage {
             return Long.compare(this.completionTick, other.completionTick);
         }
         
-        abstract void execute(Map<BytesKey, VersionedValue> dataStore);
+        abstract void execute(Map<BytesKey, byte[]> dataStore);
         abstract void fail(RuntimeException exception);
     }
     
     private static class GetOperation extends PendingOperation {
-        private final ListenableFuture<VersionedValue> future;
+        private final ListenableFuture<byte[]> future;
         
-        GetOperation(BytesKey key, ListenableFuture<VersionedValue> future, long completionTick) {
+        GetOperation(BytesKey key, ListenableFuture<byte[]> future, long completionTick) {
             super(key, completionTick);
             this.future = future;
         }
         
         @Override
-        void execute(Map<BytesKey, VersionedValue> dataStore) {
-            VersionedValue value = dataStore.get(key);
+        void execute(Map<BytesKey, byte[]> dataStore) {
+            byte[] value = dataStore.get(key);
             String keyStr = new String(key.bytes());
-            String valueStr = value != null ? new String(value.value()) : "null";
+            String valueStr = value != null ? new String(value) : "null";
             System.out.println("SimulatedStorage: GET operation - key: " + keyStr + ", value: " + valueStr);
             future.complete(value); // null if not found
         }
@@ -168,27 +168,31 @@ public class SimulatedStorage implements Storage {
     }
     
     private static class SetOperation extends PendingOperation {
-        private final VersionedValue value;
+        private final byte[] value;
         private final ListenableFuture<Boolean> future;
         
-        SetOperation(BytesKey key, VersionedValue value, 
+        SetOperation(BytesKey key, byte[] value, 
                     ListenableFuture<Boolean> future, long completionTick) {
             super(key, completionTick);
             this.value = value;
             this.future = future;
         }
-        
-        @Override
-        void execute(Map<BytesKey, VersionedValue> dataStore) {
-            VersionedValue versionedValue = dataStore.get(key);
-            if (versionedValue == null || versionedValue.timestamp() < value.timestamp()) {
-                String keyStr = new String(key.bytes());
-                String valueStr = new String(value.value());
-                System.out.println("SimulatedStorage: SET operation - key: " + keyStr + ", value: " + valueStr +
-                        ", timestamp: " + value.timestamp());
-                dataStore.put(key, value);
 
-            }
+        /**
+         *  byte[] byte[] = dataStore.get(key);
+         *             if (byte[] == null || byte[].timestamp() < value.timestamp()) {
+         *                 String keyStr = new String(key.bytes());
+         *                 String valueStr = new String(value.value());
+         *                 System.out.println("SimulatedStorage: SET operation - key: " + keyStr + ", value: " + valueStr +
+         *                         ", timestamp: " + value.timestamp());
+         *                 dataStore.put(key, value);
+         *
+         *             }
+         * @param dataStore
+         */
+        @Override
+        void execute(Map<BytesKey, byte[]> dataStore) {
+            dataStore.put(key, value);
             future.complete(true);
         }
         
@@ -207,7 +211,7 @@ public class SimulatedStorage implements Storage {
         }
         
         @Override
-        void execute(Map<BytesKey, VersionedValue> dataStore) {
+        void execute(Map<BytesKey, byte[]> dataStore) {
             System.out.println("SimulatedStorage: SYNC operation completed");
             future.complete(null);
         }

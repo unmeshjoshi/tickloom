@@ -69,7 +69,7 @@ public final class DDIA_Linearizability_And_Quorum_ScenarioTest
         // Writer upgrades to SHIPPED via ATHENS. ATHENS applies promptly; others are delayed.
         // We need to wait until the value is available on ATHENS.
         writeAndWaitUntil(withWriter(orderStatusUpdater, key, vNew), () -> {
-            VersionedValue storageValue = cluster.getStorageValue(ATHENS, key);
+            VersionedValue storageValue = cluster.getDecodedStoredValue(ATHENS, key, VersionedValue.class);
             if (null == storageValue) return false;
             return Arrays.equals(vNew, storageValue.value());
         });

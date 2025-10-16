@@ -199,9 +199,7 @@ public abstract class Process implements Tickable, AutoCloseable {
     protected <T> ListenableFuture<Boolean> persist(String key, T stateObject) {
         byte[] keyBytes = key.getBytes();
         byte[] serializedState = messageCodec.encode(stateObject);
-        VersionedValue versionedValue = new VersionedValue(serializedState, clock.now());
-        
-        return storage.set(keyBytes, versionedValue);
+        return storage.set(keyBytes, serializedState);
     }
     
     /**
@@ -237,17 +235,17 @@ public abstract class Process implements Tickable, AutoCloseable {
      */
     protected <T> ListenableFuture<T> load(String key, Class<T> stateClass) {
         byte[] keyBytes = key.getBytes();
-        ListenableFuture<VersionedValue> loadFuture = storage.get(keyBytes);
+        ListenableFuture<byte[]> loadFuture = storage.get(keyBytes);
         
         ListenableFuture<T> resultFuture = new ListenableFuture<>();
-        loadFuture.handle((versionedValue, error) -> {
+        loadFuture.handle((loadedValue, error) -> {
             if (error != null) {
                 resultFuture.fail(error);
-            } else if (versionedValue == null) {
+            } else if (loadedValue == null) {
                 resultFuture.complete(null);
             } else {
                 try {
-                    T result = messageCodec.decode(versionedValue.value(), stateClass);
+                    T result = messageCodec.decode(loadedValue, stateClass);
                     resultFuture.complete(result);
                 } catch (Exception e) {
                     resultFuture.fail(e);

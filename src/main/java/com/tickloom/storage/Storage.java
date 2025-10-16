@@ -16,7 +16,7 @@ public interface Storage extends Tickable, AutoCloseable {
      * @param key the key to retrieve
      * @return a future containing the versioned name, or null if not found
      */
-    ListenableFuture<VersionedValue> get(byte[] key);
+    ListenableFuture<byte[]> get(byte[] key);
     
     /**
      * Stores a name for the given key.
@@ -25,7 +25,7 @@ public interface Storage extends Tickable, AutoCloseable {
      * @param value the versioned name to store
      * @return a future containing true if successful, false otherwise
      */
-    ListenableFuture<Boolean> set(byte[] key, VersionedValue value);
+    ListenableFuture<Boolean> set(byte[] key, byte[] value);
     
     /**
      * Ensures all pending writes are flushed to disk for durability.
