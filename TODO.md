@@ -18,7 +18,9 @@
 - [ ] Add WriteOptions perameter to set method which allows supporting 'sync' parameter. 
 
 ## TODO
+- [ ] Update ListenableFuture API to add thenApply and thenCompose. This will simplify quorum get and compare and set kind of code.
 - [ ] Move Jepsen specific history_edn handling in linearizability-checker
 - [ ] Use Jepsen's generator in the SimulationRunner.
 - [ ] Store mavencetral token and gpg key and write a script to setup gradle.properties required for the publish task to work.
 - [ ] Add support for process initialization indicator.
+- [ ] Separate messagecodec and storagecodec. Right now, the data stored in storage is encoded with the same messagecodec as used for messaging. 
