@@ -14,7 +14,6 @@ import com.tickloom.messaging.MessageType;
 import com.tickloom.network.*;
 import com.tickloom.storage.SimulatedStorage;
 import com.tickloom.storage.Storage;
-import com.tickloom.storage.VersionedValue;
 import com.tickloom.util.Clock;
 import com.tickloom.util.IdGen;
 import com.tickloom.util.StubClock;

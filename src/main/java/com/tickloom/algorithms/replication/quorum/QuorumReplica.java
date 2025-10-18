@@ -5,7 +5,6 @@ import com.tickloom.ProcessId;
 import com.tickloom.Replica;
 import com.tickloom.future.ListenableFuture;
 import com.tickloom.messaging.*;
-import com.tickloom.storage.VersionedValue;
 
 import java.util.List;
 import java.util.Map;
@@ -253,7 +252,7 @@ public class QuorumReplica extends Replica {
                 }
             }
             // Perform local storage operation
-            var future = storage.set(setRequest.key(), messageCodec.encode(value));
+            var future = storage.put(setRequest.key(), messageCodec.encode(value));
             future.handle((success, setError)
                     -> sendInternalSetResponse(message, success, setError, setRequest));
         });

@@ -1,7 +1,7 @@
 package com.tickloom.testkit;
 
 import com.tickloom.ProcessId;
-import com.tickloom.storage.VersionedValue;
+import com.tickloom.algorithms.replication.quorum.VersionedValue;
 
 import java.util.Arrays;
 import java.util.List;

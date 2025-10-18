@@ -8,7 +8,7 @@ import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
 import com.tickloom.history.History;
 import com.tickloom.history.Op;
-import com.tickloom.storage.VersionedValue;
+import com.tickloom.algorithms.replication.quorum.VersionedValue;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

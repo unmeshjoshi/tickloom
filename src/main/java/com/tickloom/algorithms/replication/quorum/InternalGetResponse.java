@@ -1,7 +1,5 @@
 package com.tickloom.algorithms.replication.quorum;
 
-import com.tickloom.storage.VersionedValue;
-
 import java.util.Arrays;
 import java.util.Objects;
 

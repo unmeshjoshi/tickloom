@@ -6,7 +6,7 @@ import com.tickloom.algorithms.replication.quorum.QuorumMessageTypes;
 import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
 import com.tickloom.future.ListenableFuture;
-import com.tickloom.storage.VersionedValue;
+import com.tickloom.algorithms.replication.quorum.VersionedValue;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

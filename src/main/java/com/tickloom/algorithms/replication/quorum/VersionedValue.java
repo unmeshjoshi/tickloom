@@ -1,4 +1,4 @@
-package com.tickloom.storage;
+package com.tickloom.algorithms.replication.quorum;
 
 import java.util.Arrays;
 

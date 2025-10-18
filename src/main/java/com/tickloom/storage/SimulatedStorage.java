@@ -2,14 +2,22 @@ package com.tickloom.storage;
 
 import com.tickloom.future.ListenableFuture;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.PriorityQueue;
-import java.util.Random;
+import java.util.*;
 
 /**
- * Simulated storage implementation that provides asynchronous key-name operations
+ * Simulated storage implementation that provides asynchronous key-value operations
  * with configurable delays and fault injection for testing distributed systems.
+ * 
+ * This implementation uses NavigableMap (TreeMap) for ordered key storage, which enables
+ * efficient range queries and prefix operations. All operations are processed in
+ * deterministic order during the tick() method.
+ * 
+ * Key features:
+ * - Ordered key storage using NavigableMap
+ * - Deterministic operation processing during tick()
+ * - Configurable operation delays and failure rates
+ * - Support for batch operations, range queries, and prefix operations
+ * - Simple byte[] key-value storage without versioning
  */
 public class SimulatedStorage implements Storage {
     
@@ -18,7 +26,7 @@ public class SimulatedStorage implements Storage {
     private final double defaultFailureRate;
     
     // Internal state
-    private final Map<BytesKey, byte[]> dataStore = new HashMap<>();
+    private final NavigableMap<byte[], byte[]> dataStore = new TreeMap<>(Arrays::compare);
     private final PriorityQueue<PendingOperation> pendingOperations = new PriorityQueue<>();
     
     // Internal counter for operation timing (TigerBeetle pattern)
@@ -56,6 +64,8 @@ public class SimulatedStorage implements Storage {
         this.defaultFailureRate = failureRate;
     }
     
+    // ========== Basic Operations ==========
+    
     @Override
     public ListenableFuture<byte[]> get(byte[] key) {
         if (key == null) {
@@ -63,10 +73,102 @@ public class SimulatedStorage implements Storage {
         }
         
         ListenableFuture<byte[]> future = new ListenableFuture<>();
-        BytesKey bytesKey = new BytesKey(key);
         
         long completionTick = currentTick + defaultDelayTicks;
-        pendingOperations.offer(new GetOperation(bytesKey, future, completionTick));
+        pendingOperations.offer(new GetOperation(key, future, completionTick));
+        
+        return future;
+    }
+    
+    @Override
+    public ListenableFuture<Boolean> put(byte[] key, byte[] value) {
+        return put(key, value, WriteOptions.DEFAULT);
+    }
+    
+    @Override
+    public ListenableFuture<Boolean> put(byte[] key, byte[] value, WriteOptions options) {
+        if (key == null) {
+            throw new IllegalArgumentException("Key cannot be null");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("Value cannot be null");
+        }
+        if (options == null) {
+            throw new IllegalArgumentException("WriteOptions cannot be null");
+        }
+        
+        ListenableFuture<Boolean> future = new ListenableFuture<>();
+        
+        long completionTick = currentTick + defaultDelayTicks;
+        pendingOperations.offer(new SetOperation(key, value, future, completionTick, options));
+        
+        return future;
+    }
+    
+    // ========== Advanced Operations ==========
+    
+    @Override
+    public ListenableFuture<Boolean> put(WriteBatch writeBatch) {
+        return put(writeBatch, WriteOptions.DEFAULT);
+    }
+    
+    @Override
+    public ListenableFuture<Boolean> put(WriteBatch writeBatch, WriteOptions options) {
+        if (writeBatch == null) {
+            throw new IllegalArgumentException("WriteBatch cannot be null");
+        }
+        if (writeBatch.isEmpty()) {
+            throw new IllegalArgumentException("WriteBatch cannot be empty");
+        }
+        if (options == null) {
+            throw new IllegalArgumentException("WriteOptions cannot be null");
+        }
+        
+        ListenableFuture<Boolean> future = new ListenableFuture<>();
+        
+        long completionTick = currentTick + defaultDelayTicks;
+        pendingOperations.offer(new BatchWriteOperation(writeBatch, future, completionTick, options));
+        
+        return future;
+    }
+    
+    @Override
+    public ListenableFuture<Map<byte[], byte[]>> readRange(byte[] startKey, byte[] endKey) {
+        if (startKey == null) {
+            throw new IllegalArgumentException("Start key cannot be null");
+        }
+        if (endKey == null) {
+            throw new IllegalArgumentException("End key cannot be null");
+        }
+        
+        ListenableFuture<Map<byte[], byte[]>> future = new ListenableFuture<>();
+        
+        long completionTick = currentTick + defaultDelayTicks;
+        pendingOperations.offer(new RangeOperation(startKey, endKey, future, completionTick));
+        
+        return future;
+    }
+    
+    @Override
+    public ListenableFuture<List<byte[]>> keysWithPrefix(byte[] prefix) {
+        if (prefix == null) {
+            throw new IllegalArgumentException("Prefix cannot be null");
+        }
+        
+        ListenableFuture<List<byte[]>> future = new ListenableFuture<>();
+        
+        long completionTick = currentTick + defaultDelayTicks;
+        pendingOperations.offer(new KeysWithPrefixOperation(prefix, future, completionTick));
+        
+        return future;
+    }
+    
+    @Override
+    public ListenableFuture<byte[]> lastKey() {
+        ListenableFuture<byte[]> future = new ListenableFuture<>();
+        
+        long completionTick = currentTick + defaultDelayTicks;
+        pendingOperations.offer(new LastKeyOperation(future, completionTick));
         
         return future;
     }
@@ -82,28 +184,10 @@ public class SimulatedStorage implements Storage {
     }
     
     @Override
-    public ListenableFuture<Boolean> set(byte[] key, byte[] value) {
-        if (key == null) {
-            throw new IllegalArgumentException("Key cannot be null");
-        }
-        if (value == null) {
-            throw new IllegalArgumentException("Value cannot be null");
-        }
-        
-        ListenableFuture<Boolean> future = new ListenableFuture<>();
-        BytesKey bytesKey = new BytesKey(key);
-        
-        long completionTick = currentTick + defaultDelayTicks;
-        pendingOperations.offer(new SetOperation(bytesKey, value, future, completionTick));
-        
-        return future;
-    }
-    
-    @Override
     public void tick() {
         currentTick++;
         
-        // Process all operations that are due
+        // Process all operations that are due, maintaining order
         while (!pendingOperations.isEmpty() && 
                pendingOperations.peek().completionTick <= currentTick) {
             
@@ -116,7 +200,11 @@ public class SimulatedStorage implements Storage {
         if (shouldSimulateFailure()) {
             operation.fail(new RuntimeException("Simulated storage failure"));
         } else {
-            operation.execute(dataStore);
+            try {
+                operation.execute(dataStore);
+            } catch (Exception e) {
+                operation.fail(new RuntimeException("Storage operation failed", e));
+            }
         }
     }
     
@@ -124,14 +212,12 @@ public class SimulatedStorage implements Storage {
         return defaultFailureRate > 0.0 && random.nextDouble() < defaultFailureRate;
     }
     
-    // Internal classes for pending operations
+    // ========== Internal Operation Classes ==========
     
     private abstract static class PendingOperation implements Comparable<PendingOperation> {
-        protected final BytesKey key;
         protected final long completionTick;
         
-        protected PendingOperation(BytesKey key, long completionTick) {
-            this.key = key;
+        protected PendingOperation(long completionTick) {
             this.completionTick = completionTick;
         }
         
@@ -140,25 +226,29 @@ public class SimulatedStorage implements Storage {
             return Long.compare(this.completionTick, other.completionTick);
         }
         
-        abstract void execute(Map<BytesKey, byte[]> dataStore);
+        abstract void execute(NavigableMap<byte[], byte[]> dataStore);
         abstract void fail(RuntimeException exception);
     }
     
     private static class GetOperation extends PendingOperation {
+        private final byte[] key;
         private final ListenableFuture<byte[]> future;
         
-        GetOperation(BytesKey key, ListenableFuture<byte[]> future, long completionTick) {
-            super(key, completionTick);
+        GetOperation(byte[] key, ListenableFuture<byte[]> future, long completionTick) {
+            super(completionTick);
+            this.key = key;
             this.future = future;
         }
         
         @Override
-        void execute(Map<BytesKey, byte[]> dataStore) {
+        void execute(NavigableMap<byte[], byte[]> dataStore) {
             byte[] value = dataStore.get(key);
-            String keyStr = new String(key.bytes());
+            
+            String keyStr = new String(key);
             String valueStr = value != null ? new String(value) : "null";
             System.out.println("SimulatedStorage: GET operation - key: " + keyStr + ", value: " + valueStr);
-            future.complete(value); // null if not found
+            
+            future.complete(value);
         }
         
         @Override
@@ -168,32 +258,184 @@ public class SimulatedStorage implements Storage {
     }
     
     private static class SetOperation extends PendingOperation {
+        private final byte[] key;
         private final byte[] value;
         private final ListenableFuture<Boolean> future;
         
-        SetOperation(BytesKey key, byte[] value, 
-                    ListenableFuture<Boolean> future, long completionTick) {
-            super(key, completionTick);
+        SetOperation(byte[] key, byte[] value, ListenableFuture<Boolean> future, 
+                    long completionTick, WriteOptions options) {
+            super(completionTick);
+            this.key = key;
             this.value = value;
             this.future = future;
         }
-
-        /**
-         *  byte[] byte[] = dataStore.get(key);
-         *             if (byte[] == null || byte[].timestamp() < value.timestamp()) {
-         *                 String keyStr = new String(key.bytes());
-         *                 String valueStr = new String(value.value());
-         *                 System.out.println("SimulatedStorage: SET operation - key: " + keyStr + ", value: " + valueStr +
-         *                         ", timestamp: " + value.timestamp());
-         *                 dataStore.put(key, value);
-         *
-         *             }
-         * @param dataStore
-         */
+        
         @Override
-        void execute(Map<BytesKey, byte[]> dataStore) {
+        void execute(NavigableMap<byte[], byte[]> dataStore) {
             dataStore.put(key, value);
+            
+            String keyStr = new String(key);
+            String valueStr = new String(value);
+            System.out.println("SimulatedStorage: SET operation - key: " + keyStr + 
+                             ", value: " + valueStr + ", timestamp: " + completionTick);
+            
             future.complete(true);
+        }
+        
+        @Override
+        void fail(RuntimeException exception) {
+            future.fail(exception);
+        }
+    }
+    
+    private static class BatchWriteOperation extends PendingOperation {
+        private final WriteBatch writeBatch;
+        private final ListenableFuture<Boolean> future;
+        
+        BatchWriteOperation(WriteBatch writeBatch, ListenableFuture<Boolean> future, 
+                      long completionTick, WriteOptions options) {
+            super(completionTick);
+            this.writeBatch = writeBatch;
+            this.future = future;
+        }
+        
+        @Override
+        void execute(NavigableMap<byte[], byte[]> dataStore) {
+            try {
+                // Process all key-value pairs in the batch
+                Map<byte[], byte[]> operations = writeBatch.getOperations();
+                for (Map.Entry<byte[], byte[]> entry : operations.entrySet()) {
+                    byte[] key = entry.getKey();
+                    byte[] value = entry.getValue();
+                    
+                    if (value == null) {
+                        // Delete operation
+                        dataStore.remove(key);
+                    } else {
+                        // Put operation
+                        dataStore.put(key, value);
+                    }
+                }
+                
+                System.out.println("SimulatedStorage: BATCH operation completed with " + writeBatch.size() + " operations");
+                future.complete(true);
+            } catch (Exception e) {
+                future.fail(new RuntimeException("Batch operation failed", e));
+            }
+        }
+        
+        @Override
+        void fail(RuntimeException exception) {
+            future.fail(exception);
+        }
+    }
+    
+    private static class RangeOperation extends PendingOperation {
+        private final byte[] startKey;
+        private final byte[] endKey;
+        private final ListenableFuture<Map<byte[], byte[]>> future;
+        
+        RangeOperation(byte[] startKey, byte[] endKey, ListenableFuture<Map<byte[], byte[]>> future, 
+                     long completionTick) {
+            super(completionTick);
+            this.startKey = startKey;
+            this.endKey = endKey;
+            this.future = future;
+        }
+        
+        @Override
+        void execute(NavigableMap<byte[], byte[]> dataStore) {
+            Map<byte[], byte[]> result = new HashMap<>();
+            
+            // Get submap for the range
+            NavigableMap<byte[], byte[]> subMap = dataStore.subMap(startKey, true, endKey, false);
+            
+            for (Map.Entry<byte[], byte[]> entry : subMap.entrySet()) {
+                result.put(entry.getKey(), entry.getValue());
+            }
+            
+            System.out.println("SimulatedStorage: RANGE operation - start: " + new String(startKey) + 
+                             ", end: " + new String(endKey) + ", count: " + result.size());
+            
+            future.complete(result);
+        }
+        
+        @Override
+        void fail(RuntimeException exception) {
+            future.fail(exception);
+        }
+    }
+    
+    private static class KeysWithPrefixOperation extends PendingOperation {
+        private final byte[] prefix;
+        private final ListenableFuture<List<byte[]>> future;
+        
+        KeysWithPrefixOperation(byte[] prefix, ListenableFuture<List<byte[]>> future, long completionTick) {
+            super(completionTick);
+            this.prefix = prefix;
+            this.future = future;
+        }
+        
+        @Override
+        void execute(NavigableMap<byte[], byte[]> dataStore) {
+            List<byte[]> result = new ArrayList<>();
+            
+            // Find the first key with the prefix
+            byte[] firstKey = dataStore.ceilingKey(prefix);
+            if (firstKey != null && startsWith(firstKey, prefix)) {
+                // Get all keys with this prefix
+                NavigableMap<byte[], byte[]> subMap = dataStore.tailMap(firstKey, true);
+                
+                for (byte[] key : subMap.keySet()) {
+                    if (startsWith(key, prefix)) {
+                        result.add(key);
+                    } else {
+                        // No more keys with this prefix
+                        break;
+                    }
+                }
+            }
+            
+            System.out.println("SimulatedStorage: KEYS_WITH_PREFIX operation - prefix: " + new String(prefix) + 
+                             ", count: " + result.size());
+            
+            future.complete(result);
+        }
+        
+        @Override
+        void fail(RuntimeException exception) {
+            future.fail(exception);
+        }
+        
+        private boolean startsWith(byte[] array, byte[] prefix) {
+            if (array.length < prefix.length) {
+                return false;
+            }
+            for (int i = 0; i < prefix.length; i++) {
+                if (array[i] != prefix[i]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+    
+    private static class LastKeyOperation extends PendingOperation {
+        private final ListenableFuture<byte[]> future;
+        
+        LastKeyOperation(ListenableFuture<byte[]> future, long completionTick) {
+            super(completionTick);
+            this.future = future;
+        }
+        
+        @Override
+        void execute(NavigableMap<byte[], byte[]> dataStore) {
+            byte[] lastKey = dataStore.lastKey();
+            
+            System.out.println("SimulatedStorage: LAST_KEY operation - result: " + 
+                             (lastKey != null ? new String(lastKey) : "null"));
+            
+            future.complete(lastKey);
         }
         
         @Override
@@ -206,12 +448,12 @@ public class SimulatedStorage implements Storage {
         private final ListenableFuture<Void> future;
         
         SyncOperation(ListenableFuture<Void> future, long completionTick) {
-            super(null, completionTick); // Sync doesn't need a key
+            super(completionTick);
             this.future = future;
         }
         
         @Override
-        void execute(Map<BytesKey, byte[]> dataStore) {
+        void execute(NavigableMap<byte[], byte[]> dataStore) {
             System.out.println("SimulatedStorage: SYNC operation completed");
             future.complete(null);
         }

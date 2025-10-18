@@ -5,7 +5,6 @@ import com.tickloom.messaging.*;
 import com.tickloom.network.MessageCodec;
 import com.tickloom.network.PeerType;
 import com.tickloom.storage.Storage;
-import com.tickloom.storage.VersionedValue;
 import com.tickloom.util.Clock;
 import com.tickloom.util.IdGen;
 
@@ -199,7 +198,7 @@ public abstract class Process implements Tickable, AutoCloseable {
     protected <T> ListenableFuture<Boolean> persist(String key, T stateObject) {
         byte[] keyBytes = key.getBytes();
         byte[] serializedState = messageCodec.encode(stateObject);
-        return storage.set(keyBytes, serializedState);
+        return storage.put(keyBytes, serializedState);
     }
     
     /**

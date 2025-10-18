@@ -7,7 +7,7 @@ import com.tickloom.algorithms.replication.ClusterClient;
 import com.tickloom.future.ListenableFuture;
 import com.tickloom.history.History;
 import com.tickloom.messaging.MessageType;
-import com.tickloom.storage.VersionedValue;
+import com.tickloom.algorithms.replication.quorum.VersionedValue;
 import com.tickloom.util.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

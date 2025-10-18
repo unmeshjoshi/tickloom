@@ -11,7 +11,7 @@ import com.tickloom.config.ProcessConfig;
 import com.tickloom.messaging.MessageBus;
 import com.tickloom.network.JsonMessageCodec;
 import com.tickloom.network.NioNetwork;
-import com.tickloom.storage.RocksDbStorage;
+import com.tickloom.storage.rocksdb.RocksDbStorage;
 import com.tickloom.storage.Storage;
 import com.tickloom.util.Clock;
 import com.tickloom.util.IdGen;
