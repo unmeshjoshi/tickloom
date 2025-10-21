@@ -170,8 +170,9 @@ class StorageExampleTest {
         storage.put("m".getBytes(), "Middle".getBytes());
         storage.tick();
         
-        // Get the last key (lexicographically)
-        ListenableFuture<byte[]> lastKeyFuture = storage.lowerKey("z".getBytes());
+        // Get the last key (lexicographically). We need to provide upper bound which is 'excluded' from the
+        // range of keys.
+        ListenableFuture<byte[]> lastKeyFuture = storage.lowerKey("zz".getBytes());
         
         storage.tick();
         

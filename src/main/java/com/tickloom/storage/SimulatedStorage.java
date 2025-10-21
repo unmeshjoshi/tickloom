@@ -150,11 +150,11 @@ public class SimulatedStorage implements Storage {
     }
     
     @Override
-    public ListenableFuture<byte[]> lowerKey(byte[] prefix) {
+    public ListenableFuture<byte[]> lowerKey(byte[] keyUpperBound) {
         ListenableFuture<byte[]> future = new ListenableFuture<>();
         
         long completionTick = currentTick + defaultDelayTicks;
-        pendingOperations.offer(new LastKeyOperation(future, completionTick));
+        pendingOperations.offer(new LastKeyOperation(keyUpperBound, future, completionTick));
         
         return future;
     }
@@ -407,16 +407,18 @@ public class SimulatedStorage implements Storage {
     }
     
     private static class LastKeyOperation extends PendingOperation {
+        private final byte[] keyUpperBound;
         private final ListenableFuture<byte[]> future;
         
-        LastKeyOperation(ListenableFuture<byte[]> future, long completionTick) {
+        LastKeyOperation(byte[] keyUpperBound, ListenableFuture<byte[]> future, long completionTick) {
             super(completionTick);
+            this.keyUpperBound = keyUpperBound;
             this.future = future;
         }
         
         @Override
         void execute(NavigableMap<byte[], byte[]> dataStore) {
-            byte[] lastKey = dataStore.lastKey();
+            byte[] lastKey = dataStore.lowerKey(keyUpperBound);
             
             System.out.println("SimulatedStorage: LAST_KEY operation - result: " + 
                              (lastKey != null ? new String(lastKey) : "null"));
