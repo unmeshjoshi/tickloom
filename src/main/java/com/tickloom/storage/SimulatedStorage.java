@@ -150,21 +150,7 @@ public class SimulatedStorage implements Storage {
     }
     
     @Override
-    public ListenableFuture<List<byte[]>> keysWithPrefix(byte[] prefix) {
-        if (prefix == null) {
-            throw new IllegalArgumentException("Prefix cannot be null");
-        }
-        
-        ListenableFuture<List<byte[]>> future = new ListenableFuture<>();
-        
-        long completionTick = currentTick + defaultDelayTicks;
-        pendingOperations.offer(new KeysWithPrefixOperation(prefix, future, completionTick));
-        
-        return future;
-    }
-    
-    @Override
-    public ListenableFuture<byte[]> lastKey() {
+    public ListenableFuture<byte[]> lastKey(byte[] prefix) {
         ListenableFuture<byte[]> future = new ListenableFuture<>();
         
         long completionTick = currentTick + defaultDelayTicks;
@@ -379,7 +365,7 @@ public class SimulatedStorage implements Storage {
         @Override
         void execute(NavigableMap<byte[], byte[]> dataStore) {
             List<byte[]> result = new ArrayList<>();
-            
+
             // Find the first key with the prefix
             byte[] firstKey = dataStore.ceilingKey(prefix);
             if (firstKey != null && startsWith(firstKey, prefix)) {

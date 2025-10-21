@@ -142,32 +142,7 @@ class StorageExampleTest {
         assertTrue(found003, "Should contain user:003");
         assertFalse(found010, "Should not contain user:010");
     }
-    
-    @Test
-    @DisplayName("Example: Prefix queries")
-    void examplePrefixQueries() {
-        // Set up data with different prefixes
-        storage.put("user:alice".getBytes(), "Alice".getBytes());
-        storage.put("user:bob".getBytes(), "Bob".getBytes());
-        storage.put("order:123".getBytes(), "Order 123".getBytes());
-        storage.put("user:charlie".getBytes(), "Charlie".getBytes());
-        storage.tick();
-        
-        // Find all keys with "user:" prefix
-        ListenableFuture<List<byte[]>> prefixFuture = storage.keysWithPrefix("user:".getBytes());
-        
-        storage.tick();
-        
-        List<byte[]> keys = prefixFuture.getResult();
-        assertEquals(3, keys.size());
-        
-        // Verify all keys start with "user:"
-        for (byte[] key : keys) {
-            String keyStr = new String(key);
-            assertTrue(keyStr.startsWith("user:"));
-        }
-    }
-    
+
     @Test
     @DisplayName("Example: Write options")
     void exampleWriteOptions() {
@@ -197,7 +172,7 @@ class StorageExampleTest {
         storage.tick();
         
         // Get the last key (lexicographically)
-        ListenableFuture<byte[]> lastKeyFuture = storage.lastKey();
+        ListenableFuture<byte[]> lastKeyFuture = storage.lastKey("z".getBytes());
         
         storage.tick();
         

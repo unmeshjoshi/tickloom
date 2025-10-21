@@ -140,13 +140,8 @@ public class RocksDbStorage implements Storage {
     }
 
     @Override
-    public ListenableFuture<List<byte[]>> keysWithPrefix(byte[] prefix) {
-        return submit((future, completionTick) -> new KeysWithPrefixOperation(this, prefix, future, completionTick));
-    }
-
-    @Override
-    public ListenableFuture<byte[]> lastKey() {
-        return submit((future, completionTick) -> new LastKeyOperation(this, future, completionTick));
+    public ListenableFuture<byte[]> lastKey(byte[] prefix) {
+        return submit((future, completionTick) -> new LastKeyOperation(this, future, completionTick, prefix));
     }
 
     @Override

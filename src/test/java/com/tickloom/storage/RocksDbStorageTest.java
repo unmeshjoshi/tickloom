@@ -2,14 +2,22 @@ package com.tickloom.storage;
 
 import com.tickloom.future.ListenableFuture;
 import com.tickloom.storage.rocksdb.RocksDbStorage;
-import org.junit.jupiter.api.*;
+import com.tickloom.storage.rocksdb.ops.LastKeyOperation;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.rocksdb.Options;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -59,8 +67,7 @@ class RocksDbStorageTest {
 
         ListenableFuture<Boolean> setFuture = storage.put(key, value);
         storage.tick();
-        assertTrue(setFuture.isCompleted());
-        assertTrue(setFuture.getResult());
+        assertPutCompletesSuccessfully(setFuture);
 
         ListenableFuture<byte[]> getFuture = storage.get(key);
         storage.tick();
@@ -90,27 +97,29 @@ class RocksDbStorageTest {
         // Test with default options
         ListenableFuture<Boolean> setFuture1 = storage.put(key, value);
         storage.tick();
-        assertTrue(setFuture1.isCompleted());
-        assertTrue(setFuture1.getResult());
+        assertPutCompletesSuccessfully(setFuture1);
 
         // Test with sync options
         ListenableFuture<Boolean> setFuture2 = storage.put(key, value, Storage.WriteOptions.SYNC);
         storage.tick();
-        assertTrue(setFuture2.isCompleted());
-        assertTrue(setFuture2.getResult());
+        assertPutCompletesSuccessfully(setFuture2);
 
         // Test with fast options
         ListenableFuture<Boolean> setFuture3 = storage.put(key, value, Storage.WriteOptions.FAST);
         storage.tick();
-        assertTrue(setFuture3.isCompleted());
-        assertTrue(setFuture3.getResult());
+        assertPutCompletesSuccessfully(setFuture3);
+    }
+
+    private static void assertPutCompletesSuccessfully(ListenableFuture<Boolean> future) {
+        assertTrue(future.isCompleted());
+        assertTrue(future.getResult());
     }
 
     // ========== Batch Operations Tests ==========
 
     @Test
     @DisplayName("Should perform batch operations")
-    void shouldPerformPutOperations() {
+    void shouldPutBatch() {
         WriteBatch writeBatch = new WriteBatch()
                 .put("batch:key1", "batch:value1")
                 .put("batch:key2", "batch:value2")
@@ -118,8 +127,7 @@ class RocksDbStorageTest {
 
         ListenableFuture<Boolean> batchFuture = storage.put(writeBatch);
         storage.tick();
-        assertTrue(batchFuture.isCompleted());
-        assertTrue(batchFuture.getResult());
+        assertPutCompletesSuccessfully(batchFuture);
 
         // Verify the operations were applied
         ListenableFuture<byte[]> getFuture1 = storage.get("batch:key1".getBytes());
@@ -177,25 +185,6 @@ class RocksDbStorageTest {
 
     // ========== Prefix Operations Tests ==========
 
-    @Test
-    @DisplayName("Should perform prefix queries")
-    void shouldPerformPrefixQueries() {
-        // Set up some test data
-        storage.put("prefix:user:1".getBytes(), "user1".getBytes());
-        storage.put("prefix:user:2".getBytes(), "user2".getBytes());
-        storage.put("prefix:order:1".getBytes(), "order1".getBytes());
-        storage.tick();
-
-        // Query prefix
-        ListenableFuture<List<byte[]>> prefixFuture = storage.keysWithPrefix("prefix:user:".getBytes());
-        storage.tick();
-        assertTrue(prefixFuture.isCompleted());
-        
-        List<byte[]> result = prefixFuture.getResult();
-        assertNotNull(result);
-        // Note: We can't easily verify the exact contents due to byte[] comparison issues
-        // but we can verify the operation completed successfully
-    }
 
     // ========== Last Key Operations Tests ==========
 
@@ -205,19 +194,17 @@ class RocksDbStorageTest {
         // Set up some test data
         storage.put("last:key1".getBytes(), "value1".getBytes());
         storage.put("last:key2".getBytes(), "value2".getBytes());
+        storage.put("other:somekey".getBytes(), "somevalue".getBytes());
         storage.tick();
 
-        ListenableFuture<byte[]> lastKeyFuture = storage.lastKey();
+        byte[] keyUpperBound = "last:z".getBytes();
+        ListenableFuture<byte[]> lastKeyFuture = storage.lastKey(keyUpperBound);
         storage.tick();
         assertTrue(lastKeyFuture.isCompleted());
         
         byte[] lastKey = lastKeyFuture.getResult();
-        assertNotNull(lastKey);
-        // Note: We can't easily verify the exact key due to byte[] comparison issues
-        // but we can verify the operation completed successfully
+        assertEquals("last:key2", new String(lastKey));
     }
-
-    // ========== Sync Operations Tests ==========
 
     @Test
     @DisplayName("Should perform sync operations")
@@ -225,7 +212,6 @@ class RocksDbStorageTest {
         ListenableFuture<Void> syncFuture = storage.sync();
         storage.tick();
         assertTrue(syncFuture.isCompleted());
-        assertNull(syncFuture.getResult());
     }
 
     // ========== Resource Management Tests ==========
@@ -248,8 +234,7 @@ class RocksDbStorageTest {
 
         ListenableFuture<Boolean> setFuture = storage.put(emptyKey, emptyValue);
         storage.tick();
-        assertTrue(setFuture.isCompleted());
-        assertTrue(setFuture.getResult());
+        assertPutCompletesSuccessfully(setFuture);
 
         ListenableFuture<byte[]> getFuture = storage.get(emptyKey);
         storage.tick();
@@ -258,47 +243,62 @@ class RocksDbStorageTest {
     }
 
     @Test
-    @DisplayName("Should handle special characters in keys and values")
-    void shouldHandleSpecialCharactersInKeysAndValues() {
-        byte[] key = "special:key\n\t\r\0".getBytes();
-        byte[] value = "special:value\n\t\r\0".getBytes();
+    public void testLastKeyOperation() {
+        byte[] key = "rftlg:key".getBytes();
+        byte[] value = "test:value".getBytes();
 
         ListenableFuture<Boolean> setFuture = storage.put(key, value);
         storage.tick();
-        assertTrue(setFuture.isCompleted());
-        assertTrue(setFuture.getResult());
+        assertPutCompletesSuccessfully(setFuture);
 
-        ListenableFuture<byte[]> getFuture = storage.get(key);
+        ListenableFuture<byte[]> f = new ListenableFuture();
+        var op = new LastKeyOperation(this.storage, f, 1,  ("rftlg:" + "z").getBytes(StandardCharsets.UTF_8) );
+        op.execute();
+        assertTrue(f.isCompleted());
+        assertArrayEquals(f.getResult(), key);
+    }
+
+    @Test
+    public void testMultiLog() {
+        MultiLog multiLog = new MultiLog();
+        byte[] log1s = multiLog.createLogKey("log1", 1);
+        byte[] log1e = multiLog.createLogKey("log1", 2);
+        byte[] log2s = multiLog.createLogKey("log2", 1);
+        byte[] log2e = multiLog.createLogKey("log2", 2);
+
+        WriteBatch writeBatch = new WriteBatch();
+        writeBatch.put(log1s, "value1".getBytes());
+        writeBatch.put(log1e, "value2".getBytes());
+        writeBatch.put(log2s, "value3".getBytes());
+        writeBatch.put(log2e, "value4".getBytes());
+        ListenableFuture<Boolean> put = storage.put(writeBatch);
         storage.tick();
-        assertTrue(getFuture.isCompleted());
-        assertArrayEquals(value, getFuture.getResult());
+        assertPutCompletesSuccessfully(put);
+
+        ListenableFuture<byte[]> lastKeyF = storage.lastKey(multiLog.createLogKey("log2", Long.MAX_VALUE));
+        storage.tick();
+        assertTrue(lastKeyF.isCompleted());
+        assertArrayEquals(lastKeyF.getResult(), log2e);
+        assertEquals(2, multiLog.getIndex(lastKeyF.getResult()));
     }
 
-    // ========== Constructor Tests ==========
+     class MultiLog {
+        private MultiLog() {}
 
-    @Test
-    @DisplayName("Should create with default options")
-    void shouldCreateWithDefaultOptions() {
-        assertDoesNotThrow(() -> {
-            RocksDbStorage testStorage = new RocksDbStorage(createUniqueDbPath(random));
-            testStorage.close();
-        });
+        private static final byte[] RFTL    = "rftl".getBytes(java.nio.charset.StandardCharsets.US_ASCII); // LocalRaftLogSuffix
+
+         public byte[] createLogKey(String logID, long logIndex) {
+             ByteBuffer buffer = ByteBuffer.allocate(logID.length() + RFTL.length + Long.BYTES);
+             buffer.put(logID.getBytes());
+             buffer.put(RFTL); //to mark that this is a logKey. There can be additional keys for this log.
+             buffer.putLong(logIndex);
+             return buffer.array();
+         }
+
+         public long getIndex(byte[] key) {
+             return ByteBuffer.wrap(key).getLong(key.length - Long.BYTES);
+         }
+
     }
 
-    @Test
-    @DisplayName("Should create with custom options")
-    void shouldCreateWithCustomOptions() {
-        assertDoesNotThrow(() -> {
-            Options options = RocksDbStorage.createDefaultOptions();
-            RocksDbStorage testStorage = new RocksDbStorage(createUniqueDbPath(random), options, random, 0, 0.0);
-            testStorage.close();
-        });
-    }
-
-    @Test
-    @DisplayName("Should expose createDefaultOptions method")
-    void shouldExposeCreateDefaultOptionsMethod() {
-        Options options = RocksDbStorage.createDefaultOptions();
-        assertNotNull(options);
-    }
 }

@@ -73,21 +73,14 @@ public interface Storage extends Tickable, AutoCloseable {
      * @return a future containing a map of key-value pairs
      */
     ListenableFuture<Map<byte[], byte[]>> readRange(byte[] startKey, byte[] endKey);
-    
+
     /**
-     * Retrieves all keys with the given prefix.
-     * 
-     * @param prefix the prefix to search for
-     * @return a future containing a list of keys with the prefix
-     */
-    ListenableFuture<List<byte[]>> keysWithPrefix(byte[] prefix);
-    
-    /**
-     * Retrieves the last key in the store (lexicographically).
-     * 
+     * Retrieves the last key in the store (lexicographically) for a given prefix.
+     * This is particularly useful when WriteAheadLog is stored in this storage, which needs to know
+     * the last index at startup.
      * @return a future containing the last key, or null if store is empty
      */
-    ListenableFuture<byte[]> lastKey();
+    ListenableFuture<byte[]> lastKey(byte[] prefix);
     
     /**
      * Ensures all pending writes are flushed to disk for durability.
@@ -110,8 +103,6 @@ public interface Storage extends Tickable, AutoCloseable {
     default void close() throws Exception {
         // Default implementation does nothing
     }
-    
-    // ========== Helper Records ==========
     
     /**
      * Write options for storage operations.
