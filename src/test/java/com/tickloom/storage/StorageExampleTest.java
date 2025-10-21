@@ -5,7 +5,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
@@ -164,7 +163,7 @@ class StorageExampleTest {
     
     @Test
     @DisplayName("Example: Last key operation")
-    void exampleLastKeyOperation() {
+    void exampleLowerKeyOperation() {
         // Set up some ordered data
         storage.put("a".getBytes(), "First".getBytes());
         storage.put("z".getBytes(), "Last".getBytes());
@@ -172,7 +171,7 @@ class StorageExampleTest {
         storage.tick();
         
         // Get the last key (lexicographically)
-        ListenableFuture<byte[]> lastKeyFuture = storage.lastKey("z".getBytes());
+        ListenableFuture<byte[]> lastKeyFuture = storage.lowerKey("z".getBytes());
         
         storage.tick();
         

@@ -3,6 +3,7 @@ package com.tickloom.storage;
 import com.tickloom.future.ListenableFuture;
 import com.tickloom.storage.rocksdb.RocksDbStorage;
 import com.tickloom.storage.rocksdb.ops.LastKeyOperation;
+import com.tickloom.testkit.ClusterAssertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -11,19 +12,16 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for RocksDbStorage.
- * 
+ * <p>
  * Note: These tests are simplified to avoid RocksDB native library crashes on macOS.
  * The tests focus on the interface and basic functionality rather than comprehensive
  * RocksDB operations which can cause JVM crashes on Apple Silicon.
@@ -34,6 +32,7 @@ class RocksDbStorageTest {
     private Path tempDir;
     private RocksDbStorage storage;
     private Random random;
+
     @BeforeEach
     void setUp() throws IOException {
         random = new Random(12345L); // Deterministic seed for testing
@@ -44,6 +43,7 @@ class RocksDbStorageTest {
     /**
      * Creates a unique database path within the temp directory for each RocksDB instance.
      * This prevents lock conflicts when multiple RocksDB instances are created in tests.
+     *
      * @param random
      */
     private String createUniqueDbPath(Random random) {
@@ -163,7 +163,7 @@ class RocksDbStorageTest {
                 "range:key1".getBytes(), "range:key3".getBytes());
         storage.tick();
         assertTrue(rangeFuture.isCompleted());
-        
+
         Map<byte[], byte[]> result = rangeFuture.getResult();
         assertNotNull(result);
         // Note: We can't easily verify the exact contents due to byte[] comparison issues
@@ -177,7 +177,7 @@ class RocksDbStorageTest {
                 "nonexistent:start".getBytes(), "nonexistent:end".getBytes());
         storage.tick();
         assertTrue(rangeFuture.isCompleted());
-        
+
         Map<byte[], byte[]> result = rangeFuture.getResult();
         assertNotNull(result);
         assertTrue(result.isEmpty());
@@ -190,7 +190,7 @@ class RocksDbStorageTest {
 
     @Test
     @DisplayName("Should get last key")
-    void shouldGetLastKey() {
+    void shouldGetLowerKey() {
         // Set up some test data
         storage.put("last:key1".getBytes(), "value1".getBytes());
         storage.put("last:key2".getBytes(), "value2".getBytes());
@@ -198,10 +198,10 @@ class RocksDbStorageTest {
         storage.tick();
 
         byte[] keyUpperBound = "last:z".getBytes();
-        ListenableFuture<byte[]> lastKeyFuture = storage.lastKey(keyUpperBound);
+        ListenableFuture<byte[]> lastKeyFuture = storage.lowerKey(keyUpperBound);
         storage.tick();
         assertTrue(lastKeyFuture.isCompleted());
-        
+
         byte[] lastKey = lastKeyFuture.getResult();
         assertEquals("last:key2", new String(lastKey));
     }
@@ -243,7 +243,7 @@ class RocksDbStorageTest {
     }
 
     @Test
-    public void testLastKeyOperation() {
+    public void testLowerKeyOperation() {
         byte[] key = "rftlg:key".getBytes();
         byte[] value = "test:value".getBytes();
 
@@ -252,7 +252,7 @@ class RocksDbStorageTest {
         assertPutCompletesSuccessfully(setFuture);
 
         ListenableFuture<byte[]> f = new ListenableFuture();
-        var op = new LastKeyOperation(this.storage, f, 1,  ("rftlg:" + "z").getBytes(StandardCharsets.UTF_8) );
+        var op = new LastKeyOperation(this.storage, f, 1, ("rftlg:" + "z").getBytes(StandardCharsets.UTF_8));
         op.execute();
         assertTrue(f.isCompleted());
         assertArrayEquals(f.getResult(), key);
@@ -260,45 +260,178 @@ class RocksDbStorageTest {
 
     @Test
     public void testMultiLog() {
-        MultiLog multiLog = new MultiLog();
-        byte[] log1s = multiLog.createLogKey("log1", 1);
-        byte[] log1e = multiLog.createLogKey("log1", 2);
-        byte[] log2s = multiLog.createLogKey("log2", 1);
-        byte[] log2e = multiLog.createLogKey("log2", 2);
+        MultiLog multiLog = new MultiLog(List.of("log1", "log2"), storage);
+        while(!multiLog.isInitialised) {
+            storage.tick();
+        }
+        ListenableFuture<Boolean> log1 = multiLog.append("log1", "value1".getBytes());
+        ListenableFuture<Boolean> log2 = multiLog.append("log1", "value2".getBytes());
+        ListenableFuture<Boolean> log3 = multiLog.append("log2", "value3".getBytes());
+        ListenableFuture<Boolean> log4 = multiLog.append("log2", "value4".getBytes());
 
-        WriteBatch writeBatch = new WriteBatch();
-        writeBatch.put(log1s, "value1".getBytes());
-        writeBatch.put(log1e, "value2".getBytes());
-        writeBatch.put(log2s, "value3".getBytes());
-        writeBatch.put(log2e, "value4".getBytes());
-        ListenableFuture<Boolean> put = storage.put(writeBatch);
         storage.tick();
-        assertPutCompletesSuccessfully(put);
+        assertPutCompletesSuccessfully(log1);
+        assertPutCompletesSuccessfully(log2);
+        assertPutCompletesSuccessfully(log3);
+        assertPutCompletesSuccessfully(log4);
 
-        ListenableFuture<byte[]> lastKeyF = storage.lastKey(multiLog.createLogKey("log2", Long.MAX_VALUE));
+        ListenableFuture<byte[]> lastKeyF = storage.lowerKey(multiLog.createLogKey("log2", Long.MAX_VALUE));
         storage.tick();
         assertTrue(lastKeyF.isCompleted());
-        assertArrayEquals(lastKeyF.getResult(), log2e);
         assertEquals(2, multiLog.getIndex(lastKeyF.getResult()));
     }
+    @Test
+    public void testMultiLogInitialization() {
+        // Test initialization with empty log IDs
+        MultiLog emptyLog = new MultiLog(List.of(), storage);
+        assertFalse(emptyLog.isInitialised, "Should not be initialized with empty log IDs");
 
-     class MultiLog {
-        private MultiLog() {}
+        // Test initialization with single log ID
+        MultiLog singleLog = new MultiLog(List.of("log1"), storage);
+        while (!singleLog.isInitialised) {
+            storage.tick();
+        }
+        assertTrue(singleLog.isInitialised, "Should be initialized after processing");
+    }
 
-        private static final byte[] RFTL    = "rftl".getBytes(java.nio.charset.StandardCharsets.US_ASCII); // LocalRaftLogSuffix
+    @Test
+    public void testAppendBeforeInitialization() {
+        MultiLog multiLog = new MultiLog(List.of("log1"), storage);
+        assertThrows(IllegalStateException.class,
+                () -> multiLog.append("log1", "value".getBytes()),
+                "Should throw when append is called before initialization");
+    }
 
-         public byte[] createLogKey(String logID, long logIndex) {
-             ByteBuffer buffer = ByteBuffer.allocate(logID.length() + RFTL.length + Long.BYTES);
-             buffer.put(logID.getBytes());
-             buffer.put(RFTL); //to mark that this is a logKey. There can be additional keys for this log.
-             buffer.putLong(logIndex);
-             return buffer.array();
-         }
+    @Test
+    public void testConcurrentAppends() {
+        MultiLog multiLog = new MultiLog(List.of("log1"), storage);
+        while (!multiLog.isInitialised) {
+            storage.tick();
+        }
 
-         public long getIndex(byte[] key) {
-             return ByteBuffer.wrap(key).getLong(key.length - Long.BYTES);
-         }
+        // Test multiple appends to the same log
+        ListenableFuture<Boolean> append1 = multiLog.append("log1", "value1".getBytes());
+        ListenableFuture<Boolean> append2 = multiLog.append("log1", "value2".getBytes());
 
+        storage.tick();
+        assertTrue(append1.getResult(), "First append should succeed");
+        assertTrue(append2.getResult(), "Second append should succeed");
+
+        // Verify the order of appends
+        ListenableFuture<byte[]> lastKey = storage.lowerKey(multiLog.createLogKey("log1", Long.MAX_VALUE));
+        storage.tick();
+        assertEquals(2, multiLog.getIndex(lastKey.getResult()), "Last index should be 2");
+    }
+
+    @Test
+    public void testMultipleLogsIndependence() {
+        MultiLog multiLog = new MultiLog(List.of("log1", "log2"), storage);
+        while (!multiLog.isInitialised) {
+            storage.tick();
+        }
+
+        // Append to different logs
+        multiLog.append("log1", "value1".getBytes());
+        multiLog.append("log2", "value2".getBytes());
+        storage.tick();
+
+        // Verify logs are independent
+        ListenableFuture<byte[]> log1Key = storage.lowerKey(multiLog.createLogKey("log1", Long.MAX_VALUE));
+        ListenableFuture<byte[]> log2Key = storage.lowerKey(multiLog.createLogKey("log2", Long.MAX_VALUE));
+        storage.tick();
+
+        assertEquals(1, multiLog.getIndex(log1Key.getResult()), "log1 index should be 1");
+        assertEquals(1, multiLog.getIndex(log2Key.getResult()), "log2 index should be 1");
+    }
+
+    @Test
+    public void testLogKeyStructure() {
+        MultiLog multiLog = new MultiLog(List.of("testLog"), storage);
+        byte[] key = multiLog.createLogKey("testLog", 123L);
+
+        // Verify key structure: logId + RFTL + index
+        String keyStr = new String(key, 0, "testLog".length());
+        assertEquals("testLog", keyStr, "Key should start with log ID");
+
+        byte[] rftl = new byte[4];
+        System.arraycopy(key, "testLog".length(), rftl, 0, 4);
+        assertArrayEquals("rftl".getBytes(), rftl, "Key should contain RFTL marker");
+
+        long index = ByteBuffer.wrap(key, key.length - 8, 8).getLong();
+        assertEquals(123L, index, "Key should end with correct index");
+    }
+    /**
+     * An example implementation of storing multiple 'logs' in a single Storage.
+     */
+    class MultiLog {
+        private static final byte[] RFTL = "rftl".getBytes(StandardCharsets.US_ASCII);
+        private static final long INITIAL_INDEX = 0L;
+
+        private final Storage storage;
+        private final Map<String, Long> lastLogIndexes;
+        private boolean isInitialised = false;
+
+        public MultiLog(List<String> logIds, Storage storage) {
+            this.storage = Objects.requireNonNull(storage, "Storage cannot be null");
+            this.lastLogIndexes = new HashMap<>(logIds.size());
+            initializeLogIndices(logIds);
+        }
+
+        private void initializeLogIndices(List<String> logIds) {
+            logIds.forEach(logId -> {
+                lastLogIndexes.put(logId, INITIAL_INDEX);
+                fetchLastLogIndex(logId, logIds);
+            });
+        }
+
+        private void fetchLastLogIndex(String logId, List<String> allLogIds) {
+            ListenableFuture<byte[]> lastIndexFuture = storage.lowerKey(createLogKey(logId, Long.MAX_VALUE));
+            lastIndexFuture.andThen((result, error) -> handleIndexResult(logId, allLogIds, result, error));
+        }
+
+        private void handleIndexResult(String logId, List<String> allLogIds, byte[] result, Throwable error) {
+            if (error != null) {
+                return; // Error handling could be improved here
+            }
+
+            long index = result != null ? getIndex(result) : INITIAL_INDEX;
+            updateLogIndex(logId, index, allLogIds);
+        }
+
+        private void updateLogIndex(String logId, long index, List<String> allLogIds) {
+            lastLogIndexes.put(logId, index);
+            checkInitialization(allLogIds);
+        }
+
+        private void checkInitialization(List<String> allLogIds) {
+            if (lastLogIndexes.size() == allLogIds.size()) {
+                isInitialised = true;
+            }
+        }
+
+        public ListenableFuture<Boolean> append(String logId, byte[] entry) {
+            if (!isInitialised) {
+                throw new IllegalStateException("The LogStore is not initialised");
+            }
+            long nextIndex = getAndIncrementIndex(logId);
+            return storage.put(createLogKey(logId, nextIndex), entry);
+        }
+
+        private long getAndIncrementIndex(String logId) {
+            return lastLogIndexes.compute(logId, (k, v) -> v + 1);
+        }
+
+        public byte[] createLogKey(String logId, long logIndex) {
+            return ByteBuffer.allocate(logId.length() + RFTL.length + Long.BYTES)
+                    .put(logId.getBytes())
+                    .put(RFTL)
+                    .putLong(logIndex)
+                    .array();
+        }
+
+        public long getIndex(byte[] key) {
+            return ByteBuffer.wrap(key).getLong(key.length - Long.BYTES);
+        }
     }
 
 }

@@ -150,7 +150,7 @@ public class SimulatedStorage implements Storage {
     }
     
     @Override
-    public ListenableFuture<byte[]> lastKey(byte[] prefix) {
+    public ListenableFuture<byte[]> lowerKey(byte[] prefix) {
         ListenableFuture<byte[]> future = new ListenableFuture<>();
         
         long completionTick = currentTick + defaultDelayTicks;

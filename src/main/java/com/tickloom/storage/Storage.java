@@ -3,7 +3,6 @@ package com.tickloom.storage;
 import com.tickloom.Tickable;
 import com.tickloom.future.ListenableFuture;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -80,7 +79,7 @@ public interface Storage extends Tickable, AutoCloseable {
      * the last index at startup.
      * @return a future containing the last key, or null if store is empty
      */
-    ListenableFuture<byte[]> lastKey(byte[] prefix);
+    ListenableFuture<byte[]> lowerKey(byte[] prefix);
     
     /**
      * Ensures all pending writes are flushed to disk for durability.

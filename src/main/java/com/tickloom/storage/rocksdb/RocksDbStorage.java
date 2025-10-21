@@ -139,9 +139,17 @@ public class RocksDbStorage implements Storage {
         return submit((future, completionTick) -> new ReadRangeOperation(this, startKey, endKey, future, completionTick));
     }
 
+    /**
+     * Returns the highest key which is strictly lower than the given upperBoundKey key.
+     * This is useful when the storage is used to store WAL, and at startup needs the
+     * last index. The WAL implementation can find the highestKey < [WAL_PREFIX]Long.MAX_VALUE
+     * to initialize the WAL index, which then can be incremented for each append operation.
+     * @param upperBoundKey
+     * @return
+     */
     @Override
-    public ListenableFuture<byte[]> lastKey(byte[] prefix) {
-        return submit((future, completionTick) -> new LastKeyOperation(this, future, completionTick, prefix));
+    public ListenableFuture<byte[]> lowerKey(byte[] upperBoundKey) {
+        return submit((future, completionTick) -> new LastKeyOperation(this, future, completionTick, upperBoundKey));
     }
 
     @Override
