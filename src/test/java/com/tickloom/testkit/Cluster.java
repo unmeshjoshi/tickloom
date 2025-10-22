@@ -14,11 +14,13 @@ import com.tickloom.messaging.MessageType;
 import com.tickloom.network.*;
 import com.tickloom.storage.SimulatedStorage;
 import com.tickloom.storage.Storage;
+import com.tickloom.storage.rocksdb.RocksDbStorage;
 import com.tickloom.util.Clock;
 import com.tickloom.util.IdGen;
 import com.tickloom.util.StubClock;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -50,6 +52,7 @@ public class Cluster implements Tickable, AutoCloseable {
     List<Node> serverNodes = new ArrayList<>();
     List<Cluster.ClientNode> clientNodes = new ArrayList<>();
     boolean useSimulatedNetwork = false;
+    boolean useSimulatedStorage = true;
     Map<ProcessId, StubClock> processClocks = new HashMap<>();
 
     private int numProcesses = 3;
@@ -119,6 +122,11 @@ public class Cluster implements Tickable, AutoCloseable {
 
     public Cluster useSimulatedNetwork() {
         useSimulatedNetwork(false);
+        return this;
+    }
+
+    public Cluster useRocksDBStorage() {
+        useSimulatedStorage = false;
         return this;
     }
 
@@ -626,7 +634,11 @@ public class Cluster implements Tickable, AutoCloseable {
             ProcessId processId = processIds.get(i);
             List<ProcessId> peers = processIds.stream().filter(id -> !id.equals(processId)).toList();
             Network network = sharedNetwork; //We can create separate network, NioNetwork.create(topo, messageCodec);
-            SimulatedStorage storage = new SimulatedStorage(random);
+            //create storage. Based on the configuration either @SimulatedStorage or @RocksDBStorage is created.
+            //RocksDBStorage is useful when we want to test scenarios with crash recovery, particularly useful
+            // while testing consensus algorithms like Paxos and Raft.
+            Storage storage = createStorage(processId);
+
             MessageBus messageBus = sharedMessageBus; //new MessageBus(network, messageCodec);
             // Always use StubClock for deterministic testing
             StubClock stubClock = new StubClock(initialClockTime);
@@ -637,6 +649,16 @@ public class Cluster implements Tickable, AutoCloseable {
             serverNodes.add(new Node(processId, network, messageBus, process, storage));
         }
         return this;
+    }
+
+    private Storage createStorage(ProcessId processId) throws IOException {
+        return useSimulatedStorage ? new SimulatedStorage(random) : new RocksDbStorage(rocksDBPath(processId));
+    }
+
+    private String rocksDBPath(ProcessId processId) throws IOException {
+        String tmpPath = Files.createTempDirectory("testkit-rocksdb-" + processId.name() + "-"  + random.nextInt()).toString();
+        System.out.println("Creating RocksDB instance at path = " + tmpPath);
+        return tmpPath;
     }
 
     private static List<ProcessId> generateDefaultIds(int numProcesses) {
