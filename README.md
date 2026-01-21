@@ -7,6 +7,7 @@
 ### Deterministic Simulation with Jepsen-style Consistency Checking
 
 Tickloom is a lightweight Java framework for building **deterministic, testable distributed systems**.
+It implements patterns from [Patterns of Distributed Systems](https://martinfowler.com/articles/patterns-of-distributed-systems/) and serves as a reference implementation for the [Distributed Systems Patterns Workshop](https://github.com/unmeshjoshi/distrib-patterns-workshop).
 
 It gives you:
 
