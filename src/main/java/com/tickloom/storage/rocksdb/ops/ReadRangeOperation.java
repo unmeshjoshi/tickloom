@@ -7,6 +7,7 @@ import org.rocksdb.RocksIterator;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class ReadRangeOperation extends PendingOperation {
@@ -26,7 +27,7 @@ public class ReadRangeOperation extends PendingOperation {
 
     @Override
     public void execute() {
-        Map<byte[], byte[]> result = new HashMap<>();
+        Map<byte[], byte[]> result = new LinkedHashMap<>();
 
         ReadOptions readOptions = new ReadOptions();
         try (RocksIterator iterator = rocksDbStorage.db.newIterator(readOptions)) {

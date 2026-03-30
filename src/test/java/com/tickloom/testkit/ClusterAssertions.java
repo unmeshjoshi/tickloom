@@ -49,7 +49,7 @@ public class ClusterAssertions {
     }
 
     private static int DEFAULT_TIMEOUT_TICKS = 10000;
-    private static void tickUntil(Cluster cluster,BooleanSupplier p) {
+    public static void tickUntil(Cluster cluster,BooleanSupplier p) {
         int tickCount = 0;
         while (!p.getAsBoolean()) {
             if (tickCount > DEFAULT_TIMEOUT_TICKS) {
