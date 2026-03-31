@@ -45,18 +45,7 @@ public class ClusterAssertions {
     }
 
     public static void assertEventually(Cluster cluster,BooleanSupplier cond) {
-        tickUntil(cluster,cond);
+        cluster.tickUntil(cond);
     }
 
-    private static int DEFAULT_TIMEOUT_TICKS = 10000;
-    public static void tickUntil(Cluster cluster,BooleanSupplier p) {
-        int tickCount = 0;
-        while (!p.getAsBoolean()) {
-            if (tickCount > DEFAULT_TIMEOUT_TICKS) {
-                fail("Timeout waiting for condition to be met.");
-            }
-            cluster.tick();
-            tickCount++;
-        }
-    }
 }

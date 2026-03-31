@@ -22,6 +22,7 @@ import com.tickloom.util.StubClock;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.fail;
@@ -112,6 +113,31 @@ public class Cluster implements Tickable, AutoCloseable {
                 .withSeed(seed)
                 .build(factory)
                 .start();
+    }
+
+    /**
+     * Advances the simulated Tickloom cluster until the given future completes.
+     *
+     * In these tests, progress happens only when the cluster is ticked. Ticking delivers queued
+     * messages, lets nodes process events, and allows request/response callbacks to run. So this
+     * helper is not a passive wait; it is the mechanism that drives the simulated distributed
+     * system forward until the future has a result.
+     */
+    public <T> T tickUntilComplete(ListenableFuture<T> future) {
+        this.tickUntil(future::isCompleted);
+        return future.getResult();
+    }
+
+    private static int DEFAULT_TIMEOUT_TICKS = 10000;
+    public void tickUntil(BooleanSupplier p) {
+        int tickCount = 0;
+        while (!p.getAsBoolean()) {
+            if (tickCount > DEFAULT_TIMEOUT_TICKS) {
+                fail("Timeout waiting for condition to be met.");
+            }
+            tick();
+            tickCount++;
+        }
     }
 
     //Following methods are the builder API for creating the cluster.
