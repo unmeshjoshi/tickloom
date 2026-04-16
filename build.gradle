@@ -4,6 +4,7 @@
 
 plugins {
     id 'java'
+    id 'org.jetbrains.kotlin.jvm' version '1.9.23'
     id 'dev.clojurephant.clojure' version '0.8.0'
     id 'com.github.johnrengelman.shadow' version '8.1.1'
     id 'maven-publish'
@@ -16,7 +17,7 @@ plugins {
 // =============================================================================
 
 group = 'io.github.unmeshjoshi'
-version = '0.1.0-alpha.19'
+version = '0.1.0-alpha.25'
 
 // Version catalog for dependency management
 ext {
@@ -72,6 +73,9 @@ dependencies {
     implementation "com.fasterxml.jackson.core:jackson-databind:${versions.jackson}"
     implementation "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${versions.jackson}"
     implementation "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:${versions.jackson}"
+
+    // Kotlin stdlib (for coroutine extensions)
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.23'
 
     // Production-ready storage
     implementation "org.rocksdb:rocksdbjni:${versions.rocksdb}"

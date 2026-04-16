@@ -386,7 +386,7 @@ class RocksDbStorageTest {
 
         private void fetchLastLogIndex(String logId, List<String> allLogIds) {
             ListenableFuture<byte[]> lastIndexFuture = storage.lowerKey(createLogKey(logId, Long.MAX_VALUE));
-            lastIndexFuture.andThen((result, error) -> handleIndexResult(logId, allLogIds, result, error));
+            lastIndexFuture.handle((result, error) -> handleIndexResult(logId, allLogIds, result, error));
         }
 
         private void handleIndexResult(String logId, List<String> allLogIds, byte[] result, Throwable error) {

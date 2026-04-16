@@ -345,23 +345,107 @@ class ListenableFutureTest {
 
 
     @Test
-    public void shouldSupportCompositionWithAndThen() {
-        AtomicReference<String> firstHandleResult = new AtomicReference<>("");
-        AtomicReference<String> secondHandleResult = new AtomicReference<>("");
-        ListenableFuture<String> future = new ListenableFuture<>();
-        //Each handle call puts a new callback
-        future.handle((result, exception) -> {
-            firstHandleResult.set(result);
-        });
-        //andThen creates a new future which can be then separately handled
-        //But also creates a new callback on the original future which
-        //invokes the function passed to andThen
-        future.andThen((result, exception) -> {
-            secondHandleResult.set(result);
-        });
-        future.complete("TestResult");
+    public void andThenShouldChainAsyncOperations() {
+        ListenableFuture<String> first = new ListenableFuture<>();
+        ListenableFuture<Integer> second = new ListenableFuture<>();
+        AtomicReference<Integer> finalResult = new AtomicReference<>();
 
-        assertEquals("TestResult", firstHandleResult.get());
-        assertEquals("TestResult", secondHandleResult.get());
+        // andThen chains: first future's result feeds into a function
+        // that returns a new future
+        ListenableFuture<Integer> chained = first.andThen(result -> {
+            // simulate an async operation that depends on the first result
+            return second;
+        });
+        chained.handle((result, exception) -> finalResult.set(result));
+
+        // Complete the first future
+        first.complete("hello");
+        assertNull(finalResult.get(), "Should not be done yet — inner future hasn't completed");
+
+        // Complete the inner future
+        second.complete(42);
+        assertEquals(42, finalResult.get());
+    }
+
+    @Test
+    public void andThenShouldReturnNewFuture() {
+        ListenableFuture<String> original = new ListenableFuture<>();
+        ListenableFuture<String> nextStage = original.andThen(result -> {
+            return new ListenableFuture<>();
+        });
+
+        assertNotSame(original, nextStage, "andThen() should return a new future, not the original");
+    }
+
+    @Test
+    public void andThenShouldPropagateFailureFromOriginal() {
+        ListenableFuture<String> original = new ListenableFuture<>();
+        AtomicReference<Throwable> receivedError = new AtomicReference<>();
+
+        ListenableFuture<Integer> chained = original.andThen(result -> {
+            fail("Function should not be called when original fails");
+            return new ListenableFuture<>();
+        });
+        chained.handle((result, exception) -> receivedError.set(exception));
+
+        original.fail(new RuntimeException("original failed"));
+
+        assertNotNull(receivedError.get());
+        assertEquals("original failed", receivedError.get().getMessage());
+    }
+
+    @Test
+    public void andThenShouldPropagateFailureFromInnerFuture() {
+        ListenableFuture<String> original = new ListenableFuture<>();
+        ListenableFuture<Integer> inner = new ListenableFuture<>();
+        AtomicReference<Throwable> receivedError = new AtomicReference<>();
+
+        ListenableFuture<Integer> chained = original.andThen(result -> inner);
+        chained.handle((result, exception) -> receivedError.set(exception));
+
+        original.complete("ok");
+        inner.fail(new RuntimeException("inner failed"));
+
+        assertNotNull(receivedError.get());
+        assertEquals("inner failed", receivedError.get().getMessage());
+    }
+
+    @Test
+    public void andThenShouldFailWhenFunctionThrows() {
+        ListenableFuture<String> original = new ListenableFuture<>();
+        AtomicReference<Throwable> receivedError = new AtomicReference<>();
+
+        ListenableFuture<Integer> chained = original.andThen(result -> {
+            throw new RuntimeException("function threw");
+        });
+        chained.handle((result, exception) -> receivedError.set(exception));
+
+        original.complete("value");
+
+        assertNotNull(receivedError.get());
+        assertEquals("function threw", receivedError.get().getMessage());
+    }
+
+    @Test
+    public void andThenShouldSupportMultiStepChaining() {
+        ListenableFuture<String> step1 = new ListenableFuture<>();
+        ListenableFuture<Integer> step2 = new ListenableFuture<>();
+        ListenableFuture<Boolean> step3 = new ListenableFuture<>();
+        AtomicReference<Boolean> finalResult = new AtomicReference<>();
+
+        // Chain three async steps
+        ListenableFuture<Boolean> chained = step1
+            .andThen(s -> step2)
+            .andThen(i -> step3);
+        chained.handle((result, exception) -> finalResult.set(result));
+
+        step1.complete("start");
+        assertNull(finalResult.get());
+
+        step2.complete(42);
+        assertNull(finalResult.get());
+
+        step3.complete(true);
+        assertEquals(true, finalResult.get());
     }
 }

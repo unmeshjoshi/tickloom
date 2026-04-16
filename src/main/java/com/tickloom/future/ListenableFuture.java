@@ -1,8 +1,11 @@
 package com.tickloom.future;
 
+import com.tickloom.Continuation;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 /**
  * A future that supports a single, unified non-blocking callback for single-threaded event loops.
@@ -14,25 +17,59 @@ import java.util.function.BiConsumer;
 
 public class ListenableFuture<T> {
 
-    public ListenableFuture<T> andThen(BiConsumer<T, Throwable> callback) {
-        ListenableFuture<T> nextStage = new ListenableFuture<>();
-        //add handler on this future to invoke the provided callback
-        this.handle((T result, Throwable exception)->{
-            try {
-                callback.accept(result, exception);
-            } catch (Exception e) {
-                nextStage.fail(e);
+    public <U> ListenableFuture<U> map(Function<T, U> fn) {
+        ListenableFuture<U> mapped = new ListenableFuture<>();
+        this.handle((T result, Throwable exception) -> {
+            if (exception != null) {
+                mapped.fail(exception);
                 return;
             }
-            //forward the result to the next stage, so that the callback handlers set
-            //on the next stage are invoked
-            if (exception == null) {
-                nextStage.complete(result);
-            } else {
-                nextStage.fail(exception);
+            try {
+                mapped.complete(fn.apply(result));
+            } catch (Exception e) {
+                mapped.fail(e);
             }
         });
-        return this;
+        return mapped;
+    }
+
+    public <U> ListenableFuture<U> andThen(Function<T, ListenableFuture<U>> fn) {
+        ListenableFuture<U> nextStage = new ListenableFuture<>();
+
+        this.handle((T result, Throwable exception) -> {
+            if (exception != null) {
+                nextStage.fail(exception);
+                return;
+            }
+            try {
+                ListenableFuture<U> innerFuture = fn.apply(result);
+                handleInnerFutureAndCompleteStage(innerFuture, nextStage);
+            } catch (Exception e) {
+                nextStage.fail(e);
+            }
+        });
+        return nextStage;
+    }
+
+    private <U> void handleInnerFutureAndCompleteStage(ListenableFuture<U> innerFuture, ListenableFuture<U> nextStage) {
+        // Flatten: when the inner future completes, complete the next stage
+        innerFuture.handle((U innerResult, Throwable innerException) -> {
+            if (innerException != null) {
+                nextStage.fail(innerException);
+            } else {
+                nextStage.complete(innerResult);
+            }
+        });
+    }
+
+    public void whenComplete(Continuation<T> c) {
+        this.handle((result, exception) -> {
+            if (exception == null) {
+                c.resume(result);
+            } else {
+                c.resumeWithError(exception);
+            }
+        });
     }
 
     private enum State {
@@ -45,6 +82,12 @@ public class ListenableFuture<T> {
     private T result;
     private Throwable exception;
     private final List<BiConsumer<T, Throwable>> handleCallbacks = new ArrayList<>();
+
+    public static <T> ListenableFuture<T> completed(T value) {
+        ListenableFuture<T> future = new ListenableFuture<>();
+        future.complete(value);
+        return future;
+    }
 
     /**
      * Creates a new pending ListenableFuture.

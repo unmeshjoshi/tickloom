@@ -64,6 +64,7 @@ public class Cluster implements Tickable, AutoCloseable {
     private Network sharedNetwork;
     private MessageBus sharedMessageBus;
     private boolean useLossyNetwork = false;
+    private int requestTimeoutTicks = 10000;
 
 
     //Convenient cluster creation methods with defaults. If anything specific like initialTime needs
@@ -140,9 +141,26 @@ public class Cluster implements Tickable, AutoCloseable {
         }
     }
 
+    /**
+     * Converts a desired logical cluster delay into underlying simulated-network ticks.
+     *
+     * In a simulated cluster, one {@link #tick()} advances each client and each server once, and
+     * each node tick advances the shared simulated network through its ordered ticker. So a single
+     * logical cluster tick results in one network tick per ticking node. This helper scales a
+     * delay expressed in cluster ticks into the delay value expected by network fault injection.
+     */
+    public int delayForClusterTicks(int desiredDelayTicks) {
+        return (serverNodes.size() + clientNodes.size()) * desiredDelayTicks;
+    }
+
     //Following methods are the builder API for creating the cluster.
     public Cluster withSeed(long seed) {
         this.seed = seed;
+        return this;
+    }
+
+    public Cluster withRequestTimeoutTicks(int requestTimeoutTicks) {
+        this.requestTimeoutTicks = requestTimeoutTicks;
         return this;
     }
 
@@ -320,6 +338,13 @@ public class Cluster implements Tickable, AutoCloseable {
         ((SimulatedNetwork) sharedNetwork).dropMessagesOfType(source, destination, messageType);
     }
 
+    public void dropMessagesOfType(MessageType messageType, NodeGroup from, NodeGroup to) {
+        ensureSimulatedNetwork();
+        from.processIds().forEach(source ->
+                to.processIds().forEach(destination ->
+                        ((SimulatedNetwork) sharedNetwork).dropMessagesOfType(source, destination, messageType)));
+    }
+
     public void dropNthMessagesOfType(ProcessId source, ProcessId destination, MessageType messageType, int nth) {
         ensureSimulatedNetwork();
         ((SimulatedNetwork) sharedNetwork).dropNthMessagesOfType(source, destination, messageType, nth);
@@ -428,6 +453,11 @@ public class Cluster implements Tickable, AutoCloseable {
         return node.process;
     }
 
+    @SuppressWarnings("unchecked")
+    public <T extends com.tickloom.Process> T getNode(ProcessId processId) {
+        return (T) getProcess(processId);
+    }
+
     private Node findServerNode(ProcessId processId) {
         return serverNodes.stream()
                 .filter(node -> node.id.equals(processId))
@@ -531,7 +561,7 @@ public class Cluster implements Tickable, AutoCloseable {
         StubClock clientClock = new StubClock(initialClockTime);
         processClocks.put(id, clientClock);
         IdGen idGen = new IdGen(id.name(), random);
-        T clusterClient = factory.create(targetNodes, new ProcessParams(id, messageBus, messageCodec, 10000, clientClock, idGen, new SimulatedStorage(random)));
+        T clusterClient = factory.create(targetNodes, new ProcessParams(id, messageBus, messageCodec, requestTimeoutTicks, clientClock, idGen, new SimulatedStorage(random)));
         clientNodes.add(new ClientNode(id, network, messageBus, clusterClient));
         return clusterClient;
     }
@@ -671,7 +701,7 @@ public class Cluster implements Tickable, AutoCloseable {
             processClocks.put(processId, stubClock);
             Clock clock = stubClock;
             IdGen idGen = new IdGen(processId.name(), random);
-            com.tickloom.Process process = factory.create(peers, new ProcessParams(processId, messageBus, messageCodec, 10000, clock, idGen, storage));
+            com.tickloom.Process process = factory.create(peers, new ProcessParams(processId, messageBus, messageCodec, requestTimeoutTicks, clock, idGen, storage));
             serverNodes.add(new Node(processId, network, messageBus, process, storage));
         }
         return this;

@@ -35,7 +35,7 @@ public class SingleRequestIssuer<C extends ClusterClient> {
 
     private void sendClientRequest() {
         ListenableFuture<?> f = simulationRunner.issueRequest(client, rng);
-        f.andThen((result, ex) -> {
+        f.handle((result, ex) -> {
             inFlight = false;
             drainNext();
         });
