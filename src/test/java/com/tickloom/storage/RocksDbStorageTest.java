@@ -3,7 +3,6 @@ package com.tickloom.storage;
 import com.tickloom.future.ListenableFuture;
 import com.tickloom.storage.rocksdb.RocksDbStorage;
 import com.tickloom.storage.rocksdb.ops.LastKeyOperation;
-import com.tickloom.testkit.ClusterAssertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -386,7 +385,7 @@ class RocksDbStorageTest {
 
         private void fetchLastLogIndex(String logId, List<String> allLogIds) {
             ListenableFuture<byte[]> lastIndexFuture = storage.lowerKey(createLogKey(logId, Long.MAX_VALUE));
-            lastIndexFuture.handle((result, error) -> handleIndexResult(logId, allLogIds, result, error));
+            lastIndexFuture.whenComplete((result, error) -> handleIndexResult(logId, allLogIds, result, error));
         }
 
         private void handleIndexResult(String logId, List<String> allLogIds, byte[] result, Throwable error) {

@@ -137,7 +137,7 @@ public class AsyncQuorumCallback<T> implements RequestCallback<T> {
      * @return this callback for fluent chaining
      */
     public AsyncQuorumCallback<T> onSuccess(Consumer<Map<ProcessId, T>> onSuccess) {
-        quorumFuture.handle((response, error) -> {
+        quorumFuture.whenComplete((response, error) -> {
             if (error == null) {
                 onSuccess.accept(response);
             }
@@ -153,7 +153,7 @@ public class AsyncQuorumCallback<T> implements RequestCallback<T> {
      * @return this callback for fluent chaining
      */
     public AsyncQuorumCallback<T> onFailure(Consumer<Throwable> onFailure) {
-        quorumFuture.handle((response, error) -> {
+        quorumFuture.whenComplete((response, error) -> {
             if (error != null) {
                 onFailure.accept(error);
             }

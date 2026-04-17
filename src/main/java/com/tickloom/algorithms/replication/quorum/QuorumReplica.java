@@ -197,7 +197,7 @@ public class QuorumReplica extends Replica {
                 + ", from: " + message.source());
         // Perform local storage operation
         var future = storage.get(getRequest.key());
-        future.handle((value, error) -> {
+        future.whenComplete((value, error) -> {
             sendInternalGetResponse(message, value, error, getRequest);
         });
     }
@@ -238,7 +238,9 @@ public class QuorumReplica extends Replica {
 
         //First get the value and set only if it does not exist or its of lower timestamp.
         ListenableFuture<byte[]> getFuture = storage.get(setRequest.key());
-        getFuture.handle((result, error) -> {
+        //Already set with higher timestamp, so we return true, but dont overwrite the value.
+        // Perform local storage operation
+        getFuture.whenComplete((result, error) -> {
             if (error != null) {
                 sendInternalSetResponse(message, false, error, setRequest);
                 return;
@@ -253,7 +255,7 @@ public class QuorumReplica extends Replica {
             }
             // Perform local storage operation
             var future = storage.put(setRequest.key(), messageCodec.encode(value));
-            future.handle((success, setError)
+            future.whenComplete((success, setError)
                     -> sendInternalSetResponse(message, success, setError, setRequest));
         });
     }

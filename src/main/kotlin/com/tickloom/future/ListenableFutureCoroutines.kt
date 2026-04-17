@@ -22,7 +22,7 @@ import kotlin.coroutines.suspendCoroutine
  * ```
  */
 suspend fun <T> ListenableFuture<T>.await(): T = suspendCoroutine { cont ->
-    this.handle { result, exception ->
+    this.whenComplete { result, exception ->
         if (exception != null) {
             cont.resumeWithException(exception)
         } else {

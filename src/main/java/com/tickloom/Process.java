@@ -140,7 +140,8 @@ public abstract class Process implements Tickable, AutoCloseable {
     protected final void initialise() {
 
         ListenableFuture<?> initFuture = onInit();
-        initFuture.handle((result, error) -> {
+        // Don't mark as initialized if startup fails
+        initFuture.whenComplete((result, error) -> {
             if (error == null) {
                 markInitialised();
                 return;
@@ -206,8 +207,8 @@ public abstract class Process implements Tickable, AutoCloseable {
      */
     protected <T> void persist(String key, T stateObject, Runnable onSuccess, Runnable onFailure) {
         ListenableFuture<Boolean> persistFuture = persist(key, stateObject);
-        
-        persistFuture.handle((success, error) -> {
+
+        persistFuture.whenComplete((success, error) -> {
             if (error != null) {
                 if (onFailure != null) {
                     onFailure.run();
@@ -237,7 +238,7 @@ public abstract class Process implements Tickable, AutoCloseable {
         ListenableFuture<byte[]> loadFuture = storage.get(keyBytes);
         
         ListenableFuture<T> resultFuture = new ListenableFuture<>();
-        loadFuture.handle((loadedValue, error) -> {
+        loadFuture.whenComplete((loadedValue, error) -> {
             if (error != null) {
                 resultFuture.fail(error);
             } else if (loadedValue == null) {
@@ -251,7 +252,7 @@ public abstract class Process implements Tickable, AutoCloseable {
                 }
             }
         });
-        
+
         return resultFuture;
     }
 

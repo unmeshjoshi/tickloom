@@ -8,10 +8,8 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 /**
- * A future that supports a single, unified non-blocking callback for single-threaded event loops.
- * This version is simplified to only use a `handle` method, enforcing that both success
- * and failure cases are always considered.
- *
+ * A future that supports a single,
+ * unified non-blocking callback for single-threaded event loops.
  * @param <T> the type of the result name
  */
 
@@ -19,7 +17,7 @@ public class ListenableFuture<T> {
 
     public <U> ListenableFuture<U> map(Function<T, U> fn) {
         ListenableFuture<U> mapped = new ListenableFuture<>();
-        this.handle((T result, Throwable exception) -> {
+        this.whenComplete((T result, Throwable exception) -> {
             if (exception != null) {
                 mapped.fail(exception);
                 return;
@@ -36,7 +34,7 @@ public class ListenableFuture<T> {
     public <U> ListenableFuture<U> andThen(Function<T, ListenableFuture<U>> fn) {
         ListenableFuture<U> nextStage = new ListenableFuture<>();
 
-        this.handle((T result, Throwable exception) -> {
+        this.whenComplete((T result, Throwable exception) -> {
             if (exception != null) {
                 nextStage.fail(exception);
                 return;
@@ -53,7 +51,7 @@ public class ListenableFuture<T> {
 
     private <U> void handleInnerFutureAndCompleteStage(ListenableFuture<U> innerFuture, ListenableFuture<U> nextStage) {
         // Flatten: when the inner future completes, complete the next stage
-        innerFuture.handle((U innerResult, Throwable innerException) -> {
+        innerFuture.whenComplete((U innerResult, Throwable innerException) -> {
             if (innerException != null) {
                 nextStage.fail(innerException);
             } else {
@@ -62,14 +60,16 @@ public class ListenableFuture<T> {
         });
     }
 
-    public void whenComplete(Continuation<T> c) {
-        this.handle((result, exception) -> {
+
+    public ListenableFuture<T> whenComplete(Continuation<T> c) {
+        this.whenComplete((result, exception) -> {
             if (exception == null) {
                 c.resume(result);
             } else {
                 c.resumeWithError(exception);
             }
         });
+        return this;
     }
 
     private enum State {
@@ -173,11 +173,10 @@ public class ListenableFuture<T> {
     /**
      * Adds a callback that is always invoked when the future is resolved,
      * handling both success and failure cases.
-     *
      * @param callback the callback to invoke with the result (or null) and exception (or null)
      * @return this future for method chaining
      */
-    public ListenableFuture<T> handle(BiConsumer<T, Throwable> callback) {
+    public ListenableFuture<T> whenComplete(BiConsumer<T, Throwable> callback) {
         if (state == State.COMPLETED) {
             callback.accept(result, null);
         } else if (state == State.FAILED) {

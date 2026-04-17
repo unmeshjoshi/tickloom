@@ -31,7 +31,7 @@ public class HistoryRecorder<V> {
                                                         Function<Response, V> valueFromMessage) {
         history.invoke(process, op, invokedValue);
         ListenableFuture<Response> fut = requestInvoker.get();
-        return fut.handle((resp, ex) -> {
+        return fut.whenComplete((resp, ex) -> {
             try {
                 if (ex == null) {
                     var v = valueFromMessage.apply(resp);

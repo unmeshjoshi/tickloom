@@ -226,11 +226,11 @@ class ListenableFutureTest {
         AtomicReference<Throwable> receivedException = new AtomicReference<>();
         
         // When
-        future.handle((result, exception) -> {
+        future.whenComplete((result, exception) -> {
             receivedResult.set(result);
             receivedException.set(exception);
         });
-        
+
         future.complete("callback-result");
 
         // Then
@@ -248,7 +248,7 @@ class ListenableFutureTest {
         AtomicReference<Throwable> receivedException = new AtomicReference<>();
         
         // When
-        future.handle((result, exception) -> {
+        future.whenComplete((result, exception) -> {
             receivedResult.set(result);
             receivedException.set(exception);
         });
@@ -269,7 +269,7 @@ class ListenableFutureTest {
         AtomicReference<Throwable> receivedException = new AtomicReference<>();
         
         // When
-        future.handle((result, exception) -> {
+        future.whenComplete((result, exception) -> {
             receivedResult.set(result);
             receivedException.set(exception);
         });
@@ -287,10 +287,10 @@ class ListenableFutureTest {
         List<String> callbackResults = new ArrayList<>();
         
         // When - register multiple callbacks
-        future.handle((result, exception) -> callbackResults.add("callback1: " + result));
-        future.handle((result, exception) -> callbackResults.add("callback2: " + result));
-        future.handle((result, exception) -> callbackResults.add("callback3: " + result));
-        
+        future.whenComplete((result2, exception2) -> callbackResults.add("callback1: " + result2));
+        future.whenComplete((result1, exception1) -> callbackResults.add("callback2: " + result1));
+        future.whenComplete((result, exception) -> callbackResults.add("callback3: " + result));
+
         future.complete("multi-result");
 
         // Then
@@ -309,9 +309,8 @@ class ListenableFutureTest {
         AtomicBoolean secondCallbackInvoked = new AtomicBoolean(false);
         
         // When - chain multiple handle calls
-        ListenableFuture<String> returnedFuture = future
-            .handle((result, exception) -> firstCallbackInvoked.set(true))
-            .handle((result, exception) -> secondCallbackInvoked.set(true));
+        ListenableFuture<String> stringListenableFuture = future.whenComplete((result1, exception1) -> firstCallbackInvoked.set(true));
+        ListenableFuture<String> returnedFuture = stringListenableFuture.whenComplete((result, exception) -> secondCallbackInvoked.set(true));
         
         future.complete("chain-result");
 
@@ -331,11 +330,11 @@ class ListenableFutureTest {
         RuntimeException expectedException = new RuntimeException("callback-failure");
         
         // When
-        future.handle((result, exception) -> {
+        future.whenComplete((result, exception) -> {
             receivedResult.set(result);
             receivedException.set(exception);
         });
-        
+
         future.fail(expectedException);
 
         // Then
@@ -356,7 +355,7 @@ class ListenableFutureTest {
             // simulate an async operation that depends on the first result
             return second;
         });
-        chained.handle((result, exception) -> finalResult.set(result));
+        chained.whenComplete((result, exception) -> finalResult.set(result));
 
         // Complete the first future
         first.complete("hello");
@@ -386,7 +385,7 @@ class ListenableFutureTest {
             fail("Function should not be called when original fails");
             return new ListenableFuture<>();
         });
-        chained.handle((result, exception) -> receivedError.set(exception));
+        chained.whenComplete((result, exception) -> receivedError.set(exception));
 
         original.fail(new RuntimeException("original failed"));
 
@@ -401,7 +400,7 @@ class ListenableFutureTest {
         AtomicReference<Throwable> receivedError = new AtomicReference<>();
 
         ListenableFuture<Integer> chained = original.andThen(result -> inner);
-        chained.handle((result, exception) -> receivedError.set(exception));
+        chained.whenComplete((result, exception) -> receivedError.set(exception));
 
         original.complete("ok");
         inner.fail(new RuntimeException("inner failed"));
@@ -418,7 +417,7 @@ class ListenableFutureTest {
         ListenableFuture<Integer> chained = original.andThen(result -> {
             throw new RuntimeException("function threw");
         });
-        chained.handle((result, exception) -> receivedError.set(exception));
+        chained.whenComplete((result, exception) -> receivedError.set(exception));
 
         original.complete("value");
 
@@ -437,7 +436,7 @@ class ListenableFutureTest {
         ListenableFuture<Boolean> chained = step1
             .andThen(s -> step2)
             .andThen(i -> step3);
-        chained.handle((result, exception) -> finalResult.set(result));
+        chained.whenComplete((result, exception) -> finalResult.set(result));
 
         step1.complete("start");
         assertNull(finalResult.get());
