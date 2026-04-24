@@ -174,7 +174,7 @@ public class Cluster implements Tickable, AutoCloseable {
         return this;
     }
 
-    private Cluster useSimulatedNetwork(boolean isLossy) {
+    public Cluster useSimulatedNetwork(boolean isLossy) {
         this.useSimulatedNetwork = true;
         this.useLossyNetwork = isLossy;
         return this;

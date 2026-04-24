@@ -46,6 +46,38 @@ public final class DDIA_Linearizability_And_Quorum_ScenarioTest
 
     @Test
     @DisplayName("DDIA §10.6 via per-link delay: Alice sees new, later Bob sees old (LIN ❌, SC ✅)")
+    /**
+     * DDIA §10.6: quorum reads can violate linearizability.
+     *
+     * Coordinators:
+     *   writer -> athens
+     *   alice  -> byzantium
+     *   bob    -> byzantium
+     *
+     * writer          athens            byzantium          cyrene           alice            bob
+     *   |                |                   |                 |               |               |
+     *   |-- write x=1 -->|                   |                 |               |               |
+     *   |                | apply x=1         | still x=0       | still x=0     |               |
+     *   |                |                   |                 |               |               |
+     *   |                |   partition: byzantium <-> cyrene   |               |               |
+     *   |                |                   |<-- read x ------|<-- alice -----|               |
+     *   |                |<-- read x --------|                 |               |               |
+     *   |                |-- x=1 ----------->|                 |               |               |
+     *   |                |                   |-------------- x=1 ------------->|               |
+     *   |                |                   |                 |               |               |
+     *   |                | reconnect byzantium                |               |               |
+     *   |                |   partition: byzantium <-> athens  |               |               |
+     *   |                |                   |<--------------------------------|-- read x -----|
+     *   |                |                   |-- read x ----------------------->|               |
+     *   |                |                   |<----------- x=0 -----------------|               |
+     *   |                |                   |------------------------------- x=0 ------------->|
+     *   |                |-- delayed repl x=1 -->|             |               |               |
+     *   |                |----------- delayed repl x=1 -------->|               |               |
+     *   |<-delayed write-ok|
+     *
+     * Alice sees x=1 and later Bob sees x=0.
+     * Therefore the history is not linearizable, even though it can still be sequentially consistent.
+     */
     void ddia106_link_delay_race()  {
         //Updates the order status..
         var orderStatusUpdater = clientConnectedTo(WRITER, ATHENS);
@@ -63,10 +95,10 @@ public final class DDIA_Linearizability_And_Quorum_ScenarioTest
         assertNodesContainValue(List.of(ATHENS, BYZANTIUM, CYRENE), key, vOld);
 
         // Introduce *per-link delay* from ATHENS -> (BYZANTIUM, CYRENE)
-        // This holds back propagation of the upgrade write for ~PROP_DELAY_TICKS.
+        // This holds back propagation of the write replication for ~PROP_DELAY_TICKS.
         delayForMessageType(QuorumMessageTypes.INTERNAL_SET_REQUEST, ATHENS, List.of(BYZANTIUM, CYRENE), PROP_DELAY_TICKS);
 
-        // Writer upgrades to SHIPPED via ATHENS. ATHENS applies promptly; others are delayed.
+        // Writer updates values via ATHENS. ATHENS applies promptly; others are delayed.
         // We need to wait until the value is available on ATHENS.
         writeAndWaitUntil(withWriter(orderStatusUpdater, key, vNew), () -> {
             VersionedValue storageValue = cluster.getDecodedStoredValue(ATHENS, key, VersionedValue.class);
@@ -149,4 +181,3 @@ public final class DDIA_Linearizability_And_Quorum_ScenarioTest
         };
     }
 }
-

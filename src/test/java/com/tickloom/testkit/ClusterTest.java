@@ -150,13 +150,13 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
      */
     protected ClusterTest<C, RGet, JepsenValue> write(Writer<C, JepsenValue> writer) {
         var fut = H.write(writer.client.id, writer.attemptedValue(), writer.getSupplier());
-        assertEventually(() -> fut.isCompleted() && !fut.isFailed());
+        cluster.tickUntil(() -> fut.isCompleted() && !fut.isFailed());
         return this;
     }
 
     protected ClusterTest<C, RGet, JepsenValue> writeAndWaitUntil(Writer<C, JepsenValue> writer, BooleanSupplier cond) {
         var fut = H.write(writer.client.id, writer.attemptedValue(), writer.getSupplier());
-        assertEventually(cond);
+        cluster.tickUntil(cond);
         return this;
     }
 
