@@ -495,6 +495,21 @@ public class Cluster implements Tickable, AutoCloseable {
         ((SimulatedNetwork) sharedNetwork).healAllPartitions();
     }
 
+    public void resetNetworkConditions() {
+        ensureSimulatedNetwork();
+        List<ProcessId> processIds = getServerProcessIds();
+        for (ProcessId source : processIds) {
+            for (ProcessId destination : processIds) {
+                if (source.equals(destination)) {
+                    continue;
+                }
+                setNetworkDelay(source, destination, 0);
+                setPacketLoss(source, destination, 0.0);
+            }
+        }
+        healAllPartitions();
+    }
+
     public long getTimeForProcess(ProcessId processId) {
         return processClocks.get(processId).now();
     }
@@ -528,7 +543,7 @@ public class Cluster implements Tickable, AutoCloseable {
      * @throws IOException if network creation fails
      */
     public <T extends ClusterClient> T newClient(ProcessId id, Cluster.ClientFactory<T> factory) throws IOException {
-        return newClient(id, serverProcessIds(), factory);
+        return newClient(id, getServerProcessIds(), factory);
     }
 
     /**
@@ -582,7 +597,7 @@ public class Cluster implements Tickable, AutoCloseable {
         return useLossyNetwork ? SimulatedNetwork.lossyNetwork(random, 0) : SimulatedNetwork.noLossNetwork(random);
     }
 
-    private List<ProcessId> serverProcessIds() {
+    public List<ProcessId> getServerProcessIds() {
         return serverNodes.stream()
                 .map(n -> n.id).collect(Collectors.toList());
     }

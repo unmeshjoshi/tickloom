@@ -73,6 +73,7 @@ public abstract class SimulationRunner {
         Random clusterSeededRandom = cluster.getRandom();
         while (tickDuration > tick) {
             tick++;
+            injectRandomFaults();
             cluster.tick();
 
             // Decide whether to issue clientId request this tick.
@@ -81,6 +82,15 @@ public abstract class SimulationRunner {
             SingleRequestIssuer<ClusterClient> client = clients.get(clusterSeededRandom.nextInt(clients.size()));
             client.issueRequest();
         }
+    }
+
+    //Hook method for subclasses to override and inject faults.
+    protected void injectRandomFaults() {
+
+    }
+
+    protected Cluster cluster() {
+        return cluster;
     }
 
     private void waitForPendingRequests() {
@@ -127,5 +137,4 @@ public abstract class SimulationRunner {
         return "Key-" + cluster.getRandom().nextInt();
     }
 }
-
 
