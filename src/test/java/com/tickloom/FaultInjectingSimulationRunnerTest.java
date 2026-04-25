@@ -30,10 +30,12 @@ class FaultInjectingSimulationRunnerTest {
         var runner1 = new FaultInjectingQuorumKVScenarioRunner(123L);
         var runner2 = new FaultInjectingQuorumKVScenarioRunner(456L);
 
-        runner1.runAndGetHistory(500);
-        runner2.runAndGetHistory(500);
+        History history1 = runner1.runAndGetHistory(500);
+        History history2 = runner2.runAndGetHistory(500);
 
         assertNotEquals(runner1.faultSchedule(), runner2.faultSchedule());
+        assertNotEquals(history1.toEdn(), history2.toEdn());
+
     }
 
     @Test
@@ -46,7 +48,7 @@ class FaultInjectingSimulationRunnerTest {
     }
 
     @Test
-    void shouldPrintFaultScheduleAndHistoryForPresentation() throws IOException {
+    void printFaultScheduleAndHistoryForPresentation() throws IOException {
         long seed = 123L;
         long ticks = 120L;
 
