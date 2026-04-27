@@ -15,7 +15,7 @@ import java.util.function.Function;
 
 public class ListenableFuture<T> {
 
-    public <U> ListenableFuture<U> map(Function<T, U> fn) {
+    public <U> ListenableFuture<U> thenApply(Function<T, U> fn) {
         ListenableFuture<U> mapped = new ListenableFuture<>();
         this.whenComplete((T result, Throwable exception) -> {
             if (exception != null) {
@@ -31,7 +31,7 @@ public class ListenableFuture<T> {
         return mapped;
     }
 
-    public <U> ListenableFuture<U> andThen(Function<T, ListenableFuture<U>> fn) {
+    public <U> ListenableFuture<U> thenCompose(Function<T, ListenableFuture<U>> fn) {
         ListenableFuture<U> nextStage = new ListenableFuture<>();
 
         this.whenComplete((T result, Throwable exception) -> {
@@ -62,14 +62,13 @@ public class ListenableFuture<T> {
 
 
     public ListenableFuture<T> whenComplete(Continuation<T> c) {
-        this.whenComplete((result, exception) -> {
+        return this.whenComplete((result, exception) -> {
             if (exception == null) {
                 c.resume(result);
             } else {
                 c.resumeWithError(exception);
             }
         });
-        return this;
     }
 
     private enum State {
@@ -81,7 +80,7 @@ public class ListenableFuture<T> {
     private State state = State.PENDING;
     private T result;
     private Throwable exception;
-    private final List<BiConsumer<T, Throwable>> handleCallbacks = new ArrayList<>();
+    private BiConsumer<T, Throwable> callback;
 
     public static <T> ListenableFuture<T> completed(T value) {
         ListenableFuture<T> future = new ListenableFuture<>();
@@ -146,10 +145,10 @@ public class ListenableFuture<T> {
         this.state = State.COMPLETED;
         this.result = result;
 
-        for (BiConsumer<T, Throwable> callback : handleCallbacks) {
+        if (callback != null) {
             callback.accept(result, null);
+            callback = null;
         }
-        handleCallbacks.clear();
     }
 
     /**
@@ -164,10 +163,10 @@ public class ListenableFuture<T> {
         this.state = State.FAILED;
         this.exception = exception;
 
-        for (BiConsumer<T, Throwable> callback : handleCallbacks) {
+        if (callback != null) {
             callback.accept(null, exception);
+            callback = null;
         }
-        handleCallbacks.clear();
     }
 
     /**
@@ -177,13 +176,31 @@ public class ListenableFuture<T> {
      * @return this future for method chaining
      */
     public ListenableFuture<T> whenComplete(BiConsumer<T, Throwable> callback) {
+        ListenableFuture<T> nextStage = new ListenableFuture<>();
+
+        BiConsumer<T, Throwable> wrappedCallback = (res, ex) -> {
+            try {
+                callback.accept(res, ex);
+                if (ex != null) {
+                    nextStage.fail(ex);
+                } else {
+                    nextStage.complete(res);
+                }
+            } catch (Throwable t) {
+                nextStage.fail(t);
+            }
+        };
+
         if (state == State.COMPLETED) {
-            callback.accept(result, null);
+            wrappedCallback.accept(result, null);
         } else if (state == State.FAILED) {
-            callback.accept(null, exception);
+            wrappedCallback.accept(null, exception);
         } else {
-            handleCallbacks.add(callback);
+            if (this.callback != null) {
+                throw new IllegalStateException("Only a single callback is supported for pending future");
+            }
+            this.callback = wrappedCallback;
         }
-        return this;
+        return nextStage;
     }
 }

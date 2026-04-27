@@ -124,11 +124,14 @@ class ReplicaTest {
 
         List<String> broadcastInternal()  {
             java.util.List<String> captured = new java.util.ArrayList<>();
-            AsyncQuorumCallback<Message> cb = new AsyncQuorumCallback<>(getAllNodes().size(), msg -> true);
-            broadcastToAllReplicas(cb, (destinationId, correlationId) -> {
-                captured.add(correlationId);
-                return Message.of(id, destinationId, PeerType.SERVER, new MessageType("INTERNAL_GET_REQUEST"), new byte[0], correlationId);
-            });
+            this.<Message>broadcast()
+                .withQuorumSize(getAllNodes().size())
+                .responseConsideredSuccessful(msg -> true)
+                .withMessage((destinationId, correlationId) -> {
+                    captured.add(correlationId);
+                    return Message.of(id, destinationId, PeerType.SERVER, new MessageType("INTERNAL_GET_REQUEST"), new byte[0], correlationId);
+                })
+                .send();
             return captured;
         }
     }

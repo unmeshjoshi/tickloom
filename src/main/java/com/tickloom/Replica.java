@@ -6,7 +6,9 @@ import com.tickloom.messaging.*;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BiFunction;
+import java.util.function.Predicate;
 
 public abstract class Replica extends Process {
     protected final List<ProcessId> peerIds;
@@ -42,18 +44,40 @@ public abstract class Replica extends Process {
         return allNodes;
     }
 
-    /**
-     * Generic helper to broadcast an internal request to all nodes (peers + self).
-     * It handles correlation ID generation, waiting list registration and message sending.
-     */
-    protected <T> void broadcastToAllReplicas(AsyncQuorumCallback<T> quorumCallback,
-                                              BiFunction<ProcessId, String, Message> messageBuilder)  {
-        for (ProcessId node : getAllNodes()) {
-            String internalCorrelationId = internalCorrelationId();
-            waitingList.add(internalCorrelationId, (RequestCallback<Object>) quorumCallback);
+    protected <T> QuorumBroadcastBuilder<T> broadcast() {
+        return new QuorumBroadcastBuilder<>();
+    }
 
-            Message internalMessage = messageBuilder.apply(node, internalCorrelationId);
-            send(internalMessage);
+    protected class QuorumBroadcastBuilder<T> {
+        private int requiredQuorum = (int) (getAllNodes().size() / 2) + 1;
+        private Predicate<T> successCondition;
+        private BiFunction<ProcessId, String, Message> messageBuilder;
+
+        public QuorumBroadcastBuilder<T> withQuorumSize(int requiredQuorum) {
+            this.requiredQuorum = requiredQuorum;
+            return this;
+        }
+
+        public QuorumBroadcastBuilder<T> responseConsideredSuccessful(Predicate<T> successCondition) {
+            this.successCondition = successCondition;
+            return this;
+        }
+
+        public QuorumBroadcastBuilder<T> withMessage(BiFunction<ProcessId, String, Message> messageBuilder) {
+            this.messageBuilder = messageBuilder;
+            return this;
+        }
+
+        public ListenableFuture<Map<ProcessId, T>> send() {
+            AsyncQuorumCallback<T> quorumCallback = new AsyncQuorumCallback<>(getAllNodes().size(), requiredQuorum, successCondition);
+            for (ProcessId node : getAllNodes()) {
+                String internalCorrelationId = internalCorrelationId();
+                waitingList.add(internalCorrelationId, (RequestCallback<Object>) (RequestCallback) quorumCallback);
+
+                Message internalMessage = messageBuilder.apply(node, internalCorrelationId);
+                Replica.this.send(internalMessage);
+            }
+            return quorumCallback.getQuorumFuture();
         }
     }
 

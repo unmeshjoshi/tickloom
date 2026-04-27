@@ -3,6 +3,7 @@ package com.tickloom.history;
 import com.tickloom.ProcessId;
 import com.tickloom.future.ListenableFuture;
 
+import java.util.List;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -30,19 +31,13 @@ public class HistoryRecorder<V> {
                                                         Supplier<ListenableFuture<Response>> requestInvoker,
                                                         Function<Response, V> valueFromMessage) {
         history.invoke(process, op, invokedValue);
-        ListenableFuture<Response> fut = requestInvoker.get();
-        return fut.whenComplete((resp, ex) -> {
-            try {
+        return requestInvoker.get().whenComplete((resp, ex) -> {
                 if (ex == null) {
                     var v = valueFromMessage.apply(resp);
                     history.ok(process, op, v);
-                    return;
+                } else {
+                    recordTimeoutOrFailure(op, ex, process, invokedValue);
                 }
-                recordTimeoutOrFailure(op, ex, process, invokedValue);
-
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
         });
     }
 
