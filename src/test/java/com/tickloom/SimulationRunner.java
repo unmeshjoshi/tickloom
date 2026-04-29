@@ -24,6 +24,7 @@ import static com.tickloom.ConsistencyChecker.*;
 public abstract class SimulationRunner {
     private final ArrayList<com.tickloom.SingleRequestIssuer<ClusterClient>> clients;
     private Cluster cluster;
+    private long driverTicksElapsed = 0;
 
     public SimulationRunner(long randomSeed, int clusterSize, int numClients, ProcessFactory processFactory, Cluster.ClientFactory<QuorumReplicaClient> clientFactory) throws IOException {
         this.cluster = Cluster.createSimulated(clusterSize, processFactory, randomSeed);
@@ -74,7 +75,7 @@ public abstract class SimulationRunner {
         while (tickDuration > tick) {
             tick++;
             injectRandomFaults();
-            cluster.tick();
+            tickDriver();
 
             // Decide whether to issue clientId request this tick.
             if (clusterSeededRandom.nextDouble() > issueProbabilityPerTick) continue;
@@ -93,11 +94,20 @@ public abstract class SimulationRunner {
         return cluster;
     }
 
+    public long driverTicksElapsed() {
+        return driverTicksElapsed;
+    }
+
     private void waitForPendingRequests() {
         //wait for all requests to finish
         while (clients.stream().anyMatch(SingleRequestIssuer::hasPendingRequests)) {
-            cluster.tick();
+            tickDriver();
         }
+    }
+
+    private void tickDriver() {
+        cluster.tick();
+        driverTicksElapsed++;
     }
 
     private void checkLinearizability() {
@@ -137,4 +147,3 @@ public abstract class SimulationRunner {
         return "Key-" + cluster.getRandom().nextInt();
     }
 }
-

@@ -74,7 +74,7 @@ class ReplicaTest {
     }
 
     @Test
-    void shouldBroadcastInternalRequestsToAllNodes()  {
+    void shouldQuorumRequestInternalRequestsToAllNodes()  {
         // Given
         int timeoutTicks = 1;
         Random random = new Random();
@@ -124,9 +124,9 @@ class ReplicaTest {
 
         List<String> broadcastInternal()  {
             java.util.List<String> captured = new java.util.ArrayList<>();
-            this.<Message>broadcast()
+            this.<Message>quorumRequest()
                 .withQuorumSize(getAllNodes().size())
-                .responseConsideredSuccessful(msg -> true)
+                .acceptResponseWhen(msg -> true)
                 .withMessage((destinationId, correlationId) -> {
                     captured.add(correlationId);
                     return Message.of(id, destinationId, PeerType.SERVER, new MessageType("INTERNAL_GET_REQUEST"), new byte[0], correlationId);

@@ -43,13 +43,12 @@ public class QuorumReplica extends Replica {
 
         logIncomingGetRequest(clientRequest, correlationId, clientId);
 
-        this.<InternalGetResponse>broadcast()
+        this.<InternalGetResponse>quorumRequest()
                 .withMessage((node, internalCorrelationId) -> {
                     var internalRequest = new InternalGetRequest(clientRequest.key());
                     return createMessage(node, internalCorrelationId, internalRequest, QuorumMessageTypes.INTERNAL_GET_REQUEST);
                 })
-                .withQuorumSize(getAllNodes().size() / 2 + 1)
-                .responseConsideredSuccessful(response -> response != null && response.value() != null)
+                .acceptResponseWhen(response -> response != null && response.value() != null)
                 .send()
                 .whenComplete((responses, error) -> {
                     if (error != null) {
@@ -112,9 +111,9 @@ public class QuorumReplica extends Replica {
         logIncomingSetRequest(clientRequest, correlationId, clientAddress);
 
         var timestamp = clock.now();
-        this.<InternalSetResponse>broadcast()
+        this.<InternalSetResponse>quorumRequest()
                 .withQuorumSize(getAllNodes().size() / 2 + 1)
-                .responseConsideredSuccessful(response -> response != null && response.success())
+                .acceptResponseWhen(response -> response != null && response.success())
                 .withMessage((node, internalCorrelationId) -> {
                     var internalRequest = new InternalSetRequest(
                             clientRequest.key(), clientRequest.value(), timestamp);

@@ -44,26 +44,34 @@ public abstract class Replica extends Process {
         return allNodes;
     }
 
-    protected <T> QuorumBroadcastBuilder<T> broadcast() {
-        return new QuorumBroadcastBuilder<>();
+    protected <T> QuorumRequestBuilder<T> quorumRequest() {
+        return new QuorumRequestBuilder<>(majorityQuorum());
     }
 
-    protected class QuorumBroadcastBuilder<T> {
-        private int requiredQuorum = (int) (getAllNodes().size() / 2) + 1;
+    private int majorityQuorum() {
+        return (getAllNodes().size() / 2) + 1;
+    }
+
+    protected class QuorumRequestBuilder<T> {
+        private int requiredQuorum;
         private Predicate<T> successCondition;
         private BiFunction<ProcessId, String, Message> messageBuilder;
 
-        public QuorumBroadcastBuilder<T> withQuorumSize(int requiredQuorum) {
+        public QuorumRequestBuilder(int requiredQuorum) {
+            this.requiredQuorum = requiredQuorum;
+        }
+
+        public QuorumRequestBuilder<T> withQuorumSize(int requiredQuorum) {
             this.requiredQuorum = requiredQuorum;
             return this;
         }
 
-        public QuorumBroadcastBuilder<T> responseConsideredSuccessful(Predicate<T> successCondition) {
+        public QuorumRequestBuilder<T> acceptResponseWhen(Predicate<T> successCondition) {
             this.successCondition = successCondition;
             return this;
         }
 
-        public QuorumBroadcastBuilder<T> withMessage(BiFunction<ProcessId, String, Message> messageBuilder) {
+        public QuorumRequestBuilder<T> withMessage(BiFunction<ProcessId, String, Message> messageBuilder) {
             this.messageBuilder = messageBuilder;
             return this;
         }
