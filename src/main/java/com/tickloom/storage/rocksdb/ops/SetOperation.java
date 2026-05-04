@@ -1,6 +1,6 @@
 package com.tickloom.storage.rocksdb.ops;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.storage.Storage;
 import com.tickloom.storage.rocksdb.RocksDbStorage;
 import org.rocksdb.RocksDBException;
@@ -10,10 +10,10 @@ public class SetOperation extends PendingOperation {
     private final RocksDbStorage rocksDbStorage;
     private final byte[] key;
     private final byte[] value;
-    private final ListenableFuture<Boolean> future;
+    private final TickCompletableFuture<Boolean> future;
     private final Storage.WriteOptions options;
 
-    public SetOperation(RocksDbStorage rocksDbStorage, byte[] key, byte[] value, ListenableFuture<Boolean> future,
+    public SetOperation(RocksDbStorage rocksDbStorage, byte[] key, byte[] value, TickCompletableFuture<Boolean> future,
                         long completionTick, Storage.WriteOptions options) {
         super(completionTick);
         this.rocksDbStorage = rocksDbStorage;

@@ -5,7 +5,7 @@ import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 
 /**
- * Bridges tickloom's [ListenableFuture] to Kotlin coroutines.
+ * Bridges tickloom's [TickCompletableFuture] to Kotlin coroutines.
  *
  * Usage:
  * ```kotlin
@@ -21,7 +21,7 @@ import kotlin.coroutines.suspendCoroutine
  * }
  * ```
  */
-suspend fun <T> ListenableFuture<T>.await(): T = suspendCoroutine { cont ->
+suspend fun <T> TickCompletableFuture<T>.await(): T = suspendCoroutine { cont ->
     this.whenComplete { result, exception ->
         if (exception != null) {
             cont.resumeWithException(exception)

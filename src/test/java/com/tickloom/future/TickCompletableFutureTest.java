@@ -6,7 +6,6 @@ import org.junit.jupiter.api.DisplayName;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -15,13 +14,13 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for ListenableFuture.
  * Tests cover state management, error handling, result retrieval, and callback handling.
  */
-class ListenableFutureTest {
+class TickCompletableFutureTest {
 
-    private ListenableFuture<String> future;
+    private TickCompletableFuture<String> future;
 
     @BeforeEach
     void setUp() {
-        future = new ListenableFuture<>();
+        future = new TickCompletableFuture<>();
     }
 
     // Test 1: Initial state (pending)
@@ -362,13 +361,13 @@ class ListenableFutureTest {
 
     @Test
     public void thenComposeShouldChainAsyncOperations() {
-        ListenableFuture<String> first = new ListenableFuture<>();
-        ListenableFuture<Integer> second = new ListenableFuture<>();
+        TickCompletableFuture<String> first = new TickCompletableFuture<>();
+        TickCompletableFuture<Integer> second = new TickCompletableFuture<>();
         AtomicReference<Integer> finalResult = new AtomicReference<>();
 
         // thenCompose chains: first future's result feeds into a function
         // that returns a new future
-        ListenableFuture<Integer> chained = first.thenCompose(result -> {
+        TickCompletableFuture<Integer> chained = first.thenCompose(result -> {
             // simulate an async operation that depends on the first result
             return second;
         });
@@ -385,9 +384,9 @@ class ListenableFutureTest {
 
     @Test
     public void thenComposeShouldReturnNewFuture() {
-        ListenableFuture<String> original = new ListenableFuture<>();
-        ListenableFuture<String> nextStage = original.thenCompose(result -> {
-            return new ListenableFuture<>();
+        TickCompletableFuture<String> original = new TickCompletableFuture<>();
+        TickCompletableFuture<String> nextStage = original.thenCompose(result -> {
+            return new TickCompletableFuture<>();
         });
 
         assertNotSame(original, nextStage, "thenCompose() should return a new future, not the original");
@@ -395,12 +394,12 @@ class ListenableFutureTest {
 
     @Test
     public void thenComposeShouldPropagateFailureFromOriginal() {
-        ListenableFuture<String> original = new ListenableFuture<>();
+        TickCompletableFuture<String> original = new TickCompletableFuture<>();
         AtomicReference<Throwable> receivedError = new AtomicReference<>();
 
-        ListenableFuture<Integer> chained = original.thenCompose(result -> {
+        TickCompletableFuture<Integer> chained = original.thenCompose(result -> {
             fail("Function should not be called when original fails");
-            return new ListenableFuture<>();
+            return new TickCompletableFuture<>();
         });
         chained.whenComplete((result, exception) -> receivedError.set(exception));
 
@@ -412,11 +411,11 @@ class ListenableFutureTest {
 
     @Test
     public void thenComposeShouldPropagateFailureFromInnerFuture() {
-        ListenableFuture<String> original = new ListenableFuture<>();
-        ListenableFuture<Integer> inner = new ListenableFuture<>();
+        TickCompletableFuture<String> original = new TickCompletableFuture<>();
+        TickCompletableFuture<Integer> inner = new TickCompletableFuture<>();
         AtomicReference<Throwable> receivedError = new AtomicReference<>();
 
-        ListenableFuture<Integer> chained = original.thenCompose(result -> inner);
+        TickCompletableFuture<Integer> chained = original.thenCompose(result -> inner);
         chained.whenComplete((result, exception) -> receivedError.set(exception));
 
         original.complete("ok");
@@ -428,10 +427,10 @@ class ListenableFutureTest {
 
     @Test
     public void thenComposeShouldFailWhenFunctionThrows() {
-        ListenableFuture<String> original = new ListenableFuture<>();
+        TickCompletableFuture<String> original = new TickCompletableFuture<>();
         AtomicReference<Throwable> receivedError = new AtomicReference<>();
 
-        ListenableFuture<Integer> chained = original.thenCompose(result -> {
+        TickCompletableFuture<Integer> chained = original.thenCompose(result -> {
             throw new RuntimeException("function threw");
         });
         chained.whenComplete((result, exception) -> receivedError.set(exception));
@@ -444,13 +443,13 @@ class ListenableFutureTest {
 
     @Test
     public void thenComposeShouldSupportMultiStepChaining() {
-        ListenableFuture<String> step1 = new ListenableFuture<>();
-        ListenableFuture<Integer> step2 = new ListenableFuture<>();
-        ListenableFuture<Boolean> step3 = new ListenableFuture<>();
+        TickCompletableFuture<String> step1 = new TickCompletableFuture<>();
+        TickCompletableFuture<Integer> step2 = new TickCompletableFuture<>();
+        TickCompletableFuture<Boolean> step3 = new TickCompletableFuture<>();
         AtomicReference<Boolean> finalResult = new AtomicReference<>();
 
         // Chain three async steps
-        ListenableFuture<Boolean> chained = step1
+        TickCompletableFuture<Boolean> chained = step1
             .thenCompose(s -> step2)
             .thenCompose(i -> step3);
         chained.whenComplete((result, exception) -> finalResult.set(result));

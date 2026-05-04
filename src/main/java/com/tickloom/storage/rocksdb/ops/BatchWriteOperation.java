@@ -1,6 +1,6 @@
 package com.tickloom.storage.rocksdb.ops;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.storage.Storage;
 import com.tickloom.storage.WriteBatch;
 import com.tickloom.storage.rocksdb.RocksDbStorage;
@@ -12,10 +12,10 @@ import java.util.Map;
 public class BatchWriteOperation extends PendingOperation {
     private final RocksDbStorage rocksDbStorage;
     private final WriteBatch writeBatch;
-    private final ListenableFuture<Boolean> future;
+    private final TickCompletableFuture<Boolean> future;
     private final Storage.WriteOptions options;
 
-    public BatchWriteOperation(RocksDbStorage rocksDbStorage, WriteBatch writeBatch, ListenableFuture<Boolean> future,
+    public BatchWriteOperation(RocksDbStorage rocksDbStorage, WriteBatch writeBatch, TickCompletableFuture<Boolean> future,
                                long completionTick, Storage.WriteOptions options) {
         super(completionTick);
         this.rocksDbStorage = rocksDbStorage;

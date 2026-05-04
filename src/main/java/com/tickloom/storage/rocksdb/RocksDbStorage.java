@@ -7,7 +7,7 @@ import org.rocksdb.CompressionType;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -93,7 +93,7 @@ public class RocksDbStorage implements Storage {
     // ========== Basic Operations ==========
 
     @Override
-    public ListenableFuture<byte[]> get(byte[] key) {
+    public TickCompletableFuture<byte[]> get(byte[] key) {
         if (key == null) {
             throw new IllegalArgumentException("Key cannot be null");
         }
@@ -102,11 +102,11 @@ public class RocksDbStorage implements Storage {
     }
 
     static interface OperationFactory<T> {
-        PendingOperation create(ListenableFuture<T> future, long completionTick);
+        PendingOperation create(TickCompletableFuture<T> future, long completionTick);
     }
 
-    private <T> ListenableFuture<T> submit(OperationFactory<T> factory) {
-        ListenableFuture<T> future = new ListenableFuture<>();
+    private <T> TickCompletableFuture<T> submit(OperationFactory<T> factory) {
+        TickCompletableFuture<T> future = new TickCompletableFuture<>();
 
         long completionTick = currentTick + defaultDelayTicks;
         pendingOperations.offer(factory.create(future, completionTick));
@@ -114,28 +114,28 @@ public class RocksDbStorage implements Storage {
     }
 
     @Override
-    public ListenableFuture<Boolean> put(byte[] key, byte[] value) {
+    public TickCompletableFuture<Boolean> put(byte[] key, byte[] value) {
         return put(key, value, WriteOptions.DEFAULT);
     }
 
     @Override
-    public ListenableFuture<Boolean> put(byte[] key, byte[] value, WriteOptions options) {
+    public TickCompletableFuture<Boolean> put(byte[] key, byte[] value, WriteOptions options) {
         return submit((future, completionTick) -> new SetOperation(this, key, value, future, completionTick, options));
     }
 
     @Override
-    public ListenableFuture<Boolean> put(WriteBatch writeBatch) {
+    public TickCompletableFuture<Boolean> put(WriteBatch writeBatch) {
         return put(writeBatch, WriteOptions.DEFAULT);
     }
 
     @Override
-    public ListenableFuture<Boolean> put(WriteBatch writeBatch, WriteOptions options) {
+    public TickCompletableFuture<Boolean> put(WriteBatch writeBatch, WriteOptions options) {
         return submit((future, completionTick)
                 -> new BatchWriteOperation(this, writeBatch, future, completionTick, options));
     }
 
     @Override
-    public ListenableFuture<Map<byte[], byte[]>> readRange(byte[] startKey, byte[] endKey) {
+    public TickCompletableFuture<Map<byte[], byte[]>> readRange(byte[] startKey, byte[] endKey) {
         return submit((future, completionTick) -> new ReadRangeOperation(this, startKey, endKey, future, completionTick));
     }
 
@@ -148,12 +148,12 @@ public class RocksDbStorage implements Storage {
      * @return
      */
     @Override
-    public ListenableFuture<byte[]> lowerKey(byte[] upperBoundKey) {
+    public TickCompletableFuture<byte[]> lowerKey(byte[] upperBoundKey) {
         return submit((future, completionTick) -> new LastKeyOperation(this, future, completionTick, upperBoundKey));
     }
 
     @Override
-    public ListenableFuture<Void> sync() {
+    public TickCompletableFuture<Void> sync() {
         return submit((future, completionTick) -> new SyncOperation(this, future, completionTick));
     }
 

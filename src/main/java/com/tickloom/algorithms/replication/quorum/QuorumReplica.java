@@ -3,7 +3,7 @@ package com.tickloom.algorithms.replication.quorum;
 import com.tickloom.ProcessParams;
 import com.tickloom.ProcessId;
 import com.tickloom.Replica;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.messaging.*;
 
 import java.util.List;
@@ -231,7 +231,7 @@ public class QuorumReplica extends Replica {
                 ", from: " + message.source());
 
         //First get the value and set only if it does not exist or its of lower timestamp.
-        ListenableFuture<byte[]> getFuture = storage.get(setRequest.key());
+        TickCompletableFuture<byte[]> getFuture = storage.get(setRequest.key());
         //Already set with higher timestamp, so we return true, but dont overwrite the value.
         // Perform local storage operation
         getFuture.whenComplete((result, error) -> {

@@ -1,7 +1,7 @@
 package com.tickloom.io;
 
 import com.tickloom.Tickable;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 
 /**
  * Low-level async file I/O interface — the simulation boundary.
@@ -13,13 +13,13 @@ import com.tickloom.future.ListenableFuture;
  */
 public interface FileIO extends Tickable, AutoCloseable {
 
-    ListenableFuture<Integer> write(byte[] data, long offset);
+    TickCompletableFuture<Integer> write(byte[] data, long offset);
 
-    ListenableFuture<byte[]> read(long offset, int length);
+    TickCompletableFuture<byte[]> read(long offset, int length);
 
-    ListenableFuture<Void> sync();
+    TickCompletableFuture<Void> sync();
 
-    ListenableFuture<Void> truncate(long size);
+    TickCompletableFuture<Void> truncate(long size);
 
     long size();
 

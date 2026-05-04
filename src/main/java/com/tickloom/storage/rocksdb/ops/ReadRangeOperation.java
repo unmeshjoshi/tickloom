@@ -1,12 +1,11 @@
 package com.tickloom.storage.rocksdb.ops;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.storage.rocksdb.RocksDbStorage;
 import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksIterator;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -14,9 +13,9 @@ public class ReadRangeOperation extends PendingOperation {
     private final RocksDbStorage rocksDbStorage;
     private final byte[] startKey;
     private final byte[] endKey;
-    private final ListenableFuture<Map<byte[], byte[]>> future;
+    private final TickCompletableFuture<Map<byte[], byte[]>> future;
 
-    public ReadRangeOperation(RocksDbStorage rocksDbStorage, byte[] startKey, byte[] endKey, ListenableFuture<Map<byte[], byte[]>> future,
+    public ReadRangeOperation(RocksDbStorage rocksDbStorage, byte[] startKey, byte[] endKey, TickCompletableFuture<Map<byte[], byte[]>> future,
                               long completionTick) {
         super(completionTick);
         this.rocksDbStorage = rocksDbStorage;

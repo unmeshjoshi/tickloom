@@ -1,6 +1,6 @@
 package com.tickloom.io;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -41,8 +41,8 @@ public class LocalFileIO implements FileIO {
     }
 
     @Override
-    public ListenableFuture<Integer> write(byte[] data, long offset) {
-        ListenableFuture<Integer> future = new ListenableFuture<>();
+    public TickCompletableFuture<Integer> write(byte[] data, long offset) {
+        TickCompletableFuture<Integer> future = new TickCompletableFuture<>();
         try {
             ByteBuffer buf = ByteBuffer.wrap(data);
             int written = channel.write(buf, offset);
@@ -54,8 +54,8 @@ public class LocalFileIO implements FileIO {
     }
 
     @Override
-    public ListenableFuture<byte[]> read(long offset, int length) {
-        ListenableFuture<byte[]> future = new ListenableFuture<>();
+    public TickCompletableFuture<byte[]> read(long offset, int length) {
+        TickCompletableFuture<byte[]> future = new TickCompletableFuture<>();
         try {
             int readable = (int) Math.max(0, channel.size() - offset);
             int toRead = Math.min(length, readable);
@@ -76,8 +76,8 @@ public class LocalFileIO implements FileIO {
     }
 
     @Override
-    public ListenableFuture<Void> sync() {
-        ListenableFuture<Void> future = new ListenableFuture<>();
+    public TickCompletableFuture<Void> sync() {
+        TickCompletableFuture<Void> future = new TickCompletableFuture<>();
         try {
             channel.force(true);
             future.complete(null);
@@ -88,8 +88,8 @@ public class LocalFileIO implements FileIO {
     }
 
     @Override
-    public ListenableFuture<Void> truncate(long size) {
-        ListenableFuture<Void> future = new ListenableFuture<>();
+    public TickCompletableFuture<Void> truncate(long size) {
+        TickCompletableFuture<Void> future = new TickCompletableFuture<>();
         try {
             channel.truncate(size);
             future.complete(null);

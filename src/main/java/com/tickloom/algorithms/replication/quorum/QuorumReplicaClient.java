@@ -3,7 +3,7 @@ package com.tickloom.algorithms.replication.quorum;
 import com.tickloom.ProcessId;
 import com.tickloom.ProcessParams;
 import com.tickloom.algorithms.replication.ClusterClient;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.messaging.*;
 
 import java.util.List;
@@ -15,14 +15,14 @@ public class QuorumReplicaClient extends ClusterClient {
         super(replicaEndpoints, processParams);
     }
     
-    public ListenableFuture<GetResponse> get(byte[] key) {
+    public TickCompletableFuture<GetResponse> get(byte[] key) {
         GetRequest request = new GetRequest(key);
         ProcessId primaryReplica = firstReplica();
         
         return sendRequest(request, primaryReplica, QuorumMessageTypes.CLIENT_GET_REQUEST);
     }
     
-    public ListenableFuture<SetResponse> set(byte[] key, byte[] value) {
+    public TickCompletableFuture<SetResponse> set(byte[] key, byte[] value) {
         SetRequest request = new SetRequest(key, value);
         ProcessId primaryReplica = firstReplica();
         

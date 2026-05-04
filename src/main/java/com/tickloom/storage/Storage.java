@@ -1,7 +1,7 @@
 package com.tickloom.storage;
 
 import com.tickloom.Tickable;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 
 import java.util.Map;
 
@@ -23,7 +23,7 @@ public interface Storage extends Tickable, AutoCloseable {
      * @param key the key to retrieve
      * @return a future containing the value, or null if not found
      */
-    ListenableFuture<byte[]> get(byte[] key);
+    TickCompletableFuture<byte[]> get(byte[] key);
     
     /**
      * Stores a value for the given key.
@@ -32,7 +32,7 @@ public interface Storage extends Tickable, AutoCloseable {
      * @param value the value to store
      * @return a future containing true if successful, false otherwise
      */
-    ListenableFuture<Boolean> put(byte[] key, byte[] value);
+    TickCompletableFuture<Boolean> put(byte[] key, byte[] value);
     
     /**
      * Stores a value for the given key with write options.
@@ -44,7 +44,7 @@ public interface Storage extends Tickable, AutoCloseable {
      * @param options write options (sync, etc.)
      * @return a future containing true if successful, false otherwise
      */
-    ListenableFuture<Boolean> put(byte[] key, byte[] value, WriteOptions options);
+    TickCompletableFuture<Boolean> put(byte[] key, byte[] value, WriteOptions options);
 
     /**
      * Performs atomic batch write operations.
@@ -53,7 +53,7 @@ public interface Storage extends Tickable, AutoCloseable {
      * @param writeBatch the WriteBatch containing key-value pairs to write
      * @return a future containing true if all operations succeeded, false otherwise
      */
-    ListenableFuture<Boolean> put(WriteBatch writeBatch);
+    TickCompletableFuture<Boolean> put(WriteBatch writeBatch);
     
     /**
      * Performs atomic batch write operations with write options.
@@ -62,7 +62,7 @@ public interface Storage extends Tickable, AutoCloseable {
      * @param options write options for the entire batch
      * @return a future containing true if all operations succeeded, false otherwise
      */
-    ListenableFuture<Boolean> put(WriteBatch writeBatch, WriteOptions options);
+    TickCompletableFuture<Boolean> put(WriteBatch writeBatch, WriteOptions options);
     
     /**
      * Retrieves values for a range of keys.
@@ -71,7 +71,7 @@ public interface Storage extends Tickable, AutoCloseable {
      * @param endKey the end key (exclusive)
      * @return a future containing a map of key-value pairs
      */
-    ListenableFuture<Map<byte[], byte[]>> readRange(byte[] startKey, byte[] endKey);
+    TickCompletableFuture<Map<byte[], byte[]>> readRange(byte[] startKey, byte[] endKey);
 
     /**
      * Retrieves the last key in the store (lexicographically) for a given prefix.
@@ -79,7 +79,7 @@ public interface Storage extends Tickable, AutoCloseable {
      * the last index at startup.
      * @return a future containing the last key, or null if store is empty
      */
-    ListenableFuture<byte[]> lowerKey(byte[] prefix);
+    TickCompletableFuture<byte[]> lowerKey(byte[] prefix);
     
     /**
      * Ensures all pending writes are flushed to disk for durability.
@@ -88,7 +88,7 @@ public interface Storage extends Tickable, AutoCloseable {
      * 
      * @return a future that completes when the sync operation is finished
      */
-    ListenableFuture<Void> sync();
+    TickCompletableFuture<Void> sync();
     
     /**
      * Advances the storage simulation by one tick.

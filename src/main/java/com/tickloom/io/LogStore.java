@@ -1,6 +1,6 @@
 package com.tickloom.io;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -38,7 +38,7 @@ public class LogStore {
 
         while (offset + LENGTH_PREFIX_SIZE <= fileSize) {
             // read length prefix
-            ListenableFuture<byte[]> lenFuture = fileIO.read(offset, LENGTH_PREFIX_SIZE);
+            TickCompletableFuture<byte[]> lenFuture = fileIO.read(offset, LENGTH_PREFIX_SIZE);
             fileIO.tick();
             if (!lenFuture.isCompleted()) break;
 
@@ -48,7 +48,7 @@ public class LogStore {
             }
 
             // read payload
-            ListenableFuture<byte[]> entryFuture = fileIO.read(offset + LENGTH_PREFIX_SIZE, entryLength);
+            TickCompletableFuture<byte[]> entryFuture = fileIO.read(offset + LENGTH_PREFIX_SIZE, entryLength);
             fileIO.tick();
             if (!entryFuture.isCompleted()) break;
 
@@ -65,7 +65,7 @@ public class LogStore {
      *
      * @return future containing the 1-based index of the appended entry
      */
-    public ListenableFuture<Long> append(byte[] entry) {
+    public TickCompletableFuture<Long> append(byte[] entry) {
         byte[] frame = frame(entry);
         long entryOffset = writeOffset;
 
@@ -97,7 +97,7 @@ public class LogStore {
     /**
      * Flushes all written entries to durable storage.
      */
-    public ListenableFuture<Void> sync() {
+    public TickCompletableFuture<Void> sync() {
         return fileIO.sync();
     }
 

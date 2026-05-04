@@ -16,7 +16,7 @@ import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
 import com.tickloom.algorithms.replication.quorum.SetResponse;
 import com.tickloom.algorithms.replication.quorum.GetResponse;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 
 /**
  * Demonstrates the tightened Cluster design with ProcessId-only methods and clientId-specific targeting.
@@ -47,10 +47,10 @@ public class ClientTargetingTest {
             byte[] value1 = "written_via_athens".getBytes();
             byte[] value2 = "written_via_byzantium".getBytes();
 
-            ListenableFuture<SetResponse> athensWrite = athensClient.set(key, value1);
+            TickCompletableFuture<SetResponse> athensWrite = athensClient.set(key, value1);
             assertEventually(cluster,() -> athensWrite.isCompleted() && athensWrite.getResult().success());
 
-            ListenableFuture<SetResponse> byzantiumWrite = byzantiumClient.set(key, value2);
+            TickCompletableFuture<SetResponse> byzantiumWrite = byzantiumClient.set(key, value2);
             assertEventually(cluster,() -> byzantiumWrite.isCompleted() && byzantiumWrite.getResult().success());
 
             // Phase 2: Isolate Athens - clientId connected to Athens should fail, but Byzantium clientId continues
@@ -59,7 +59,7 @@ public class ClientTargetingTest {
 
             // Athens clientId should fail/timeout when trying to write
             byte[] failedValue = "should_fail".getBytes();
-            ListenableFuture<SetResponse> athensFailedWrite = athensClient.set(key, failedValue);
+            TickCompletableFuture<SetResponse> athensFailedWrite = athensClient.set(key, failedValue);
             
             // Tick for a limited time to see if it completes
             for (int i = 0; i < 50; i++) {
@@ -74,7 +74,7 @@ public class ClientTargetingTest {
 
             // Byzantium clientId should still work (writes to majority)
             byte[] workingValue = "byzantium_still_works".getBytes();
-            ListenableFuture<SetResponse> byzantiumWorkingWrite = byzantiumClient.set(key, workingValue);
+            TickCompletableFuture<SetResponse> byzantiumWorkingWrite = byzantiumClient.set(key, workingValue);
             assertEventually(cluster,() -> byzantiumWorkingWrite.isCompleted() && byzantiumWorkingWrite.getResult().success());
 
             // Phase 3: Reconnect Athens and verify both clients work again
@@ -82,15 +82,15 @@ public class ClientTargetingTest {
             System.out.println("=== Athens reconnected ===");
 
             byte[] finalValue = "both_clients_working".getBytes();
-            ListenableFuture<SetResponse> athensFinalWrite = athensClient.set(key, finalValue);
+            TickCompletableFuture<SetResponse> athensFinalWrite = athensClient.set(key, finalValue);
             assertEventually(cluster,() -> athensFinalWrite.isCompleted() && athensFinalWrite.getResult().success());
 
             // Verify consistency across all clients
-            ListenableFuture<GetResponse> athensRead = athensClient.get(key);
+            TickCompletableFuture<GetResponse> athensRead = athensClient.get(key);
             assertEventually(cluster,() -> athensRead.isCompleted() && athensRead.getResult().found()
                     && Arrays.equals(finalValue, athensRead.getResult().value()));
 
-            ListenableFuture<GetResponse> byzantiumRead = byzantiumClient.get(key);
+            TickCompletableFuture<GetResponse> byzantiumRead = byzantiumClient.get(key);
             assertEventually(cluster,(() -> byzantiumRead.isCompleted()
                     && byzantiumRead.getResult().found()
                     && Arrays.equals(finalValue, byzantiumRead.getResult().value())));

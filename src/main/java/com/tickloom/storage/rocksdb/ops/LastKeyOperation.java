@@ -1,6 +1,6 @@
 package com.tickloom.storage.rocksdb.ops;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.storage.rocksdb.RocksDbStorage;
 import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksIterator;
@@ -75,10 +75,10 @@ import org.rocksdb.RocksIterator;
  */
 public class LastKeyOperation extends PendingOperation {
     private final RocksDbStorage rocksDbStorage;
-    private final ListenableFuture<byte[]> future;
+    private final TickCompletableFuture<byte[]> future;
     private final byte[] keyUpperBound;
 
-    public LastKeyOperation(RocksDbStorage rocksDbStorage, ListenableFuture<byte[]> future, long completionTick, byte[] keyUpperBound) {
+    public LastKeyOperation(RocksDbStorage rocksDbStorage, TickCompletableFuture<byte[]> future, long completionTick, byte[] keyUpperBound) {
         super(completionTick);
         this.rocksDbStorage = rocksDbStorage;
         this.future = future;

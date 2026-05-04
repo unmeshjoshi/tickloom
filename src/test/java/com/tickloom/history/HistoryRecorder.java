@@ -1,9 +1,8 @@
 package com.tickloom.history;
 
 import com.tickloom.ProcessId;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 
-import java.util.List;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -26,10 +25,10 @@ import java.util.function.Supplier;
 public class HistoryRecorder<V> {
     History<V> history = new History<V>();
 
-    public <Response> ListenableFuture<Response> invoke(ProcessId process, final Op op,
-                                                        V invokedValue,
-                                                        Supplier<ListenableFuture<Response>> requestInvoker,
-                                                        Function<Response, V> valueFromMessage) {
+    public <Response> TickCompletableFuture<Response> invoke(ProcessId process, final Op op,
+                                                             V invokedValue,
+                                                             Supplier<TickCompletableFuture<Response>> requestInvoker,
+                                                             Function<Response, V> valueFromMessage) {
         history.invoke(process, op, invokedValue);
         return requestInvoker.get().whenComplete((resp, ex) -> {
                 if (ex == null) {

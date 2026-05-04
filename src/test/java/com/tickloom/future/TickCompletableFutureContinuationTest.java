@@ -62,7 +62,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *     }
  * }
  */
-public class ListenableFutureContinuationTest {
+public class TickCompletableFutureContinuationTest {
 
     // Step 1: whenComplete resumes the continuation with the result on success
     @Test
@@ -70,7 +70,7 @@ public class ListenableFutureContinuationTest {
         AtomicReference<String> resumed = new AtomicReference<>();
         Continuation<String> c = result -> resumed.set(result);
 
-        ListenableFuture<String> future = new ListenableFuture<>();
+        TickCompletableFuture<String> future = new TickCompletableFuture<>();
         future.whenComplete(c);
         future.complete("hello");
 
@@ -93,7 +93,7 @@ public class ListenableFutureContinuationTest {
             }
         };
 
-        ListenableFuture<String> future = new ListenableFuture<>();
+        TickCompletableFuture<String> future = new TickCompletableFuture<>();
         future.whenComplete(c);
         RuntimeException expected = new RuntimeException("boom");
         future.fail(expected);
@@ -107,7 +107,7 @@ public class ListenableFutureContinuationTest {
         AtomicReference<String> resumed = new AtomicReference<>();
         Continuation<String> c = result -> resumed.set(result);
 
-        ListenableFuture<String> future = new ListenableFuture<>();
+        TickCompletableFuture<String> future = new TickCompletableFuture<>();
         future.complete("already-done");
         future.whenComplete(c);
 
@@ -130,8 +130,8 @@ public class ListenableFutureContinuationTest {
     @Test
     public void continuationFlattensGetThenPutWorkflow() {
         // Simulate async storage with manually-controlled futures
-        ListenableFuture<String> getFuture = new ListenableFuture<>();
-        ListenableFuture<Boolean> putFuture = new ListenableFuture<>();
+        TickCompletableFuture<String> getFuture = new TickCompletableFuture<>();
+        TickCompletableFuture<Boolean> putFuture = new TickCompletableFuture<>();
 
         AtomicReference<String> finalResult = new AtomicReference<>();
         AtomicReference<Throwable> finalError = new AtomicReference<>();
@@ -151,8 +151,8 @@ public class ListenableFutureContinuationTest {
 
     @Test
     public void continuationHandlesErrorInFirstStep() {
-        ListenableFuture<String> getFuture = new ListenableFuture<>();
-        ListenableFuture<Boolean> putFuture = new ListenableFuture<>();
+        TickCompletableFuture<String> getFuture = new TickCompletableFuture<>();
+        TickCompletableFuture<Boolean> putFuture = new TickCompletableFuture<>();
 
         AtomicReference<String> finalResult = new AtomicReference<>();
         AtomicReference<Throwable> finalError = new AtomicReference<>();
@@ -169,8 +169,8 @@ public class ListenableFutureContinuationTest {
 
     @Test
     public void continuationSkipsPutWhenValueIsCurrent() {
-        ListenableFuture<String> getFuture = new ListenableFuture<>();
-        ListenableFuture<Boolean> putFuture = new ListenableFuture<>();
+        TickCompletableFuture<String> getFuture = new TickCompletableFuture<>();
+        TickCompletableFuture<Boolean> putFuture = new TickCompletableFuture<>();
 
         AtomicReference<String> finalResult = new AtomicReference<>();
         AtomicReference<Throwable> finalError = new AtomicReference<>();
@@ -200,13 +200,13 @@ public class ListenableFutureContinuationTest {
         private static final int PUT = 1;
 
         private int state = GET;
-        private final ListenableFuture<String> getFuture;
-        private final ListenableFuture<Boolean> putFuture;
+        private final TickCompletableFuture<String> getFuture;
+        private final TickCompletableFuture<Boolean> putFuture;
         private final AtomicReference<String> finalResult;
         private final AtomicReference<Throwable> finalError;
 
-        GetThenPutWorkflow(ListenableFuture<String> getFuture,
-                           ListenableFuture<Boolean> putFuture,
+        GetThenPutWorkflow(TickCompletableFuture<String> getFuture,
+                           TickCompletableFuture<Boolean> putFuture,
                            AtomicReference<String> finalResult,
                            AtomicReference<Throwable> finalError) {
             this.getFuture = getFuture;

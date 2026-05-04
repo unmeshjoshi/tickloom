@@ -1,6 +1,6 @@
 package com.tickloom;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.messaging.*;
 import com.tickloom.network.MessageCodec;
 import com.tickloom.network.PeerType;
@@ -139,7 +139,7 @@ public abstract class Process implements Tickable, AutoCloseable {
      */
     protected final void initialise() {
 
-        ListenableFuture<?> initFuture = onInit();
+        TickCompletableFuture<?> initFuture = onInit();
         // Don't mark as initialized if startup fails
         initFuture.whenComplete((result, error) -> {
             if (error == null) {
@@ -160,9 +160,9 @@ public abstract class Process implements Tickable, AutoCloseable {
      * Default implementation is a no-op that completes immediately.
      * Subclasses can override this method if they need initialization.
      */
-    protected ListenableFuture<?> onInit() {
+    protected TickCompletableFuture<?> onInit() {
         // Default no-op implementation - subclasses can override if needed
-        ListenableFuture<Void> initFuture = new ListenableFuture<>();
+        TickCompletableFuture<Void> initFuture = new TickCompletableFuture<>();
         initFuture.complete(null);
         return initFuture;
     }
@@ -196,7 +196,7 @@ public abstract class Process implements Tickable, AutoCloseable {
     /**
      * Persist state with automatic serialization.
      */
-    protected <T> ListenableFuture<Boolean> persist(String key, T stateObject) {
+    protected <T> TickCompletableFuture<Boolean> persist(String key, T stateObject) {
         byte[] keyBytes = key.getBytes();
         byte[] serializedState = messageCodec.encode(stateObject);
         return storage.put(keyBytes, serializedState);
@@ -206,7 +206,7 @@ public abstract class Process implements Tickable, AutoCloseable {
      * Persist state with success and failure handlers.
      */
     protected <T> void persist(String key, T stateObject, Runnable onSuccess, Runnable onFailure) {
-        ListenableFuture<Boolean> persistFuture = persist(key, stateObject);
+        TickCompletableFuture<Boolean> persistFuture = persist(key, stateObject);
 
         persistFuture.whenComplete((success, error) -> {
             if (error != null) {
@@ -233,11 +233,11 @@ public abstract class Process implements Tickable, AutoCloseable {
     /**
      * Load persisted state with automatic deserialization.
      */
-    protected <T> ListenableFuture<T> load(String key, Class<T> stateClass) {
+    protected <T> TickCompletableFuture<T> load(String key, Class<T> stateClass) {
         byte[] keyBytes = key.getBytes();
-        ListenableFuture<byte[]> loadFuture = storage.get(keyBytes);
+        TickCompletableFuture<byte[]> loadFuture = storage.get(keyBytes);
         
-        ListenableFuture<T> resultFuture = new ListenableFuture<>();
+        TickCompletableFuture<T> resultFuture = new TickCompletableFuture<>();
         loadFuture.whenComplete((loadedValue, error) -> {
             if (error != null) {
                 resultFuture.fail(error);

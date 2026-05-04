@@ -4,7 +4,7 @@ import clojure.lang.IPersistentVector;
 import com.tickloom.algorithms.replication.ClusterClient;
 import com.tickloom.algorithms.replication.quorum.QuorumKVScenarioRunner;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.history.History;
 import com.tickloom.history.HistoryRecorder;
 import com.tickloom.history.JepsenHistory;
@@ -124,7 +124,7 @@ public abstract class SimulationRunner {
         history.invoke(processId, op, JepsenHistory.tuple(key, value));
     }
 
-    protected abstract ListenableFuture issueRequest(ClusterClient client, Random clusterSeededRandom);
+    protected abstract TickCompletableFuture issueRequest(ClusterClient client, Random clusterSeededRandom);
 
     private void writeHistory(History history) {
         String buildDir = "build";

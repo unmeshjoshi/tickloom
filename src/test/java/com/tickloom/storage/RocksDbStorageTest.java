@@ -1,6 +1,6 @@
 package com.tickloom.storage;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.storage.rocksdb.RocksDbStorage;
 import com.tickloom.storage.rocksdb.ops.LastKeyOperation;
 import org.junit.jupiter.api.AfterEach;
@@ -64,11 +64,11 @@ class RocksDbStorageTest {
         byte[] key = "test:key".getBytes();
         byte[] value = "test:value".getBytes();
 
-        ListenableFuture<Boolean> setFuture = storage.put(key, value);
+        TickCompletableFuture<Boolean> setFuture = storage.put(key, value);
         storage.tick();
         assertPutCompletesSuccessfully(setFuture);
 
-        ListenableFuture<byte[]> getFuture = storage.get(key);
+        TickCompletableFuture<byte[]> getFuture = storage.get(key);
         storage.tick();
         assertTrue(getFuture.isCompleted());
         assertArrayEquals(value, getFuture.getResult());
@@ -79,7 +79,7 @@ class RocksDbStorageTest {
     void shouldReturnNullForNonExistentKeys() {
         byte[] key = "nonexistent:key".getBytes();
 
-        ListenableFuture<byte[]> getFuture = storage.get(key);
+        TickCompletableFuture<byte[]> getFuture = storage.get(key);
         storage.tick();
         assertTrue(getFuture.isCompleted());
         assertNull(getFuture.getResult());
@@ -94,22 +94,22 @@ class RocksDbStorageTest {
         byte[] value = "options:value".getBytes();
 
         // Test with default options
-        ListenableFuture<Boolean> setFuture1 = storage.put(key, value);
+        TickCompletableFuture<Boolean> setFuture1 = storage.put(key, value);
         storage.tick();
         assertPutCompletesSuccessfully(setFuture1);
 
         // Test with sync options
-        ListenableFuture<Boolean> setFuture2 = storage.put(key, value, Storage.WriteOptions.SYNC);
+        TickCompletableFuture<Boolean> setFuture2 = storage.put(key, value, Storage.WriteOptions.SYNC);
         storage.tick();
         assertPutCompletesSuccessfully(setFuture2);
 
         // Test with fast options
-        ListenableFuture<Boolean> setFuture3 = storage.put(key, value, Storage.WriteOptions.FAST);
+        TickCompletableFuture<Boolean> setFuture3 = storage.put(key, value, Storage.WriteOptions.FAST);
         storage.tick();
         assertPutCompletesSuccessfully(setFuture3);
     }
 
-    private static void assertPutCompletesSuccessfully(ListenableFuture<Boolean> future) {
+    private static void assertPutCompletesSuccessfully(TickCompletableFuture<Boolean> future) {
         assertTrue(future.isCompleted());
         assertTrue(future.getResult());
     }
@@ -124,22 +124,22 @@ class RocksDbStorageTest {
                 .put("batch:key2", "batch:value2")
                 .put("batch:key3", "batch:value3");
 
-        ListenableFuture<Boolean> batchFuture = storage.put(writeBatch);
+        TickCompletableFuture<Boolean> batchFuture = storage.put(writeBatch);
         storage.tick();
         assertPutCompletesSuccessfully(batchFuture);
 
         // Verify the operations were applied
-        ListenableFuture<byte[]> getFuture1 = storage.get("batch:key1".getBytes());
+        TickCompletableFuture<byte[]> getFuture1 = storage.get("batch:key1".getBytes());
         storage.tick();
         assertTrue(getFuture1.isCompleted());
         assertArrayEquals("batch:value1".getBytes(), getFuture1.getResult());
 
-        ListenableFuture<byte[]> getFuture2 = storage.get("batch:key2".getBytes());
+        TickCompletableFuture<byte[]> getFuture2 = storage.get("batch:key2".getBytes());
         storage.tick();
         assertTrue(getFuture2.isCompleted());
         assertArrayEquals("batch:value2".getBytes(), getFuture2.getResult());
 
-        ListenableFuture<byte[]> getFuture3 = storage.get("batch:key3".getBytes());
+        TickCompletableFuture<byte[]> getFuture3 = storage.get("batch:key3".getBytes());
         storage.tick();
         assertTrue(getFuture3.isCompleted());
         assertArrayEquals("batch:value3".getBytes(), getFuture3.getResult());
@@ -158,7 +158,7 @@ class RocksDbStorageTest {
         storage.tick();
 
         // Query range
-        ListenableFuture<Map<byte[], byte[]>> rangeFuture = storage.readRange(
+        TickCompletableFuture<Map<byte[], byte[]>> rangeFuture = storage.readRange(
                 "range:key1".getBytes(), "range:key3".getBytes());
         storage.tick();
         assertTrue(rangeFuture.isCompleted());
@@ -172,7 +172,7 @@ class RocksDbStorageTest {
     @Test
     @DisplayName("Should handle empty range queries")
     void shouldHandleEmptyReadRangeQueries() {
-        ListenableFuture<Map<byte[], byte[]>> rangeFuture = storage.readRange(
+        TickCompletableFuture<Map<byte[], byte[]>> rangeFuture = storage.readRange(
                 "nonexistent:start".getBytes(), "nonexistent:end".getBytes());
         storage.tick();
         assertTrue(rangeFuture.isCompleted());
@@ -197,7 +197,7 @@ class RocksDbStorageTest {
         storage.tick();
 
         byte[] keyUpperBound = "last:z".getBytes();
-        ListenableFuture<byte[]> lastKeyFuture = storage.lowerKey(keyUpperBound);
+        TickCompletableFuture<byte[]> lastKeyFuture = storage.lowerKey(keyUpperBound);
         storage.tick();
         assertTrue(lastKeyFuture.isCompleted());
 
@@ -208,7 +208,7 @@ class RocksDbStorageTest {
     @Test
     @DisplayName("Should perform sync operations")
     void shouldPerformSyncOperations() {
-        ListenableFuture<Void> syncFuture = storage.sync();
+        TickCompletableFuture<Void> syncFuture = storage.sync();
         storage.tick();
         assertTrue(syncFuture.isCompleted());
     }
@@ -231,11 +231,11 @@ class RocksDbStorageTest {
         byte[] emptyKey = new byte[0];
         byte[] emptyValue = new byte[0];
 
-        ListenableFuture<Boolean> setFuture = storage.put(emptyKey, emptyValue);
+        TickCompletableFuture<Boolean> setFuture = storage.put(emptyKey, emptyValue);
         storage.tick();
         assertPutCompletesSuccessfully(setFuture);
 
-        ListenableFuture<byte[]> getFuture = storage.get(emptyKey);
+        TickCompletableFuture<byte[]> getFuture = storage.get(emptyKey);
         storage.tick();
         assertTrue(getFuture.isCompleted());
         assertArrayEquals(emptyValue, getFuture.getResult());
@@ -246,11 +246,11 @@ class RocksDbStorageTest {
         byte[] key = "rftlg:key".getBytes();
         byte[] value = "test:value".getBytes();
 
-        ListenableFuture<Boolean> setFuture = storage.put(key, value);
+        TickCompletableFuture<Boolean> setFuture = storage.put(key, value);
         storage.tick();
         assertPutCompletesSuccessfully(setFuture);
 
-        ListenableFuture<byte[]> f = new ListenableFuture();
+        TickCompletableFuture<byte[]> f = new TickCompletableFuture();
         var op = new LastKeyOperation(this.storage, f, 1, ("rftlg:" + "z").getBytes(StandardCharsets.UTF_8));
         op.execute();
         assertTrue(f.isCompleted());
@@ -263,10 +263,10 @@ class RocksDbStorageTest {
         while(!multiLog.isInitialised) {
             storage.tick();
         }
-        ListenableFuture<Boolean> log1 = multiLog.append("log1", "value1".getBytes());
-        ListenableFuture<Boolean> log2 = multiLog.append("log1", "value2".getBytes());
-        ListenableFuture<Boolean> log3 = multiLog.append("log2", "value3".getBytes());
-        ListenableFuture<Boolean> log4 = multiLog.append("log2", "value4".getBytes());
+        TickCompletableFuture<Boolean> log1 = multiLog.append("log1", "value1".getBytes());
+        TickCompletableFuture<Boolean> log2 = multiLog.append("log1", "value2".getBytes());
+        TickCompletableFuture<Boolean> log3 = multiLog.append("log2", "value3".getBytes());
+        TickCompletableFuture<Boolean> log4 = multiLog.append("log2", "value4".getBytes());
 
         storage.tick();
         assertPutCompletesSuccessfully(log1);
@@ -274,7 +274,7 @@ class RocksDbStorageTest {
         assertPutCompletesSuccessfully(log3);
         assertPutCompletesSuccessfully(log4);
 
-        ListenableFuture<byte[]> lastKeyF = storage.lowerKey(multiLog.createLogKey("log2", Long.MAX_VALUE));
+        TickCompletableFuture<byte[]> lastKeyF = storage.lowerKey(multiLog.createLogKey("log2", Long.MAX_VALUE));
         storage.tick();
         assertTrue(lastKeyF.isCompleted());
         assertEquals(2, multiLog.getIndex(lastKeyF.getResult()));
@@ -309,15 +309,15 @@ class RocksDbStorageTest {
         }
 
         // Test multiple appends to the same log
-        ListenableFuture<Boolean> append1 = multiLog.append("log1", "value1".getBytes());
-        ListenableFuture<Boolean> append2 = multiLog.append("log1", "value2".getBytes());
+        TickCompletableFuture<Boolean> append1 = multiLog.append("log1", "value1".getBytes());
+        TickCompletableFuture<Boolean> append2 = multiLog.append("log1", "value2".getBytes());
 
         storage.tick();
         assertTrue(append1.getResult(), "First append should succeed");
         assertTrue(append2.getResult(), "Second append should succeed");
 
         // Verify the order of appends
-        ListenableFuture<byte[]> lastKey = storage.lowerKey(multiLog.createLogKey("log1", Long.MAX_VALUE));
+        TickCompletableFuture<byte[]> lastKey = storage.lowerKey(multiLog.createLogKey("log1", Long.MAX_VALUE));
         storage.tick();
         assertEquals(2, multiLog.getIndex(lastKey.getResult()), "Last index should be 2");
     }
@@ -335,8 +335,8 @@ class RocksDbStorageTest {
         storage.tick();
 
         // Verify logs are independent
-        ListenableFuture<byte[]> log1Key = storage.lowerKey(multiLog.createLogKey("log1", Long.MAX_VALUE));
-        ListenableFuture<byte[]> log2Key = storage.lowerKey(multiLog.createLogKey("log2", Long.MAX_VALUE));
+        TickCompletableFuture<byte[]> log1Key = storage.lowerKey(multiLog.createLogKey("log1", Long.MAX_VALUE));
+        TickCompletableFuture<byte[]> log2Key = storage.lowerKey(multiLog.createLogKey("log2", Long.MAX_VALUE));
         storage.tick();
 
         assertEquals(1, multiLog.getIndex(log1Key.getResult()), "log1 index should be 1");
@@ -384,7 +384,7 @@ class RocksDbStorageTest {
         }
 
         private void fetchLastLogIndex(String logId, List<String> allLogIds) {
-            ListenableFuture<byte[]> lastIndexFuture = storage.lowerKey(createLogKey(logId, Long.MAX_VALUE));
+            TickCompletableFuture<byte[]> lastIndexFuture = storage.lowerKey(createLogKey(logId, Long.MAX_VALUE));
             lastIndexFuture.whenComplete((result, error) -> handleIndexResult(logId, allLogIds, result, error));
         }
 
@@ -408,7 +408,7 @@ class RocksDbStorageTest {
             }
         }
 
-        public ListenableFuture<Boolean> append(String logId, byte[] entry) {
+        public TickCompletableFuture<Boolean> append(String logId, byte[] entry) {
             if (!isInitialised) {
                 throw new IllegalStateException("The LogStore is not initialised");
             }

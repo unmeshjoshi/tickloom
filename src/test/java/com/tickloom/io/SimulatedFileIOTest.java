@@ -1,6 +1,6 @@
 package com.tickloom.io;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -21,12 +21,12 @@ class SimulatedFileIOTest {
     void writeAndReadBack() {
         byte[] data = "hello".getBytes();
 
-        ListenableFuture<Integer> writeFuture = fileIO.write(data, 0);
+        TickCompletableFuture<Integer> writeFuture = fileIO.write(data, 0);
         fileIO.tick();
         assertTrue(writeFuture.isCompleted());
         assertEquals(5, writeFuture.getResult());
 
-        ListenableFuture<byte[]> readFuture = fileIO.read(0, 5);
+        TickCompletableFuture<byte[]> readFuture = fileIO.read(0, 5);
         fileIO.tick();
         assertTrue(readFuture.isCompleted());
         assertArrayEquals(data, readFuture.getResult());
@@ -40,7 +40,7 @@ class SimulatedFileIOTest {
         fileIO.write("bb".getBytes(), 2);
         fileIO.tick();
 
-        ListenableFuture<byte[]> readFuture = fileIO.read(0, 4);
+        TickCompletableFuture<byte[]> readFuture = fileIO.read(0, 4);
         fileIO.tick();
 
         assertArrayEquals("aabb".getBytes(), readFuture.getResult());
@@ -62,7 +62,7 @@ class SimulatedFileIOTest {
         fileIO.write("abc".getBytes(), 0);
         fileIO.tick();
 
-        ListenableFuture<byte[]> readFuture = fileIO.read(0, 100);
+        TickCompletableFuture<byte[]> readFuture = fileIO.read(0, 100);
         fileIO.tick();
 
         // should return only what's available
@@ -82,14 +82,14 @@ class SimulatedFileIOTest {
         fileIO.tick();
 
         // verify overwrite visible before crash
-        ListenableFuture<byte[]> readBeforeCrash = fileIO.read(0, 6);
+        TickCompletableFuture<byte[]> readBeforeCrash = fileIO.read(0, 6);
         fileIO.tick();
         assertArrayEquals("after!".getBytes(), readBeforeCrash.getResult());
 
         // crash — unsynced write lost
         fileIO.crash();
 
-        ListenableFuture<byte[]> readAfterCrash = fileIO.read(0, 6);
+        TickCompletableFuture<byte[]> readAfterCrash = fileIO.read(0, 6);
         fileIO.tick();
         assertArrayEquals("before".getBytes(), readAfterCrash.getResult());
     }
@@ -104,7 +104,7 @@ class SimulatedFileIOTest {
 
         fileIO.crash();
 
-        ListenableFuture<byte[]> readFuture = fileIO.read(0, 7);
+        TickCompletableFuture<byte[]> readFuture = fileIO.read(0, 7);
         fileIO.tick();
         assertArrayEquals("durable".getBytes(), readFuture.getResult());
     }
@@ -113,7 +113,7 @@ class SimulatedFileIOTest {
     void delayedCompletion() {
         SimulatedFileIO delayed = new SimulatedFileIO("delayed.dat", new Random(42), 2, 1, 3, 0.0);
 
-        ListenableFuture<Integer> writeFuture = delayed.write("test".getBytes(), 0);
+        TickCompletableFuture<Integer> writeFuture = delayed.write("test".getBytes(), 0);
 
         delayed.tick(); // tick 1
         assertFalse(writeFuture.isCompleted());
@@ -121,7 +121,7 @@ class SimulatedFileIOTest {
         delayed.tick(); // tick 2 — write completes
         assertTrue(writeFuture.isCompleted());
 
-        ListenableFuture<byte[]> readFuture = delayed.read(0, 4);
+        TickCompletableFuture<byte[]> readFuture = delayed.read(0, 4);
 
         delayed.tick(); // tick 3 — read completes (1 tick delay)
         assertTrue(readFuture.isCompleted());
@@ -134,13 +134,13 @@ class SimulatedFileIOTest {
         fileIO.tick();
         assertEquals(6, fileIO.size());
 
-        ListenableFuture<Void> truncateFuture = fileIO.truncate(3);
+        TickCompletableFuture<Void> truncateFuture = fileIO.truncate(3);
         fileIO.tick();
 
         assertTrue(truncateFuture.isCompleted());
         assertEquals(3, fileIO.size());
 
-        ListenableFuture<byte[]> readFuture = fileIO.read(0, 3);
+        TickCompletableFuture<byte[]> readFuture = fileIO.read(0, 3);
         fileIO.tick();
         assertArrayEquals("abc".getBytes(), readFuture.getResult());
     }
@@ -159,7 +159,7 @@ class SimulatedFileIOTest {
 
         // size should revert to durable state
         assertEquals(6, fileIO.size());
-        ListenableFuture<byte[]> readFuture = fileIO.read(0, 6);
+        TickCompletableFuture<byte[]> readFuture = fileIO.read(0, 6);
         fileIO.tick();
         assertArrayEquals("abcdef".getBytes(), readFuture.getResult());
     }
@@ -172,7 +172,7 @@ class SimulatedFileIOTest {
         fileIO.write("second".getBytes(), 0);
         fileIO.tick();
 
-        ListenableFuture<byte[]> readFuture = fileIO.read(0, 6);
+        TickCompletableFuture<byte[]> readFuture = fileIO.read(0, 6);
         fileIO.tick();
         assertArrayEquals("second".getBytes(), readFuture.getResult());
     }

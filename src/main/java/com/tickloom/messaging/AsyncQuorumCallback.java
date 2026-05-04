@@ -1,13 +1,12 @@
 package com.tickloom.messaging;
 
 import com.tickloom.ProcessId;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
@@ -21,7 +20,7 @@ public class AsyncQuorumCallback<T> implements RequestCallback<T> {
     private final int requiredQuorum;
     private final List<Exception> exceptions = new ArrayList<>();
     private final Map<ProcessId, T> responses = new HashMap<>();
-    private final ListenableFuture<Map<ProcessId, T>> quorumFuture = new ListenableFuture<>();
+    private final TickCompletableFuture<Map<ProcessId, T>> quorumFuture = new TickCompletableFuture<>();
     private final Predicate<T> successCondition;
     private volatile boolean completed = false;
 
@@ -105,7 +104,7 @@ public class AsyncQuorumCallback<T> implements RequestCallback<T> {
      * 
      * @return the quorum future
      */
-    public ListenableFuture<Map<ProcessId, T>> getQuorumFuture() {
+    public TickCompletableFuture<Map<ProcessId, T>> getQuorumFuture() {
         return quorumFuture;
     }
 }

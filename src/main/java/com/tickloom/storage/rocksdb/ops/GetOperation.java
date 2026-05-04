@@ -1,15 +1,15 @@
 package com.tickloom.storage.rocksdb.ops;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.storage.rocksdb.RocksDbStorage;
 import org.rocksdb.RocksDBException;
 
 public class GetOperation extends PendingOperation {
     private final RocksDbStorage rocksDbStorage;
     private final byte[] key;
-    private final ListenableFuture<byte[]> future;
+    private final TickCompletableFuture<byte[]> future;
 
-    public GetOperation(RocksDbStorage rocksDbStorage, byte[] key, ListenableFuture<byte[]> future, long completionTick) {
+    public GetOperation(RocksDbStorage rocksDbStorage, byte[] key, TickCompletableFuture<byte[]> future, long completionTick) {
         super(completionTick);
         this.rocksDbStorage = rocksDbStorage;
         this.key = key;

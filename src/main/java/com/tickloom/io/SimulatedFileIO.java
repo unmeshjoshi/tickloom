@@ -1,6 +1,6 @@
 package com.tickloom.io;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 
 import java.util.Arrays;
 import java.util.PriorityQueue;
@@ -49,29 +49,29 @@ public class SimulatedFileIO implements FileIO {
     }
 
     @Override
-    public ListenableFuture<Integer> write(byte[] data, long offset) {
-        ListenableFuture<Integer> future = new ListenableFuture<>();
+    public TickCompletableFuture<Integer> write(byte[] data, long offset) {
+        TickCompletableFuture<Integer> future = new TickCompletableFuture<>();
         pendingOps.offer(new WriteOp(future, completionTick(writeDelayTicks), data, offset));
         return future;
     }
 
     @Override
-    public ListenableFuture<byte[]> read(long offset, int length) {
-        ListenableFuture<byte[]> future = new ListenableFuture<>();
+    public TickCompletableFuture<byte[]> read(long offset, int length) {
+        TickCompletableFuture<byte[]> future = new TickCompletableFuture<>();
         pendingOps.offer(new ReadOp(future, completionTick(readDelayTicks), offset, length));
         return future;
     }
 
     @Override
-    public ListenableFuture<Void> sync() {
-        ListenableFuture<Void> future = new ListenableFuture<>();
+    public TickCompletableFuture<Void> sync() {
+        TickCompletableFuture<Void> future = new TickCompletableFuture<>();
         pendingOps.offer(new SyncOp(future, completionTick(syncDelayTicks)));
         return future;
     }
 
     @Override
-    public ListenableFuture<Void> truncate(long size) {
-        ListenableFuture<Void> future = new ListenableFuture<>();
+    public TickCompletableFuture<Void> truncate(long size) {
+        TickCompletableFuture<Void> future = new TickCompletableFuture<>();
         pendingOps.offer(new TruncateOp(future, completionTick(writeDelayTicks), size));
         return future;
     }
@@ -138,11 +138,11 @@ public class SimulatedFileIO implements FileIO {
     }
 
     private class WriteOp extends PendingOp {
-        final ListenableFuture<Integer> future;
+        final TickCompletableFuture<Integer> future;
         final byte[] data;
         final long offset;
 
-        WriteOp(ListenableFuture<Integer> future, long completionTick, byte[] data, long offset) {
+        WriteOp(TickCompletableFuture<Integer> future, long completionTick, byte[] data, long offset) {
             super(completionTick);
             this.future = future;
             this.data = data;
@@ -163,11 +163,11 @@ public class SimulatedFileIO implements FileIO {
     }
 
     private class ReadOp extends PendingOp {
-        final ListenableFuture<byte[]> future;
+        final TickCompletableFuture<byte[]> future;
         final long offset;
         final int length;
 
-        ReadOp(ListenableFuture<byte[]> future, long completionTick, long offset, int length) {
+        ReadOp(TickCompletableFuture<byte[]> future, long completionTick, long offset, int length) {
             super(completionTick);
             this.future = future;
             this.offset = offset;
@@ -191,10 +191,10 @@ public class SimulatedFileIO implements FileIO {
     }
 
     private class TruncateOp extends PendingOp {
-        final ListenableFuture<Void> future;
+        final TickCompletableFuture<Void> future;
         final long size;
 
-        TruncateOp(ListenableFuture<Void> future, long completionTick, long size) {
+        TruncateOp(TickCompletableFuture<Void> future, long completionTick, long size) {
             super(completionTick);
             this.future = future;
             this.size = size;
@@ -213,9 +213,9 @@ public class SimulatedFileIO implements FileIO {
     }
 
     private class SyncOp extends PendingOp {
-        final ListenableFuture<Void> future;
+        final TickCompletableFuture<Void> future;
 
-        SyncOp(ListenableFuture<Void> future, long completionTick) {
+        SyncOp(TickCompletableFuture<Void> future, long completionTick) {
             super(completionTick);
             this.future = future;
         }

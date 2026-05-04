@@ -1,6 +1,6 @@
 package com.tickloom.io;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -21,7 +21,7 @@ class LogStoreTest {
 
     @Test
     void appendAndRead() {
-        ListenableFuture<Long> appendFuture = logStore.append("hello".getBytes());
+        TickCompletableFuture<Long> appendFuture = logStore.append("hello".getBytes());
         fileIO.tick();
 
         assertTrue(appendFuture.isCompleted());

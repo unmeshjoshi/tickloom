@@ -4,7 +4,7 @@ import com.tickloom.history.JepsenHistory;
 import com.tickloom.history.Op;
 import com.tickloom.SimulationRunner;
 import com.tickloom.algorithms.replication.ClusterClient;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 
 import java.io.IOException;
 import java.util.Random;
@@ -29,7 +29,7 @@ public class QuorumKVScenarioRunner extends SimulationRunner {
     //and once we get a response, we need to be able to extract the value from that response.
     //Historyrecorder handles the values to be recorded in case of failures and timeouts.
     @Override
-    protected ListenableFuture issueRequest(ClusterClient client, Random clusterSeededRandom) {
+    protected TickCompletableFuture issueRequest(ClusterClient client, Random clusterSeededRandom) {
         String key = randomKey();
         String value = randomValue();
         QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;

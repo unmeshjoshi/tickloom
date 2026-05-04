@@ -1,6 +1,6 @@
 package com.tickloom.storage;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 
 import java.util.*;
 
@@ -67,12 +67,12 @@ public class SimulatedStorage implements Storage {
     // ========== Basic Operations ==========
     
     @Override
-    public ListenableFuture<byte[]> get(byte[] key) {
+    public TickCompletableFuture<byte[]> get(byte[] key) {
         if (key == null) {
             throw new IllegalArgumentException("Key cannot be null");
         }
         
-        ListenableFuture<byte[]> future = new ListenableFuture<>();
+        TickCompletableFuture<byte[]> future = new TickCompletableFuture<>();
         
         long completionTick = currentTick + defaultDelayTicks;
         pendingOperations.offer(new GetOperation(key, future, completionTick));
@@ -81,12 +81,12 @@ public class SimulatedStorage implements Storage {
     }
     
     @Override
-    public ListenableFuture<Boolean> put(byte[] key, byte[] value) {
+    public TickCompletableFuture<Boolean> put(byte[] key, byte[] value) {
         return put(key, value, WriteOptions.DEFAULT);
     }
     
     @Override
-    public ListenableFuture<Boolean> put(byte[] key, byte[] value, WriteOptions options) {
+    public TickCompletableFuture<Boolean> put(byte[] key, byte[] value, WriteOptions options) {
         if (key == null) {
             throw new IllegalArgumentException("Key cannot be null");
         }
@@ -97,7 +97,7 @@ public class SimulatedStorage implements Storage {
             throw new IllegalArgumentException("WriteOptions cannot be null");
         }
         
-        ListenableFuture<Boolean> future = new ListenableFuture<>();
+        TickCompletableFuture<Boolean> future = new TickCompletableFuture<>();
         
         long completionTick = currentTick + defaultDelayTicks;
         pendingOperations.offer(new SetOperation(key, value, future, completionTick, options));
@@ -108,12 +108,12 @@ public class SimulatedStorage implements Storage {
     // ========== Advanced Operations ==========
     
     @Override
-    public ListenableFuture<Boolean> put(WriteBatch writeBatch) {
+    public TickCompletableFuture<Boolean> put(WriteBatch writeBatch) {
         return put(writeBatch, WriteOptions.DEFAULT);
     }
     
     @Override
-    public ListenableFuture<Boolean> put(WriteBatch writeBatch, WriteOptions options) {
+    public TickCompletableFuture<Boolean> put(WriteBatch writeBatch, WriteOptions options) {
         if (writeBatch == null) {
             throw new IllegalArgumentException("WriteBatch cannot be null");
         }
@@ -124,7 +124,7 @@ public class SimulatedStorage implements Storage {
             throw new IllegalArgumentException("WriteOptions cannot be null");
         }
         
-        ListenableFuture<Boolean> future = new ListenableFuture<>();
+        TickCompletableFuture<Boolean> future = new TickCompletableFuture<>();
         
         long completionTick = currentTick + defaultDelayTicks;
         pendingOperations.offer(new BatchWriteOperation(writeBatch, future, completionTick, options));
@@ -133,7 +133,7 @@ public class SimulatedStorage implements Storage {
     }
     
     @Override
-    public ListenableFuture<Map<byte[], byte[]>> readRange(byte[] startKey, byte[] endKey) {
+    public TickCompletableFuture<Map<byte[], byte[]>> readRange(byte[] startKey, byte[] endKey) {
         if (startKey == null) {
             throw new IllegalArgumentException("Start key cannot be null");
         }
@@ -141,7 +141,7 @@ public class SimulatedStorage implements Storage {
             throw new IllegalArgumentException("End key cannot be null");
         }
         
-        ListenableFuture<Map<byte[], byte[]>> future = new ListenableFuture<>();
+        TickCompletableFuture<Map<byte[], byte[]>> future = new TickCompletableFuture<>();
         
         long completionTick = currentTick + defaultDelayTicks;
         pendingOperations.offer(new RangeOperation(startKey, endKey, future, completionTick));
@@ -150,8 +150,8 @@ public class SimulatedStorage implements Storage {
     }
     
     @Override
-    public ListenableFuture<byte[]> lowerKey(byte[] keyUpperBound) {
-        ListenableFuture<byte[]> future = new ListenableFuture<>();
+    public TickCompletableFuture<byte[]> lowerKey(byte[] keyUpperBound) {
+        TickCompletableFuture<byte[]> future = new TickCompletableFuture<>();
         
         long completionTick = currentTick + defaultDelayTicks;
         pendingOperations.offer(new LastKeyOperation(keyUpperBound, future, completionTick));
@@ -160,8 +160,8 @@ public class SimulatedStorage implements Storage {
     }
     
     @Override
-    public ListenableFuture<Void> sync() {
-        ListenableFuture<Void> future = new ListenableFuture<>();
+    public TickCompletableFuture<Void> sync() {
+        TickCompletableFuture<Void> future = new TickCompletableFuture<>();
         
         long completionTick = currentTick + defaultDelayTicks;
         pendingOperations.offer(new SyncOperation(future, completionTick));
@@ -218,9 +218,9 @@ public class SimulatedStorage implements Storage {
     
     private static class GetOperation extends PendingOperation {
         private final byte[] key;
-        private final ListenableFuture<byte[]> future;
+        private final TickCompletableFuture<byte[]> future;
         
-        GetOperation(byte[] key, ListenableFuture<byte[]> future, long completionTick) {
+        GetOperation(byte[] key, TickCompletableFuture<byte[]> future, long completionTick) {
             super(completionTick);
             this.key = key;
             this.future = future;
@@ -246,9 +246,9 @@ public class SimulatedStorage implements Storage {
     private static class SetOperation extends PendingOperation {
         private final byte[] key;
         private final byte[] value;
-        private final ListenableFuture<Boolean> future;
+        private final TickCompletableFuture<Boolean> future;
         
-        SetOperation(byte[] key, byte[] value, ListenableFuture<Boolean> future, 
+        SetOperation(byte[] key, byte[] value, TickCompletableFuture<Boolean> future,
                     long completionTick, WriteOptions options) {
             super(completionTick);
             this.key = key;
@@ -276,9 +276,9 @@ public class SimulatedStorage implements Storage {
     
     private static class BatchWriteOperation extends PendingOperation {
         private final WriteBatch writeBatch;
-        private final ListenableFuture<Boolean> future;
+        private final TickCompletableFuture<Boolean> future;
         
-        BatchWriteOperation(WriteBatch writeBatch, ListenableFuture<Boolean> future, 
+        BatchWriteOperation(WriteBatch writeBatch, TickCompletableFuture<Boolean> future,
                       long completionTick, WriteOptions options) {
             super(completionTick);
             this.writeBatch = writeBatch;
@@ -319,9 +319,9 @@ public class SimulatedStorage implements Storage {
     private static class RangeOperation extends PendingOperation {
         private final byte[] startKey;
         private final byte[] endKey;
-        private final ListenableFuture<Map<byte[], byte[]>> future;
+        private final TickCompletableFuture<Map<byte[], byte[]>> future;
         
-        RangeOperation(byte[] startKey, byte[] endKey, ListenableFuture<Map<byte[], byte[]>> future, 
+        RangeOperation(byte[] startKey, byte[] endKey, TickCompletableFuture<Map<byte[], byte[]>> future,
                      long completionTick) {
             super(completionTick);
             this.startKey = startKey;
@@ -354,9 +354,9 @@ public class SimulatedStorage implements Storage {
     
     private static class KeysWithPrefixOperation extends PendingOperation {
         private final byte[] prefix;
-        private final ListenableFuture<List<byte[]>> future;
+        private final TickCompletableFuture<List<byte[]>> future;
         
-        KeysWithPrefixOperation(byte[] prefix, ListenableFuture<List<byte[]>> future, long completionTick) {
+        KeysWithPrefixOperation(byte[] prefix, TickCompletableFuture<List<byte[]>> future, long completionTick) {
             super(completionTick);
             this.prefix = prefix;
             this.future = future;
@@ -408,9 +408,9 @@ public class SimulatedStorage implements Storage {
     
     private static class LastKeyOperation extends PendingOperation {
         private final byte[] keyUpperBound;
-        private final ListenableFuture<byte[]> future;
+        private final TickCompletableFuture<byte[]> future;
         
-        LastKeyOperation(byte[] keyUpperBound, ListenableFuture<byte[]> future, long completionTick) {
+        LastKeyOperation(byte[] keyUpperBound, TickCompletableFuture<byte[]> future, long completionTick) {
             super(completionTick);
             this.keyUpperBound = keyUpperBound;
             this.future = future;
@@ -433,9 +433,9 @@ public class SimulatedStorage implements Storage {
     }
     
     private static class SyncOperation extends PendingOperation {
-        private final ListenableFuture<Void> future;
+        private final TickCompletableFuture<Void> future;
         
-        SyncOperation(ListenableFuture<Void> future, long completionTick) {
+        SyncOperation(TickCompletableFuture<Void> future, long completionTick) {
             super(completionTick);
             this.future = future;
         }

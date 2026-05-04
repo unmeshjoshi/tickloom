@@ -2,7 +2,7 @@ package com.tickloom.algorithms.replication.quorum;
 
 import com.tickloom.FaultInjectingSimulationRunner;
 import com.tickloom.algorithms.replication.ClusterClient;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.history.JepsenHistory;
 import com.tickloom.history.Op;
 
@@ -22,7 +22,7 @@ public class FaultInjectingQuorumKVScenarioRunner extends FaultInjectingSimulati
     }
 
     @Override
-    protected ListenableFuture issueRequest(ClusterClient client, Random clusterSeededRandom) {
+    protected TickCompletableFuture issueRequest(ClusterClient client, Random clusterSeededRandom) {
         String key = randomKey();
         String value = randomValue();
         QuorumReplicaClient quorumReplicaClient = (QuorumReplicaClient) client;

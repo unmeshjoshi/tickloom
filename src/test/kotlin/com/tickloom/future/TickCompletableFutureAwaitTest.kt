@@ -22,7 +22,7 @@ import kotlin.coroutines.resume
  * With await():
  *   val responses = quorumCallback.getQuorumFuture().await()
  */
-class ListenableFutureAwaitTest {
+class TickCompletableFutureAwaitTest {
 
     /** Helper to run a suspend block synchronously (like launchCoordinator). */
     private fun runSuspend(block: suspend () -> Unit) {
@@ -40,7 +40,7 @@ class ListenableFutureAwaitTest {
 
     @Test
     fun `await resumes with result when future completes`() {
-        val future = ListenableFuture<String>()
+        val future = TickCompletableFuture<String>()
         var result: String? = null
 
         runSuspend {
@@ -50,7 +50,7 @@ class ListenableFutureAwaitTest {
         }
 
         // Better approach: complete before await
-        val future2 = ListenableFuture<String>()
+        val future2 = TickCompletableFuture<String>()
         future2.complete("hello")
 
         runSuspend {
@@ -62,7 +62,7 @@ class ListenableFutureAwaitTest {
 
     @Test
     fun `await throws when future fails`() {
-        val future = ListenableFuture<String>()
+        val future = TickCompletableFuture<String>()
         future.fail(RuntimeException("boom"))
 
         var caught: Throwable? = null
@@ -80,7 +80,7 @@ class ListenableFutureAwaitTest {
 
     @Test
     fun `await suspends and resumes when future completes later`() {
-        val future = ListenableFuture<String>()
+        val future = TickCompletableFuture<String>()
         var result: String? = null
         var suspended = false
 
@@ -105,7 +105,7 @@ class ListenableFutureAwaitTest {
 
     @Test
     fun `await suspends and resumes with error when future fails later`() {
-        val future = ListenableFuture<String>()
+        val future = TickCompletableFuture<String>()
         var caught: Throwable? = null
 
         val completion = object : kotlin.coroutines.Continuation<Unit> {
@@ -129,8 +129,8 @@ class ListenableFutureAwaitTest {
 
     @Test
     fun `await works in sequential chain`() {
-        val future1 = ListenableFuture<String>()
-        val future2 = ListenableFuture<Int>()
+        val future1 = TickCompletableFuture<String>()
+        val future2 = TickCompletableFuture<Int>()
         var finalResult: String? = null
 
         val completion = object : kotlin.coroutines.Continuation<Unit> {

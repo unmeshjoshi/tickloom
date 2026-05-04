@@ -1,6 +1,6 @@
 package com.tickloom.storage;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,8 +33,8 @@ class StorageExampleTest {
         byte[] key1 = "user:123".getBytes();
         byte[] value1 = "John Doe".getBytes();
         
-        ListenableFuture<Boolean> setFuture = storage.put(key1, value1);
-        ListenableFuture<byte[]> getFuture = storage.get(key1);
+        TickCompletableFuture<Boolean> setFuture = storage.put(key1, value1);
+        TickCompletableFuture<byte[]> getFuture = storage.get(key1);
         
         // Process the operations
         storage.tick();
@@ -55,7 +55,7 @@ class StorageExampleTest {
             .put("user:2", "Bob")
             .put("user:3", "Charlie");
         
-        ListenableFuture<Boolean> batchFuture = storage.put(writeBatch);
+        TickCompletableFuture<Boolean> batchFuture = storage.put(writeBatch);
         
         // Process the batch operation
         storage.tick();
@@ -63,9 +63,9 @@ class StorageExampleTest {
         assertTrue(batchFuture.getResult());
         
         // Verify individual keys were set
-        ListenableFuture<byte[]> getFuture1 = storage.get("user:1".getBytes());
-        ListenableFuture<byte[]> getFuture2 = storage.get("user:2".getBytes());
-        ListenableFuture<byte[]> getFuture3 = storage.get("user:3".getBytes());
+        TickCompletableFuture<byte[]> getFuture1 = storage.get("user:1".getBytes());
+        TickCompletableFuture<byte[]> getFuture2 = storage.get("user:2".getBytes());
+        TickCompletableFuture<byte[]> getFuture3 = storage.get("user:3".getBytes());
         
         storage.tick();
         
@@ -88,15 +88,15 @@ class StorageExampleTest {
             .delete("temp:key1")  // Delete existing key
             .put("temp:key2", "updated:value2");  // Update existing key
         
-        ListenableFuture<Boolean> batchFuture = storage.put(writeBatch);
+        TickCompletableFuture<Boolean> batchFuture = storage.put(writeBatch);
         storage.tick();
         
         assertTrue(batchFuture.getResult());
         
         // Verify operations were applied
-        ListenableFuture<byte[]> getNewKey = storage.get("new:key1".getBytes());
-        ListenableFuture<byte[]> getDeletedKey = storage.get("temp:key1".getBytes());
-        ListenableFuture<byte[]> getUpdatedKey = storage.get("temp:key2".getBytes());
+        TickCompletableFuture<byte[]> getNewKey = storage.get("new:key1".getBytes());
+        TickCompletableFuture<byte[]> getDeletedKey = storage.get("temp:key1".getBytes());
+        TickCompletableFuture<byte[]> getUpdatedKey = storage.get("temp:key2".getBytes());
         
         storage.tick();
         
@@ -116,7 +116,7 @@ class StorageExampleTest {
         storage.tick();
         
         // Query range from user:001 to user:005 (exclusive)
-        ListenableFuture<Map<byte[], byte[]>> rangeFuture = storage.readRange(
+        TickCompletableFuture<Map<byte[], byte[]>> rangeFuture = storage.readRange(
             "user:001".getBytes(), 
             "user:005".getBytes()
         );
@@ -149,10 +149,10 @@ class StorageExampleTest {
         byte[] value = "Important Data".getBytes();
         
         // Use SYNC write options for critical data
-        ListenableFuture<Boolean> syncFuture = storage.put(key, value, Storage.WriteOptions.SYNC);
+        TickCompletableFuture<Boolean> syncFuture = storage.put(key, value, Storage.WriteOptions.SYNC);
         
         // Use FAST write options for high-performance writes
-        ListenableFuture<Boolean> fastFuture = storage.put("temp:data".getBytes(), "Temp Data".getBytes(),
+        TickCompletableFuture<Boolean> fastFuture = storage.put("temp:data".getBytes(), "Temp Data".getBytes(),
                                                           Storage.WriteOptions.FAST);
         
         storage.tick();
@@ -172,7 +172,7 @@ class StorageExampleTest {
         
         // Get the last key (lexicographically). We need to provide upper bound which is 'excluded' from the
         // range of keys.
-        ListenableFuture<byte[]> lastKeyFuture = storage.lowerKey("zz".getBytes());
+        TickCompletableFuture<byte[]> lastKeyFuture = storage.lowerKey("zz".getBytes());
         
         storage.tick();
         
@@ -188,17 +188,17 @@ class StorageExampleTest {
         byte[] value2 = "Version 2".getBytes();
         
         // First write
-        ListenableFuture<Boolean> set1 = storage.put(key, value1);
+        TickCompletableFuture<Boolean> set1 = storage.put(key, value1);
         storage.tick();
         assertTrue(set1.getResult());
         
         // Second write (should succeed due to newer timestamp)
-        ListenableFuture<Boolean> set2 = storage.put(key, value2);
+        TickCompletableFuture<Boolean> set2 = storage.put(key, value2);
         storage.tick();
         assertTrue(set2.getResult());
         
         // Verify we get the latest value
-        ListenableFuture<byte[]> getFuture = storage.get(key);
+        TickCompletableFuture<byte[]> getFuture = storage.get(key);
         storage.tick();
         assertArrayEquals(value2, getFuture.getResult());
     }

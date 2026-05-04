@@ -6,7 +6,7 @@ import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
 import com.tickloom.config.ClusterTopology;
 import com.tickloom.config.Config;
 import com.tickloom.config.ProcessConfig;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.messaging.MessageBus;
 import com.tickloom.network.JsonMessageCodec;
 import com.tickloom.network.NioNetwork;
@@ -89,7 +89,7 @@ public class ClientMain {
             addShutdownHook(network);
 
             byte[] key = keyArg.getBytes(StandardCharsets.UTF_8);
-            ListenableFuture<?> future;
+            TickCompletableFuture<?> future;
             if (isGet) {
                 future = client.get(key);
             } else {
@@ -128,7 +128,7 @@ public class ClientMain {
         }
     }
 
-    private static boolean runUntilComplete(NioNetwork network, com.tickloom.Process client, ListenableFuture<?> future, long deadlineMs) throws IOException {
+    private static boolean runUntilComplete(NioNetwork network, com.tickloom.Process client, TickCompletableFuture<?> future, long deadlineMs) throws IOException {
         long start = System.currentTimeMillis();
         while (System.currentTimeMillis() - start < deadlineMs) {
             network.tick();

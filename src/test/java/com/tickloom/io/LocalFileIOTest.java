@@ -1,6 +1,6 @@
 package com.tickloom.io;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,11 +32,11 @@ class LocalFileIOTest {
     void writeAndReadBack() {
         byte[] data = "hello".getBytes();
 
-        ListenableFuture<Integer> writeFuture = fileIO.write(data, 0);
+        TickCompletableFuture<Integer> writeFuture = fileIO.write(data, 0);
         assertTrue(writeFuture.isCompleted());
         assertEquals(5, writeFuture.getResult());
 
-        ListenableFuture<byte[]> readFuture = fileIO.read(0, 5);
+        TickCompletableFuture<byte[]> readFuture = fileIO.read(0, 5);
         assertTrue(readFuture.isCompleted());
         assertArrayEquals(data, readFuture.getResult());
     }
@@ -46,7 +46,7 @@ class LocalFileIOTest {
         fileIO.write("aaaa".getBytes(), 0);
         fileIO.write("bb".getBytes(), 2);
 
-        ListenableFuture<byte[]> readFuture = fileIO.read(0, 4);
+        TickCompletableFuture<byte[]> readFuture = fileIO.read(0, 4);
         assertArrayEquals("aabb".getBytes(), readFuture.getResult());
     }
 
@@ -63,7 +63,7 @@ class LocalFileIOTest {
     void readBeyondSize() {
         fileIO.write("abc".getBytes(), 0);
 
-        ListenableFuture<byte[]> readFuture = fileIO.read(0, 100);
+        TickCompletableFuture<byte[]> readFuture = fileIO.read(0, 100);
         assertEquals(3, readFuture.getResult().length);
         assertArrayEquals("abc".getBytes(), readFuture.getResult());
     }
@@ -73,11 +73,11 @@ class LocalFileIOTest {
         fileIO.write("abcdef".getBytes(), 0);
         assertEquals(6, fileIO.size());
 
-        ListenableFuture<Void> truncateFuture = fileIO.truncate(3);
+        TickCompletableFuture<Void> truncateFuture = fileIO.truncate(3);
         assertTrue(truncateFuture.isCompleted());
         assertEquals(3, fileIO.size());
 
-        ListenableFuture<byte[]> readFuture = fileIO.read(0, 3);
+        TickCompletableFuture<byte[]> readFuture = fileIO.read(0, 3);
         assertArrayEquals("abc".getBytes(), readFuture.getResult());
     }
 
@@ -85,7 +85,7 @@ class LocalFileIOTest {
     void syncCompletes() {
         fileIO.write("data".getBytes(), 0);
 
-        ListenableFuture<Void> syncFuture = fileIO.sync();
+        TickCompletableFuture<Void> syncFuture = fileIO.sync();
         assertTrue(syncFuture.isCompleted());
     }
 
@@ -94,7 +94,7 @@ class LocalFileIOTest {
         fileIO.write("first_".getBytes(), 0);
         fileIO.write("second".getBytes(), 0);
 
-        ListenableFuture<byte[]> readFuture = fileIO.read(0, 6);
+        TickCompletableFuture<byte[]> readFuture = fileIO.read(0, 6);
         assertArrayEquals("second".getBytes(), readFuture.getResult());
     }
 
@@ -112,7 +112,7 @@ class LocalFileIOTest {
 
         LocalFileIO reopened = LocalFileIO.open(path);
         assertEquals(7, reopened.size());
-        ListenableFuture<byte[]> readFuture = reopened.read(0, 7);
+        TickCompletableFuture<byte[]> readFuture = reopened.read(0, 7);
         assertArrayEquals("durable".getBytes(), readFuture.getResult());
         reopened.close();
     }

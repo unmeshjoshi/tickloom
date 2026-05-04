@@ -4,7 +4,7 @@ import com.tickloom.ProcessFactory;
 import com.tickloom.ProcessId;
 import com.tickloom.ProcessParams;
 import com.tickloom.Tickable;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.algorithms.replication.ClusterClient;
 import com.tickloom.config.ClusterTopology;
 import com.tickloom.config.Config;
@@ -124,7 +124,7 @@ public class Cluster implements Tickable, AutoCloseable {
      * helper is not a passive wait; it is the mechanism that drives the simulated distributed
      * system forward until the future has a result.
      */
-    public <T> T tickUntilComplete(ListenableFuture<T> future) {
+    public <T> T tickUntilComplete(TickCompletableFuture<T> future) {
         this.tickUntil(future::isCompleted);
         return future.getResult();
     }
@@ -475,7 +475,7 @@ public class Cluster implements Tickable, AutoCloseable {
      */
     public byte[] getStorageValue(ProcessId processId, byte[] key) {
         Storage storage = getStorageForProcess(processId);
-        ListenableFuture<byte[]> future = storage.get(key);
+        TickCompletableFuture<byte[]> future = storage.get(key);
 
         // Tick until the storage operation completes
         while (!future.isCompleted()) {

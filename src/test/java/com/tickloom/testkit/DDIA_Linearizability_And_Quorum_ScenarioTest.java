@@ -5,7 +5,7 @@ import com.tickloom.algorithms.replication.quorum.GetResponse;
 import com.tickloom.algorithms.replication.quorum.QuorumMessageTypes;
 import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.algorithms.replication.quorum.VersionedValue;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -160,7 +160,7 @@ public final class DDIA_Linearizability_And_Quorum_ScenarioTest
     private static Reader<QuorumReplicaClient, GetResponse, String> withReader(QuorumReplicaClient reconnectedClient2, byte[] key) {
         return new Reader<>(reconnectedClient2) {
             @Override
-            public Supplier<ListenableFuture<GetResponse>> getSupplier() {
+            public Supplier<TickCompletableFuture<GetResponse>> getSupplier() {
                 return () -> client.get(key); // <-- return the lambda
             }
         };
@@ -175,7 +175,7 @@ public final class DDIA_Linearizability_And_Quorum_ScenarioTest
             }
 
             @Override
-            public Supplier<ListenableFuture<?>> getSupplier() {
+            public Supplier<TickCompletableFuture<?>> getSupplier() {
                 return () -> client.set(this.key.getBytes(), this.value.getBytes());
             }
         };

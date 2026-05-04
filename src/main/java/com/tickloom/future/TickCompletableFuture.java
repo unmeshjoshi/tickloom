@@ -2,8 +2,6 @@ package com.tickloom.future;
 
 import com.tickloom.Continuation;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -13,10 +11,10 @@ import java.util.function.Function;
  * @param <T> the type of the result name
  */
 
-public class ListenableFuture<T> {
+public class TickCompletableFuture<T> {
 
-    public <U> ListenableFuture<U> thenApply(Function<T, U> fn) {
-        ListenableFuture<U> mapped = new ListenableFuture<>();
+    public <U> TickCompletableFuture<U> thenApply(Function<T, U> fn) {
+        TickCompletableFuture<U> mapped = new TickCompletableFuture<>();
         this.whenComplete((T result, Throwable exception) -> {
             if (exception != null) {
                 mapped.fail(exception);
@@ -31,8 +29,8 @@ public class ListenableFuture<T> {
         return mapped;
     }
 
-    public <U> ListenableFuture<U> thenCompose(Function<T, ListenableFuture<U>> fn) {
-        ListenableFuture<U> nextStage = new ListenableFuture<>();
+    public <U> TickCompletableFuture<U> thenCompose(Function<T, TickCompletableFuture<U>> fn) {
+        TickCompletableFuture<U> nextStage = new TickCompletableFuture<>();
 
         this.whenComplete((T result, Throwable exception) -> {
             if (exception != null) {
@@ -40,7 +38,7 @@ public class ListenableFuture<T> {
                 return;
             }
             try {
-                ListenableFuture<U> innerFuture = fn.apply(result);
+                TickCompletableFuture<U> innerFuture = fn.apply(result);
                 handleInnerFutureAndCompleteStage(innerFuture, nextStage);
             } catch (Exception e) {
                 nextStage.fail(e);
@@ -49,7 +47,7 @@ public class ListenableFuture<T> {
         return nextStage;
     }
 
-    private <U> void handleInnerFutureAndCompleteStage(ListenableFuture<U> innerFuture, ListenableFuture<U> nextStage) {
+    private <U> void handleInnerFutureAndCompleteStage(TickCompletableFuture<U> innerFuture, TickCompletableFuture<U> nextStage) {
         // Flatten: when the inner future completes, complete the next stage
         innerFuture.whenComplete((U innerResult, Throwable innerException) -> {
             if (innerException != null) {
@@ -61,7 +59,7 @@ public class ListenableFuture<T> {
     }
 
 
-    public ListenableFuture<T> whenComplete(Continuation<T> c) {
+    public TickCompletableFuture<T> whenComplete(Continuation<T> c) {
         return this.whenComplete((result, exception) -> {
             if (exception == null) {
                 c.resume(result);
@@ -82,8 +80,8 @@ public class ListenableFuture<T> {
     private Throwable exception;
     private BiConsumer<T, Throwable> callback;
 
-    public static <T> ListenableFuture<T> completed(T value) {
-        ListenableFuture<T> future = new ListenableFuture<>();
+    public static <T> TickCompletableFuture<T> completed(T value) {
+        TickCompletableFuture<T> future = new TickCompletableFuture<>();
         future.complete(value);
         return future;
     }
@@ -91,7 +89,7 @@ public class ListenableFuture<T> {
     /**
      * Creates a new pending ListenableFuture.
      */
-    public ListenableFuture() {
+    public TickCompletableFuture() {
         // Starts in PENDING state
     }
 
@@ -175,8 +173,8 @@ public class ListenableFuture<T> {
      * @param callback the callback to invoke with the result (or null) and exception (or null)
      * @return this future for method chaining
      */
-    public ListenableFuture<T> whenComplete(BiConsumer<T, Throwable> callback) {
-        ListenableFuture<T> nextStage = new ListenableFuture<>();
+    public TickCompletableFuture<T> whenComplete(BiConsumer<T, Throwable> callback) {
+        TickCompletableFuture<T> nextStage = new TickCompletableFuture<>();
 
         BiConsumer<T, Throwable> wrappedCallback = (res, ex) -> {
             try {

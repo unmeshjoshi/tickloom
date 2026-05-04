@@ -5,7 +5,6 @@ import com.tickloom.messaging.MessageType;
 import com.tickloom.network.JsonMessageCodec;
 import com.tickloom.network.Network;
 import com.tickloom.network.SimulatedNetwork;
-import com.tickloom.future.ListenableFuture;
 import com.tickloom.storage.SimulatedStorage;
 import com.tickloom.util.IdGen;
 import com.tickloom.util.SystemClock;

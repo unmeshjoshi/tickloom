@@ -1,6 +1,6 @@
 package com.tickloom.storage.rocksdb.ops;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.storage.rocksdb.RocksDbStorage;
 import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksIterator;
@@ -11,9 +11,9 @@ import java.util.List;
 public class KeysWithPrefixOperation extends PendingOperation {
     private final RocksDbStorage rocksDbStorage;
     private final byte[] prefix;
-    private final ListenableFuture<List<byte[]>> future;
+    private final TickCompletableFuture<List<byte[]>> future;
 
-    public KeysWithPrefixOperation(RocksDbStorage rocksDbStorage, byte[] prefix, ListenableFuture<List<byte[]>> future, long completionTick) {
+    public KeysWithPrefixOperation(RocksDbStorage rocksDbStorage, byte[] prefix, TickCompletableFuture<List<byte[]>> future, long completionTick) {
         super(completionTick);
         this.rocksDbStorage = rocksDbStorage;
         this.prefix = prefix;

@@ -1,7 +1,7 @@
 package com.tickloom;
 
 import com.tickloom.algorithms.replication.ClusterClient;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 
 import java.util.ArrayDeque;
 import java.util.Random;
@@ -34,7 +34,7 @@ public class SingleRequestIssuer<C extends ClusterClient> {
     }
 
     private void sendClientRequest() {
-        ListenableFuture<?> f = simulationRunner.issueRequest(client, rng);
+        TickCompletableFuture<?> f = simulationRunner.issueRequest(client, rng);
         f.whenComplete((result, ex) -> {
             inFlight = false;
             drainNext();

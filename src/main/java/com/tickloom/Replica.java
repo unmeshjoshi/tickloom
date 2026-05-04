@@ -1,6 +1,6 @@
 package com.tickloom;
 
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.messaging.*;
 
 import java.io.IOException;
@@ -76,7 +76,7 @@ public abstract class Replica extends Process {
             return this;
         }
 
-        public ListenableFuture<Map<ProcessId, T>> send() {
+        public TickCompletableFuture<Map<ProcessId, T>> send() {
             AsyncQuorumCallback<T> quorumCallback = new AsyncQuorumCallback<>(getAllNodes().size(), requiredQuorum, successCondition);
             for (ProcessId node : getAllNodes()) {
                 String internalCorrelationId = internalCorrelationId();

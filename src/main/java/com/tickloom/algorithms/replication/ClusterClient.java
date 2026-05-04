@@ -3,10 +3,9 @@ package com.tickloom.algorithms.replication;
 import com.tickloom.Process;
 import com.tickloom.ProcessParams;
 import com.tickloom.ProcessId;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.messaging.*;
 import com.tickloom.network.PeerType;
-import com.tickloom.util.IdGen;
 
 import java.io.IOException;
 import java.util.List;
@@ -35,10 +34,10 @@ public abstract class ClusterClient extends Process {
     }
 
 
-    public <T> ListenableFuture<T> sendRequest(Object request, ProcessId destination,
-                                               MessageType messageType) {
+    public <T> TickCompletableFuture<T> sendRequest(Object request, ProcessId destination,
+                                                    MessageType messageType) {
         String correlationId = generateCorrelationId();
-        ListenableFuture<T> future = new ListenableFuture<>();
+        TickCompletableFuture<T> future = new TickCompletableFuture<>();
         
         RequestCallback<Object> callback = createCallback(future);
         waitingList.add(correlationId, callback);
@@ -84,7 +83,7 @@ public abstract class ClusterClient extends Process {
     }
     
     @SuppressWarnings("unchecked")
-    private <T> RequestCallback<Object> createCallback(ListenableFuture<T> future) {
+    private <T> RequestCallback<Object> createCallback(TickCompletableFuture<T> future) {
         return new RequestCallback<Object>() {
             @Override
             public void onResponse(Object response, ProcessId fromNode) {

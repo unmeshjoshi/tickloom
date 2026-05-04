@@ -4,7 +4,7 @@ import com.tickloom.ConsistencyChecker;
 import com.tickloom.ProcessFactory;
 import com.tickloom.ProcessId;
 import com.tickloom.algorithms.replication.ClusterClient;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.history.History;
 import com.tickloom.messaging.MessageType;
 import com.tickloom.algorithms.replication.quorum.VersionedValue;
@@ -184,7 +184,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
         }
 
         public abstract HistVal attemptedValue();
-        public abstract Supplier<ListenableFuture<?>> getSupplier();
+        public abstract Supplier<TickCompletableFuture<?>> getSupplier();
 
     }
 
@@ -203,7 +203,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
             this.attemptedValue = attemptedValue;
         }
 
-        public abstract Supplier<ListenableFuture<RGet>> getSupplier();
+        public abstract Supplier<TickCompletableFuture<RGet>> getSupplier();
     }
 
 
@@ -219,7 +219,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
         return this;
     }
 
-    private static <RGet> boolean isSuccessful(ListenableFuture<RGet> fut) {
+    private static <RGet> boolean isSuccessful(TickCompletableFuture<RGet> fut) {
         return fut.isCompleted() && !fut.isFailed();
     }
 

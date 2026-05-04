@@ -4,7 +4,6 @@ import com.tickloom.ProcessParams;
 import com.tickloom.ProcessId;
 import com.tickloom.Tickable;
 import com.tickloom.config.ClusterTopology;
-import com.tickloom.future.ListenableFuture;
 import com.tickloom.messaging.Message;
 import com.tickloom.messaging.MessageBus;
 import com.tickloom.messaging.MessageType;

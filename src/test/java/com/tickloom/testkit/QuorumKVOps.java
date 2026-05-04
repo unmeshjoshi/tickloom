@@ -3,7 +3,7 @@ package com.tickloom.testkit;
 import com.tickloom.ProcessId;
 import com.tickloom.algorithms.replication.quorum.GetResponse;
 import com.tickloom.algorithms.replication.quorum.SetResponse;
-import com.tickloom.future.ListenableFuture;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.history.History;
 import com.tickloom.history.HistoryRecorder;
 import com.tickloom.history.Op;
@@ -21,11 +21,11 @@ class QuorumKVOps<RGet, V> {
     }
 
     //test helpers
-    public ListenableFuture<SetResponse> write(ProcessId id, V attemptedValue, Supplier<ListenableFuture<?>> requestInvoker) {
+    public TickCompletableFuture<SetResponse> write(ProcessId id, V attemptedValue, Supplier<TickCompletableFuture<?>> requestInvoker) {
         return recorder.<SetResponse>invoke(id, Op.WRITE, attemptedValue, requestInvoker, (response) -> attemptedValue);
     }
 
-    public ListenableFuture<RGet> read(ProcessId id, Supplier<ListenableFuture<RGet>> requestInvoker) {
+    public TickCompletableFuture<RGet> read(ProcessId id, Supplier<TickCompletableFuture<RGet>> requestInvoker) {
         return recorder.<GetResponse>invoke(id, Op.READ, (String) null, requestInvoker, readValue);
     }
 
