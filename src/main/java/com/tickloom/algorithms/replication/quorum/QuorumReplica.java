@@ -43,12 +43,8 @@ public class QuorumReplica extends Replica {
 
         logIncomingGetRequest(clientRequest, correlationId, clientId);
 
-        this.<InternalGetResponse>quorumRequest()
-                .withMessage((node, internalCorrelationId) -> {
-                    var internalRequest = new InternalGetRequest(clientRequest.key());
-                    return createMessage(node, internalCorrelationId, internalRequest, QuorumMessageTypes.INTERNAL_GET_REQUEST);
-                })
-                .acceptResponseWhen(response -> response != null && response.value() != null)
+        this.<InternalGetResponse>quorumRequest(QuorumMessageTypes.INTERNAL_GET_REQUEST, new InternalGetRequest(clientRequest.key()))
+                .countResponseIf(response -> response != null && response.value() != null)
                 .send()
                 .whenComplete((responses, error) -> {
                     if (error != null) {
@@ -111,14 +107,11 @@ public class QuorumReplica extends Replica {
         logIncomingSetRequest(clientRequest, correlationId, clientAddress);
 
         var timestamp = clock.now();
-        this.<InternalSetResponse>quorumRequest()
-                .withQuorumSize(getAllNodes().size() / 2 + 1)
-                .acceptResponseWhen(response -> response != null && response.success())
-                .withMessage((node, internalCorrelationId) -> {
-                    var internalRequest = new InternalSetRequest(
-                            clientRequest.key(), clientRequest.value(), timestamp);
-                    return createMessage(node, internalCorrelationId, internalRequest, QuorumMessageTypes.INTERNAL_SET_REQUEST);
-                })
+        InternalSetRequest internalSetRequest = new InternalSetRequest(
+                clientRequest.key(), clientRequest.value(), timestamp);
+
+        this.<InternalSetResponse>quorumRequest(QuorumMessageTypes.INTERNAL_SET_REQUEST, internalSetRequest)
+                .countResponseIf(response -> response != null && response.success())
                 .send()
                 .whenComplete((responses, error) -> {
                     if (error != null) {

@@ -31,6 +31,34 @@ public class AsyncQuorumCallback<T> implements RequestCallback<T> {
      * @param requiredQuorum the number of successful responses needed to satisfy quorum
      * @param successCondition predicate that determines if a response is successful
      */
+
+    /**
+     * Creates a new AsyncQuorumCallback with a simple majority required quorum.
+     *
+     * @param totalResponses the total number of expected responses
+     * @param successCondition predicate that determines if a response is successful
+     */
+    public AsyncQuorumCallback(int totalResponses, java.util.function.Predicate<T> successCondition) {
+        this(totalResponses, (totalResponses / 2) + 1, successCondition);
+    }
+
+    public AsyncQuorumCallback<T> onSuccess(java.util.function.Consumer<Map<ProcessId, T>> successCallback) {
+        quorumFuture.whenComplete((result, exception) -> {
+            if (exception == null) {
+                successCallback.accept(result);
+            }
+        });
+        return this;
+    }
+
+    public AsyncQuorumCallback<T> onFailure(java.util.function.Consumer<Throwable> failureCallback) {
+        quorumFuture.whenComplete((result, exception) -> {
+            if (exception != null) {
+                failureCallback.accept(exception);
+            }
+        });
+        return this;
+    }
     public AsyncQuorumCallback(int totalResponses, int requiredQuorum, Predicate<T> successCondition) {
         this.successCondition = successCondition;
         if (totalResponses <= 0) {

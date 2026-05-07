@@ -16,6 +16,8 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ReplicaTest {
+
+
     @Test
     void shouldCreateDefensiveCopyOfPeers() {
         // Given
@@ -80,12 +82,14 @@ class ReplicaTest {
         Random random = new Random();
         JsonMessageCodec messageCodec = new JsonMessageCodec();
 
-        Network network = SimulatedNetwork.noLossNetwork(random);
+        SimulatedNetwork network = SimulatedNetwork.noLossNetwork(random);
         MessageBus messageBus = new MessageBus(network, messageCodec);
 
         TestableReplica replica = new TestableReplica(List.of(ProcessId.of("node1"), ProcessId.of("node2")), new SimulatedStorage(random), new ProcessParams(ProcessId.of("test"), messageBus, messageCodec, timeoutTicks, new SystemClock(), new IdGen(ProcessId.of("test").name(), new Random()), new SimulatedStorage(random)));
         // When
-        List<String> corrIds = replica.broadcastInternal();
+        replica.broadcastInternal();
+
+        var corrIds = network.getPendingMessages().stream().map(message -> message.correlationId()).toList();
 
         // Then: correlation IDs should be unique (callback-based approach handles message delivery automatically)
         assertEquals(corrIds.size(), new java.util.HashSet<>(corrIds).size());
@@ -122,17 +126,12 @@ class ReplicaTest {
             return waitingList.size();
         }
 
-        List<String> broadcastInternal()  {
+        void broadcastInternal()  {
             java.util.List<String> captured = new java.util.ArrayList<>();
-            this.<Message>quorumRequest()
+            this.<Message>quorumRequest(new MessageType("INTERNAL_GET_REQUEST"), new byte[0])
                 .withQuorumSize(getAllNodes().size())
-                .acceptResponseWhen(msg -> true)
-                .withMessage((destinationId, correlationId) -> {
-                    captured.add(correlationId);
-                    return Message.of(id, destinationId, PeerType.SERVER, new MessageType("INTERNAL_GET_REQUEST"), new byte[0], correlationId);
-                })
+                .countResponseIf(msg -> true)
                 .send();
-            return captured;
         }
     }
 }

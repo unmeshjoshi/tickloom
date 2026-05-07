@@ -44,8 +44,8 @@ public abstract class Replica extends Process {
         return allNodes;
     }
 
-    protected <T> QuorumRequestBuilder<T> quorumRequest() {
-        return new QuorumRequestBuilder<>(majorityQuorum());
+    protected <T> QuorumRequestBuilder<T> quorumRequest(MessageType messageType, Object request) {
+        return new QuorumRequestBuilder<>(majorityQuorum(), messageType, request);
     }
 
     private int majorityQuorum() {
@@ -54,11 +54,15 @@ public abstract class Replica extends Process {
 
     protected class QuorumRequestBuilder<T> {
         private int requiredQuorum;
+        private final MessageType messageType;
+        private final Object payload;
         private Predicate<T> successCondition;
         private BiFunction<ProcessId, String, Message> messageBuilder;
 
-        public QuorumRequestBuilder(int requiredQuorum) {
+        public QuorumRequestBuilder(int requiredQuorum, MessageType messageType, Object request) {
             this.requiredQuorum = requiredQuorum;
+            this.messageType = messageType;
+            this.payload = request;
         }
 
         public QuorumRequestBuilder<T> withQuorumSize(int requiredQuorum) {
@@ -66,7 +70,7 @@ public abstract class Replica extends Process {
             return this;
         }
 
-        public QuorumRequestBuilder<T> acceptResponseWhen(Predicate<T> successCondition) {
+        public QuorumRequestBuilder<T> countResponseIf(Predicate<T> successCondition) {
             this.successCondition = successCondition;
             return this;
         }
@@ -82,7 +86,7 @@ public abstract class Replica extends Process {
                 String internalCorrelationId = internalCorrelationId();
                 waitingList.add(internalCorrelationId, (RequestCallback<Object>) (RequestCallback) quorumCallback);
 
-                Message internalMessage = messageBuilder.apply(node, internalCorrelationId);
+                Message internalMessage = createMessage(node, internalCorrelationId, payload, messageType);
                 Replica.this.send(internalMessage);
             }
             return quorumCallback.getQuorumFuture();

@@ -544,6 +544,10 @@ public class SimulatedNetwork extends Network {
         return lastDeliveredMessage;
     }
 
+    public List<Message> getPendingMessages() {
+        return pendingMessages.stream().map(QueuedMessage::message).toList();
+    }
+
     /**
      * Internal record to track messages with their delivery timing.
      * Implements Comparable to allow PriorityQueue ordering by delivery time.
