@@ -12,8 +12,9 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,6 +44,8 @@ public final class DDIA_Linearizability_And_Quorum_ScenarioTest
     private static String maskNull(GetResponse response) {
         return response == null || response.value() == null ? null : new String(response.value(), StandardCharsets.UTF_8);
     }
+
+
 
     @Test
     @DisplayName("DDIA §10.6 via per-link delay: Alice sees new, later Bob sees old (LIN ❌, SC ✅)")
@@ -156,6 +159,8 @@ public final class DDIA_Linearizability_And_Quorum_ScenarioTest
         // Different clients (Alice vs Bob), no same-client regression → SC can be satisfied.
         assertSequentialConsistency(true);
     }
+
+
 
     private static Reader<QuorumReplicaClient, GetResponse, String> withReader(QuorumReplicaClient reconnectedClient2, byte[] key) {
         return new Reader<>(reconnectedClient2) {

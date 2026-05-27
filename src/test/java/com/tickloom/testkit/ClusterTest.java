@@ -42,7 +42,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
     protected final QuorumKVOps<RGet, JepsenValue> H;
 
     /** The running cluster for this test. */
-    protected Cluster cluster;
+    public Cluster cluster;
 
     public ClusterTest(List<ProcessId> processIds,
                        ProcessFactory serverFactory,
@@ -76,7 +76,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
      * ============================== */
 
     /** Create a client bound to a server. */
-    protected C clientConnectedTo(ProcessId clientId, ProcessId serverId) {
+    public C clientConnectedTo(ProcessId clientId, ProcessId serverId) {
         try {
             return cluster.newClientConnectedTo(clientId, serverId, clientFactory);
         } catch (Exception e) {
@@ -89,7 +89,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
      *
      * @return
      */
-    protected ClusterTest<C, RGet, JepsenValue> partition(NodeGroup a, NodeGroup b) {
+    public ClusterTest<C, RGet, JepsenValue> partition(NodeGroup a, NodeGroup b) {
         cluster.partitionNodes(a, b);
         return this;
     }
@@ -99,7 +99,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
      *
      * @return
      */
-    protected ClusterTest<C, RGet, JepsenValue> healAllPartitions() {
+    public ClusterTest<C, RGet, JepsenValue> healAllPartitions() {
         cluster.healAllPartitions();
         return this;
     }
@@ -109,13 +109,13 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
      *
      * @return
      */
-    protected ClusterTest<C, RGet, JepsenValue> clockSkew(ProcessId processId, long logicalTs) {
+    public ClusterTest<C, RGet, JepsenValue> clockSkew(ProcessId processId, long logicalTs) {
         cluster.setTimeForProcess(processId, logicalTs);
         return this;
     }
 
     /** Peek stored value at a node; may be null. */
-    protected <T> T storedValue(ProcessId processId, byte[] key, Class<T> clazz) {
+    public <T> T storedValue(ProcessId processId, byte[] key, Class<T> clazz) {
         return cluster.getDecodedStoredValue(processId, key, clazz);
     }
 
@@ -125,12 +125,12 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
      *
      * @return
      */
-    protected ClusterTest<C, RGet, JepsenValue> assertEventually(BooleanSupplier cond) {
+    public ClusterTest<C, RGet, JepsenValue> assertEventually(BooleanSupplier cond) {
         assertEventually(cond, 10_000, "Timeout waiting for condition");
         return this;
     }
 
-    protected ClusterTest<C, RGet, JepsenValue> assertEventually(BooleanSupplier cond, int timeoutTicks, String message) {
+    public ClusterTest<C, RGet, JepsenValue> assertEventually(BooleanSupplier cond, int timeoutTicks, String message) {
         int ticks = 0;
         while (!cond.getAsBoolean()) {
             if (ticks++ >= timeoutTicks) fail(message + " after " + timeoutTicks + " ticks");
@@ -148,26 +148,26 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
      *
      * @return
      */
-    protected ClusterTest<C, RGet, JepsenValue> write(Writer<C, JepsenValue> writer) {
+    public ClusterTest<C, RGet, JepsenValue> write(Writer<C, JepsenValue> writer) {
         var fut = H.write(writer.client.id, writer.attemptedValue(), writer.getSupplier());
         cluster.tickUntil(() -> fut.isCompleted() && !fut.isFailed());
         return this;
     }
 
-    protected ClusterTest<C, RGet, JepsenValue> writeAndWaitUntil(Writer<C, JepsenValue> writer, BooleanSupplier cond) {
+    public ClusterTest<C, RGet, JepsenValue> writeAndWaitUntil(Writer<C, JepsenValue> writer, BooleanSupplier cond) {
         var fut = H.write(writer.client.id, writer.attemptedValue(), writer.getSupplier());
         cluster.tickUntil(cond);
         return this;
     }
 
-    protected void delay(ProcessId processId, List<ProcessId> toProcesses, int propDelayTicks) {
+    public void delay(ProcessId processId, List<ProcessId> toProcesses, int propDelayTicks) {
         for (ProcessId toProcess : toProcesses) {
             cluster.setNetworkDelay(processId, toProcess, propDelayTicks);
         }
     }
 
 
-    protected void delayForMessageType(MessageType messageType, ProcessId processId, List<ProcessId> toProcessIds, int propDelayTicks) {
+    public void delayForMessageType(MessageType messageType, ProcessId processId, List<ProcessId> toProcessIds, int propDelayTicks) {
         cluster.delayForMessageType(messageType, processId, toProcessIds, propDelayTicks);
     }
 
@@ -207,13 +207,13 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
     }
 
 
-    protected ClusterTest<C, RGet, JepsenValue> read(Reader reader) {
+    public ClusterTest<C, RGet, JepsenValue> read(Reader reader) {
         var fut = H.read(reader.client.id, reader.getSupplier());
         assertEventually(() -> isSuccessful(fut));
         return this;
     }
 
-    protected ClusterTest<C, RGet, JepsenValue> read(Reader reader, Predicate cond) {
+    public ClusterTest<C, RGet, JepsenValue> read(Reader reader, Predicate cond) {
         var fut = H.read(reader.client.id, reader.getSupplier());
         assertEventually(() -> isSuccessful(fut) && cond.test(fut));
         return this;
@@ -224,7 +224,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
     }
 
     /** Persist EDN history for offline Jepsen/Knossos checks; returns the history as well. */
-    protected History writeHistoryEdnFile(TestInfo testInfo) throws IOException {
+    public History writeHistoryEdnFile(TestInfo testInfo) throws IOException {
         var history = H.history();
         TestUtils.writeEdnFile(testInfo, history);
         return history;
@@ -234,7 +234,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
      * Consistency checks
      * ============================== */
 
-    protected ClusterTest<C, RGet, JepsenValue> assertSequentialConsistency(boolean expected) {
+    public ClusterTest<C, RGet, JepsenValue> assertSequentialConsistency(boolean expected) {
         System.out.println("History is " + H.history().toEdn());
         boolean seq = ConsistencyChecker.check(
                 H.history(),
@@ -245,7 +245,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
         return this;
     }
 
-    protected ClusterTest<C, RGet, JepsenValue> assertLinearizability(boolean expected) {
+    public ClusterTest<C, RGet, JepsenValue> assertLinearizability(boolean expected) {
         boolean lin = ConsistencyChecker.check(
                 H.history(),
                 ConsistencyChecker.ConsistencyProperty.LINEARIZABILITY,
@@ -264,7 +264,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
      *
      * @return
      */
-    protected ClusterTest<C, RGet, JepsenValue> assertNodesContainValue(List<ProcessId> nodes, byte[] key, byte[] expected) {
+    public ClusterTest<C, RGet, JepsenValue> assertNodesContainValue(List<ProcessId> nodes, byte[] key, byte[] expected) {
         for (ProcessId node : nodes) {
             var actual = cluster.getDecodedStoredValue(node, key, VersionedValue.class).value();
             assertNotNull(actual, () -> "No value at " + node + " for key=" + pretty(key));
@@ -278,7 +278,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
         return this;
     }
 
-    protected Optional<byte[]> getNodeValue(ProcessId node, byte[] key) {
+    public Optional<byte[]> getNodeValue(ProcessId node, byte[] key) {
         VersionedValue storageValue = cluster.getDecodedStoredValue(node, key, VersionedValue.class);
         if (null == storageValue) {
             return Optional.empty();
@@ -287,7 +287,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
     }
 
     /** String sugar for assertNodesContainValue. */
-    protected void assertNodesContainValue(List<ProcessId> nodes, String key, String expected) {
+    public void assertNodesContainValue(List<ProcessId> nodes, String key, String expected) {
         assertNodesContainValue(
                 nodes,
                 key.getBytes(StandardCharsets.UTF_8),
@@ -300,7 +300,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
      *
      * @return
      */
-    protected ClusterTest<C, RGet, JepsenValue> assertNoValue(byte[] key, List<ProcessId> nodes) {
+    public ClusterTest<C, RGet, JepsenValue> assertNoValue(byte[] key, List<ProcessId> nodes) {
         for (ProcessId node : nodes) {
             byte[] vv = cluster.getStorageValue(node, key);
             assertNull(vv, () -> "Expected no value at " + node + " for key=" + pretty(key) +
