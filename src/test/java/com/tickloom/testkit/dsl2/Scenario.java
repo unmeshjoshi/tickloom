@@ -9,7 +9,6 @@ import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.history.History;
 import com.tickloom.history.HistoryRecorder;
 import com.tickloom.testkit.Cluster;
-import com.tickloom.testkit.dsl.ScenarioBuilder;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -59,12 +58,11 @@ public class Scenario<C extends ClusterClient, T> {
         try(var cluster = Cluster.create(serverIds, serverFactory)) {
             Map<ProcessId, C> clients = createClients(cluster, clientDefs);
             for (Step step : steps) {
-                C c = clients.get(step.clientId());
-                Action action = step.action();
-                action.executeWith(clients, cluster);
+                step.execute(clients, cluster);
             }
         }
     }
+
 
     static class QuorumKVWriteAction implements Action<QuorumReplicaClient> {
         String key;
@@ -76,10 +74,9 @@ public class Scenario<C extends ClusterClient, T> {
             this.value = value;
         }
         @Override
-        public void executeWith(Map<ProcessId, QuorumReplicaClient> clients, Cluster cluster) {
+        public TickCompletableFuture<SetResponse> executeWith(Map<ProcessId, QuorumReplicaClient> clients, Cluster cluster) {
             QuorumReplicaClient quorumReplicaClient = clients.get(clientId);
-            TickCompletableFuture<SetResponse> setFuture = quorumReplicaClient.set(key.getBytes(), value.getBytes());
-            cluster.tickUntil(() -> setFuture.isCompleted() && !setFuture.isFailed());
+            return quorumReplicaClient.set(key.getBytes(), value.getBytes());
         }
     }
 

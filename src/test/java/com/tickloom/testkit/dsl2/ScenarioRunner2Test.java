@@ -20,7 +20,9 @@ class ScenarioRunner2Test {
                 (replicaEndpoints, processParams) -> new QuorumReplicaClient(replicaEndpoints, processParams))
                 .withServerIds(List.of(ProcessId.of("athens"), ProcessId.of("byzantium"), ProcessId.of("cyrene")))
                 .withClientDefs(List.of(new ClientDef(clientId, ProcessId.of("athens"))));
-        scenario.addStep(new Step(clientId, new Scenario.QuorumKVWriteAction(clientId, "key1", "value1"), new AwaitCompletion()));
+        scenario.addStep(new Step(new Scenario.QuorumKVWriteAction(clientId, "key1", "value1"),
+                new AwaitCompletion()));
         scenario.execute();
     }
+
 }
