@@ -3,88 +3,66 @@ package com.tickloom.testkit.dsl2;
 import com.tickloom.ProcessFactory;
 import com.tickloom.ProcessId;
 import com.tickloom.algorithms.replication.ClusterClient;
-import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
-import com.tickloom.algorithms.replication.quorum.SetResponse;
-import com.tickloom.future.TickCompletableFuture;
-import com.tickloom.history.History;
 import com.tickloom.history.HistoryRecorder;
+import com.tickloom.history.JepsenHistory;
 import com.tickloom.testkit.Cluster;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-record ClientDef(
-    ProcessId id,
-    ProcessId connectedTo){
-}
-
-public class Scenario<C extends ClusterClient, T> {
-    List<ProcessId> serverIds = new ArrayList<>();
-    List<ClientDef> clientDefs = new ArrayList<>();
-    ProcessFactory serverFactory;
-    Cluster.ClientFactory<C> clientFactory;
+/**
+ * Boots a simulated cluster from the topology's factory lambdas and runs the recorded steps.
+ * No reflection: constructor changes on replica or client are compile errors at the factory site.
+ */
+public final class Scenario<C extends ClusterClient> {
     private final String name;
-    private final List<Step> steps = new ArrayList<>();
+    private final List<ProcessId> serverIds;
+    private final List<ClientDef> clientDefs;
+    private final ProcessFactory replicaFactory;
+    private final Cluster.ClientFactory<C> clientFactory;
+    private final List<Step<C, ?>> steps;
     private final HistoryRecorder<String> recorder = new HistoryRecorder<>();
 
-    public Scenario(String name, ProcessFactory serverFactory, Cluster.ClientFactory<C> clientFactory) {
+    Scenario(String name,
+             List<ProcessId> serverIds,
+             List<ClientDef> clientDefs,
+             ProcessFactory replicaFactory,
+             Cluster.ClientFactory<C> clientFactory,
+             List<Step<C, ?>> steps) {
         this.name = name;
-        this.serverFactory = serverFactory;
-        this.clientFactory = clientFactory;
-    }
-
-    public Scenario<C, T> withServerIds(List<ProcessId> serverIds) {
         this.serverIds = serverIds;
-        return this;
-    }
-
-    public Scenario<C, T> withClientDefs(List<ClientDef> clientDefs) {
         this.clientDefs = clientDefs;
-        return this;
+        this.replicaFactory = replicaFactory;
+        this.clientFactory = clientFactory;
+        this.steps = steps;
     }
 
+    public static ScenarioBuilder scenario(String name) {
+        return ScenarioBuilder.scenario(name);
+    }
 
-    public String getName() { return name; }
-    public List<Step> getSteps() { return steps; }
-    public HistoryRecorder<String> getRecorder() { return recorder; }
-    public History history() { return recorder.getHistory(); }
+    public String name() { return name; }
+    public HistoryRecorder<String> recorder() { return recorder; }
+    public JepsenHistory history() { return recorder.jepsenHistory(); }
 
-    public void addStep(Step step) { steps.add(step); }
-
-    public void execute() throws IOException {
-        try(var cluster = Cluster.create(serverIds, serverFactory)) {
-            Map<ProcessId, C> clients = createClients(cluster, clientDefs);
-            for (Step step : steps) {
-                step.execute(clients, cluster);
+    public void run() throws IOException {
+        try (Cluster cluster = Cluster.createSimulated(serverIds, replicaFactory)) {
+            Map<ProcessId, C> clients = createClients(cluster);
+            for (Step<C, ?> step : steps) {
+                step.execute(clients, cluster, recorder);
             }
         }
     }
 
-
-    static class QuorumKVWriteAction implements Action<QuorumReplicaClient> {
-        String key;
-        String value;
-        ProcessId clientId;
-        public QuorumKVWriteAction(ProcessId clientId, String key, String value) {
-            this.clientId = clientId;
-            this.key = key;
-            this.value = value;
-        }
-        @Override
-        public TickCompletableFuture<SetResponse> executeWith(Map<ProcessId, QuorumReplicaClient> clients, Cluster cluster) {
-            QuorumReplicaClient quorumReplicaClient = clients.get(clientId);
-            return quorumReplicaClient.set(key.getBytes(), value.getBytes());
-        }
-    }
-
-    private Map<ProcessId, C> createClients(Cluster cluster, List<ClientDef> clientDefs) throws IOException {
+    private Map<ProcessId, C> createClients(Cluster cluster) throws IOException {
         var clients = new HashMap<ProcessId, C>();
-        for (ClientDef clientDef : clientDefs) {
-            C t = cluster.newClientConnectedTo(clientDef.id(), clientDef.connectedTo(), clientFactory);
-            clients.put(clientDef.id(), t);
+        for (ClientDef def : clientDefs) {
+            C client = def.connectedTo() == null
+                    ? cluster.newClient(def.id(), clientFactory)
+                    : cluster.newClientConnectedTo(def.id(), def.connectedTo(), clientFactory);
+            clients.put(def.id(), client);
         }
         return clients;
     }

@@ -52,7 +52,12 @@ public class HistoryRecorder<V> {
         return !(op == Op.READ) && ex instanceof TimeoutException;
     }
 
+    @Deprecated
     public History getHistory() {
         return history;
+    }
+
+    public JepsenHistory jepsenHistory() {
+        return history.jepsenHistory;
     }
 }
