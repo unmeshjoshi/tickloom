@@ -1,4 +1,4 @@
-package com.tickloom.testkit.dsl2;
+package com.tickloom.testkit.dsl2.semanticmodel;
 
 import com.tickloom.testkit.Cluster;
 

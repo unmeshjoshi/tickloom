@@ -7,7 +7,7 @@ import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.history.HistoryRecorder;
 import com.tickloom.history.Op;
 import com.tickloom.testkit.Cluster;
-import com.tickloom.testkit.dsl2.Action;
+import com.tickloom.testkit.dsl2.semanticmodel.Action;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;

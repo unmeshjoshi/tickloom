@@ -1,4 +1,4 @@
-package com.tickloom.testkit.dsl2;
+package com.tickloom.testkit.dsl2.semanticmodel;
 
 import com.tickloom.ProcessId;
 import com.tickloom.algorithms.replication.ClusterClient;

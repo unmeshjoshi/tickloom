@@ -1,4 +1,4 @@
-package com.tickloom.testkit.dsl2;
+package com.tickloom.testkit.dsl2.semanticmodel;
 
 import com.tickloom.ProcessFactory;
 import com.tickloom.ProcessId;
@@ -25,22 +25,18 @@ public final class Scenario<C extends ClusterClient> {
     private final List<Step<C, ?>> steps;
     private final HistoryRecorder<String> recorder = new HistoryRecorder<>();
 
-    Scenario(String name,
-             List<ProcessId> serverIds,
-             List<ClientDef> clientDefs,
-             ProcessFactory replicaFactory,
-             Cluster.ClientFactory<C> clientFactory,
-             List<Step<C, ?>> steps) {
+    public Scenario(String name,
+                    List<ProcessId> serverIds,
+                    List<ClientDef> clientDefs,
+                    ProcessFactory replicaFactory,
+                    Cluster.ClientFactory<C> clientFactory,
+                    List<Step<C, ?>> steps) {
         this.name = name;
         this.serverIds = serverIds;
         this.clientDefs = clientDefs;
         this.replicaFactory = replicaFactory;
         this.clientFactory = clientFactory;
         this.steps = steps;
-    }
-
-    public static ScenarioBuilder scenario(String name) {
-        return ScenarioBuilder.scenario(name);
     }
 
     public String name() { return name; }
