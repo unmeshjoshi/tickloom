@@ -1,4 +1,4 @@
-package com.tickloom.testkit.dsl2.semanticmodel;
+package com.tickloom.testkit.dsl.semanticmodel;
 
 import com.tickloom.ProcessId;
 

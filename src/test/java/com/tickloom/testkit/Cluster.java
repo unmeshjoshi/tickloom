@@ -56,6 +56,14 @@ public class Cluster implements Tickable, AutoCloseable {
     boolean useSimulatedStorage = true;
     Map<ProcessId, StubClock> processClocks = new HashMap<>();
 
+    public ClusterClient getClient(ProcessId id) {
+        return clientNodes.stream()
+                .filter(c -> c.id.equals(id))
+                .map(c -> c.client)
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("No client found with id " + id));
+    }
+
     private int numProcesses = 3;
     private List<ProcessId> customProcessIds = new ArrayList<>(); // Custom process names like 'athens', 'byzantium', etc.
     private long initialClockTime = 1000L; // Initial time for all clocks (must be positive)

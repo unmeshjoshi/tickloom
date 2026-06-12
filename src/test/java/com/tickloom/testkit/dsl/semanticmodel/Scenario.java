@@ -1,4 +1,4 @@
-package com.tickloom.testkit.dsl2.semanticmodel;
+package com.tickloom.testkit.dsl.semanticmodel;
 
 import com.tickloom.ProcessFactory;
 import com.tickloom.ProcessId;
@@ -13,13 +13,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Boots a simulated cluster from the topology's factory lambdas and runs the recorded steps.
- * No reflection: constructor changes on replica or client are compile errors at the factory site.
+ * Boots a simulated cluster from the topology's factory lambdas, applies any
+ * initial-condition {@link ClusterEvent}s collected via the DSL's
+ * {@code given(...)} block, then runs the recorded steps. No reflection:
+ * constructor changes on replica or client are compile errors at the factory site.
  */
 public final class Scenario<C extends ClusterClient> {
     private final String name;
     private final List<ProcessId> serverIds;
     private final List<ClientDef> clientDefs;
+    private final List<ClusterEvent> givens;
     private final ProcessFactory replicaFactory;
     private final Cluster.ClientFactory<C> clientFactory;
     private final List<Step<C, ?>> steps;
@@ -28,12 +31,14 @@ public final class Scenario<C extends ClusterClient> {
     public Scenario(String name,
                     List<ProcessId> serverIds,
                     List<ClientDef> clientDefs,
+                    List<ClusterEvent> givens,
                     ProcessFactory replicaFactory,
                     Cluster.ClientFactory<C> clientFactory,
                     List<Step<C, ?>> steps) {
         this.name = name;
         this.serverIds = serverIds;
         this.clientDefs = clientDefs;
+        this.givens = givens;
         this.replicaFactory = replicaFactory;
         this.clientFactory = clientFactory;
         this.steps = steps;
@@ -43,13 +48,17 @@ public final class Scenario<C extends ClusterClient> {
     public HistoryRecorder<String> recorder() { return recorder; }
     public JepsenHistory history() { return recorder.jepsenHistory(); }
 
-    public void run() throws IOException {
+    public JepsenHistory run() throws IOException {
         try (Cluster cluster = Cluster.createSimulated(serverIds, replicaFactory)) {
             Map<ProcessId, C> clients = createClients(cluster);
+            for (ClusterEvent given : givens) {
+                given.introduceIn(cluster);
+            }
             for (Step<C, ?> step : steps) {
                 step.execute(clients, cluster, recorder);
             }
         }
+        return history();
     }
 
     private Map<ProcessId, C> createClients(Cluster cluster) throws IOException {
