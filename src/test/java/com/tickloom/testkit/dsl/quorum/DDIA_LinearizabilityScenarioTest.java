@@ -52,7 +52,7 @@ class DDIA_LinearizabilityScenarioTest {
                 .client(BOB).connectedTo(BYZANTIUM)
                 .steps(s -> {
                     // Seed initial value across the cluster.
-                    s.client(WRITER).writes(KEY, VOLD).awaitCompletion();
+                    s.client(WRITER).writes(KEY, VOLD).expectSuccess();
 
                     // Writer updates to VNEW. Replication from ATHENS to the other replicas is
                     // delayed so only ATHENS sees the new value initially. We don't wait for the
@@ -67,7 +67,7 @@ class DDIA_LinearizabilityScenarioTest {
                     // quorum to include ATHENS (which has VNEW), so Alice returns VNEW.
                     s.client(ALICE).reads(KEY)
                             .whileClusterEvent(new Partition(List.of(BYZANTIUM), List.of(CYRENE)))
-                            .awaitCompletion();
+                            .expectSuccess();
 
                     // Bob reads via BYZANTIUM. We reconnect BYZANTIUM<->CYRENE and then
                     // partition BYZANTIUM<->ATHENS, so the quorum is {BYZANTIUM, CYRENE},

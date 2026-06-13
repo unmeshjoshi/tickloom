@@ -16,7 +16,7 @@ class ScenarioRunner2Test {
      *   .client(alice).connectedTo(athens)
      *   .steps(s -> s.client(alice).writes("k","v")
      *                  .whileClusterEvent(partition(...))
-     *                  .awaitCompletion())
+     *                  .expectSuccess())
      */
     @Test
     public void shouldRunWriteStep() throws IOException {
@@ -28,11 +28,10 @@ class ScenarioRunner2Test {
         Scenario<QuorumReplicaClient> scenario = QuorumStepBuilder.scenario("quorum write")
                 .servers(athens, byzantium, cyrene)
                 .client(alice).connectedTo(athens)
-                .steps(s -> s.client(alice).writes("key", "value").awaitCompletion());
+                .steps(s -> s.client(alice).writes("key", "value").expectSuccess());
 
-        scenario.run();
+        JepsenHistory history = scenario.run();
 
-        JepsenHistory history = scenario.history();
         System.out.println("history = " + history.getEdnString());
     }
 }

@@ -2,12 +2,16 @@ package com.tickloom.testkit.dsl;
 
 import com.tickloom.ProcessId;
 import com.tickloom.algorithms.replication.ClusterClient;
+import com.tickloom.future.TickCompletableFuture;
+import com.tickloom.testkit.Cluster;
 import com.tickloom.testkit.dsl.semanticmodel.Action;
+import com.tickloom.testkit.dsl.semanticmodel.AwaitState;
 import com.tickloom.testkit.dsl.semanticmodel.ClusterEvent;
 import com.tickloom.testkit.dsl.semanticmodel.Step;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * Generic step-builder base. Subclasses implement two protocol-specific scopes:
@@ -35,6 +39,15 @@ public abstract class StepBuilder<C extends ClusterClient,
         return actionBuilder();
     }
 
+    @Override
+    public final StepScope<T> await(Predicate<Cluster> condition) {
+        Action<C, Void> noop = (clients, cluster, recorder) -> TickCompletableFuture.completed(null);
+        Step<C, Void> step = new Step<>(noop);
+        step.withAwait(new AwaitState(condition));
+        addStep(step);
+        return this;
+    }
+
     protected abstract T actionBuilder();
     protected abstract G setupBuilder();
 
@@ -42,7 +55,7 @@ public abstract class StepBuilder<C extends ClusterClient,
         return currentClientId;
     }
 
-    protected final <V> EventOrAwaitScope<T> beginStep(Action<C, V> action) {
+    protected final <V> EventOrAwaitScope<T, V> beginStep(Action<C, V> action) {
         return new EventOrAwaitScopeImpl<>(this, action);
     }
 

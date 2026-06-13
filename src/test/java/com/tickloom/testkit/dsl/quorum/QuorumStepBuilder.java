@@ -40,7 +40,7 @@ public final class QuorumStepBuilder
     // ---- Action verbs ----
 
     @Override
-    public EventOrAwaitScope<QuorumActionScope> writes(String key, String value) {
+    public EventOrAwaitScope<QuorumActionScope, String> writes(String key, String value) {
         ProcessId clientId = currentClientId();
         byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
         byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
@@ -53,7 +53,7 @@ public final class QuorumStepBuilder
     }
 
     @Override
-    public EventOrAwaitScope<QuorumActionScope> reads(String key) {
+    public EventOrAwaitScope<QuorumActionScope, String> reads(String key) {
         ProcessId clientId = currentClientId();
         byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
         Action<QuorumReplicaClient, String> action = (clients, cluster, recorder) ->

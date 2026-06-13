@@ -10,6 +10,6 @@ import com.tickloom.testkit.dsl.EventOrAwaitScope;
  * compile error.
  */
 public interface QuorumActionScope extends ActionScope {
-    EventOrAwaitScope<QuorumActionScope> writes(String key, String value);
-    EventOrAwaitScope<QuorumActionScope> reads(String key);
+    EventOrAwaitScope<QuorumActionScope, String> writes(String key, String value);
+    EventOrAwaitScope<QuorumActionScope, String> reads(String key);
 }

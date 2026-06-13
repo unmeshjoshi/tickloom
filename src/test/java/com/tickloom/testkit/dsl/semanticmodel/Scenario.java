@@ -26,7 +26,6 @@ public final class Scenario<C extends ClusterClient> {
     private final ProcessFactory replicaFactory;
     private final Cluster.ClientFactory<C> clientFactory;
     private final List<Step<C, ?>> steps;
-    private final HistoryRecorder<String> recorder = new HistoryRecorder<>();
 
     public Scenario(String name,
                     List<ProcessId> serverIds,
@@ -45,10 +44,16 @@ public final class Scenario<C extends ClusterClient> {
     }
 
     public String name() { return name; }
-    public HistoryRecorder<String> recorder() { return recorder; }
-    public JepsenHistory history() { return recorder.jepsenHistory(); }
 
+    /**
+     * Every run creates a new history instance.
+     * This allows the same scenario to run multiple times.
+     * Each run creates a new cluster instance and executes the scenario.
+     * @return
+     * @throws IOException
+     */
     public JepsenHistory run() throws IOException {
+        HistoryRecorder<String> recorder = new HistoryRecorder<>();
         try (Cluster cluster = Cluster.createSimulated(serverIds, replicaFactory)) {
             Map<ProcessId, C> clients = createClients(cluster);
             for (ClusterEvent given : givens) {
@@ -58,7 +63,7 @@ public final class Scenario<C extends ClusterClient> {
                 step.execute(clients, cluster, recorder);
             }
         }
-        return history();
+        return recorder.jepsenHistory();
     }
 
     private Map<ProcessId, C> createClients(Cluster cluster) throws IOException {

@@ -1,12 +1,13 @@
 package com.tickloom.testkit.dsl;
 
 import com.tickloom.algorithms.replication.ClusterClient;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.testkit.Cluster;
 import com.tickloom.testkit.dsl.semanticmodel.Action;
-import com.tickloom.testkit.dsl.semanticmodel.AwaitCompletion;
 import com.tickloom.testkit.dsl.semanticmodel.AwaitCondition;
 import com.tickloom.testkit.dsl.semanticmodel.AwaitState;
 import com.tickloom.testkit.dsl.semanticmodel.ClusterEvent;
+import com.tickloom.testkit.dsl.semanticmodel.Expects;
 import com.tickloom.testkit.dsl.semanticmodel.Step;
 
 import java.util.ArrayList;
@@ -17,7 +18,7 @@ final class EventOrAwaitScopeImpl<C extends ClusterClient,
                                   T extends ActionScope,
                                   G extends SetupScope,
                                   V>
-        implements EventOrAwaitScope<T> {
+        implements EventOrAwaitScope<T, V> {
 
     private final StepBuilder<C, T, G> parent;
     private final Action<C, V> action;
@@ -29,24 +30,24 @@ final class EventOrAwaitScopeImpl<C extends ClusterClient,
     }
 
     @Override
-    public EventOrAwaitScope<T> whileClusterEvent(ClusterEvent event) {
+    public EventOrAwaitScope<T, V> whileClusterEvent(ClusterEvent event) {
         events.add(event);
         return this;
     }
 
     @Override
-    public StepScope<T> awaitCompletion() {
-        return buildStep(new AwaitCompletion());
-    }
-
-    @Override
-    public StepScope<T> awaitCompletion(Object expectedResult) {
-        return buildStep(new AwaitCompletion(expectedResult));
+    public StepScope<T> expects(Predicate<TickCompletableFuture<V>> check) {
+        return buildStep(new Expects(eraseFutureType(check)));
     }
 
     @Override
     public StepScope<T> await(Predicate<Cluster> condition) {
         return buildStep(new AwaitState(condition));
+    }
+
+    @SuppressWarnings("unchecked")
+    private Predicate<TickCompletableFuture<?>> eraseFutureType(Predicate<TickCompletableFuture<V>> check) {
+        return f -> check.test((TickCompletableFuture<V>) f);
     }
 
     private StepScope<T> buildStep(AwaitCondition await) {
