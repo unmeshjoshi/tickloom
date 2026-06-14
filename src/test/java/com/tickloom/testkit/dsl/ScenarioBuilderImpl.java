@@ -8,7 +8,9 @@ import com.tickloom.testkit.dsl.semanticmodel.ClientDef;
 import com.tickloom.testkit.dsl.semanticmodel.Scenario;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -22,7 +24,7 @@ import java.util.function.Supplier;
 final class ScenarioBuilderImpl<C extends ClusterClient,
                                 T extends ActionScope,
                                 G extends SetupScope>
-        implements ServerStep<C, T, G>, ClientDefStep<C, T, G>, ConnectedToStep<C, T, G> {
+        implements ServerStep<C, T, G>, ClientStep<C,T, G>, ClientDefStep<C, T, G> {
 
     private final String name;
     private final ProcessFactory replicaFactory;
@@ -30,8 +32,7 @@ final class ScenarioBuilderImpl<C extends ClusterClient,
     private final StepBuilder<C, T, G> stepBuilder;
 
     private List<ProcessId> serverIds = List.of();
-    private final List<ClientDef> clientDefs = new ArrayList<>();
-    private ProcessId pendingClientId;
+    private final Map<ProcessId, ClientDef> clientDefs = new HashMap<>();
 
     ScenarioBuilderImpl(String name,
                         ProcessFactory replicaFactory,
@@ -44,21 +45,32 @@ final class ScenarioBuilderImpl<C extends ClusterClient,
     }
 
     @Override
-    public ClientDefStep<C, T, G> servers(ProcessId... ids) {
+    public ClientStep<C, T, G> servers(ProcessId... ids) {
         this.serverIds = List.of(ids);
         return this;
     }
 
     @Override
-    public ConnectedToStep<C, T, G> client(ProcessId id) {
-        this.pendingClientId = id;
+    public ClientDefStep<C, T, G> clients(ProcessId... ids) {
+        for (ProcessId id : ids) {
+            clientDefs.put(id, new ClientDef(id, null));
+        }
+        return this;
+    }
+
+    ClientDef pending;
+    @Override
+    public ClientDefStep<C, T, G> client(ProcessId id) {
+        pending = clientDefs.get(id);
         return this;
     }
 
     @Override
     public ClientDefStep<C, T, G> connectedTo(ProcessId serverId) {
-        clientDefs.add(new ClientDef(pendingClientId, serverId));
-        pendingClientId = null;
+        if (pending == null) {
+            throw new IllegalStateException("client() must be called before connectedTo()");
+        }
+        clientDefs.put(pending.id(), new ClientDef(pending.id(), serverId));
         return this;
     }
 
@@ -71,7 +83,7 @@ final class ScenarioBuilderImpl<C extends ClusterClient,
     @Override
     public Scenario<C> steps(Consumer<StepScope<T>> stepsConsumer) {
         stepsConsumer.accept(stepBuilder);
-        return new Scenario<>(name, serverIds, clientDefs,
+        return new Scenario<>(name, serverIds, clientDefs.values().stream().toList(),
                 stepBuilder.collectedGivens(),
                 replicaFactory, clientFactory,
                 stepBuilder.collectedSteps());

@@ -27,6 +27,7 @@ class ScenarioRunner2Test {
 
         Scenario<QuorumReplicaClient> scenario = QuorumStepBuilder.scenario("quorum write")
                 .servers(athens, byzantium, cyrene)
+                .clients(alice)
                 .client(alice).connectedTo(athens)
                 .steps(s -> s.client(alice).writes("key", "value").expectSuccess());
 

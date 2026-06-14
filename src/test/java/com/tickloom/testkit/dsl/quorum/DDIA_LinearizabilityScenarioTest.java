@@ -47,6 +47,7 @@ class DDIA_LinearizabilityScenarioTest {
     void ddia106_link_delay_race() throws IOException {
         Scenario<QuorumReplicaClient> scenario = QuorumStepBuilder.scenario("DDIA §10.6 quorum non-linearizable")
                 .servers(ATHENS, BYZANTIUM, CYRENE)
+                .clients(WRITER, ALICE, BOB)
                 .client(WRITER).connectedTo(ATHENS)
                 .client(ALICE).connectedTo(BYZANTIUM)
                 .client(BOB).connectedTo(BYZANTIUM)

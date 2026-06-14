@@ -17,7 +17,7 @@ plugins {
 // =============================================================================
 
 group = 'io.github.unmeshjoshi'
-version = '0.1.0-alpha.29'
+version = '0.1.0-alpha.30'
 
 // Version catalog for dependency management
 ext {
