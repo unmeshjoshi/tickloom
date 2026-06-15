@@ -52,8 +52,10 @@ public final class Scenario<C extends ClusterClient> {
      * @return
      * @throws IOException
      */
-    public JepsenHistory run() throws IOException {
+
+    public ScenarioResult run() throws IOException {
         HistoryRecorder<String> recorder = new HistoryRecorder<>();
+        ClusterSnapshot snapshot;
         try (Cluster cluster = Cluster.createSimulated(serverIds, replicaFactory)) {
             Map<ProcessId, C> clients = createClients(cluster);
             for (ClusterEvent given : givens) {
@@ -62,8 +64,9 @@ public final class Scenario<C extends ClusterClient> {
             for (Step<C, ?> step : steps) {
                 step.execute(clients, cluster, recorder);
             }
+            snapshot = new ClusterSnapshot(cluster);
         }
-        return recorder.jepsenHistory();
+        return new ScenarioResult(recorder.jepsenHistory(), snapshot);
     }
 
     private Map<ProcessId, C> createClients(Cluster cluster) throws IOException {

@@ -31,7 +31,7 @@ class ScenarioRunner2Test {
                 .client(alice).connectedTo(athens)
                 .steps(s -> s.client(alice).writes("key", "value").expectSuccess());
 
-        JepsenHistory history = scenario.run();
+        JepsenHistory history = scenario.run().history();
 
         System.out.println("history = " + history.getEdnString());
     }

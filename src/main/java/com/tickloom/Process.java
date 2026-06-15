@@ -170,6 +170,10 @@ public abstract class Process implements Tickable, AutoCloseable {
     /**
      * Check if the process is initialized.
      */
+    public Storage getStorage() {
+        return storage;
+    }
+
     public boolean isInitialised() {
         return isInitialised;
     }

@@ -2,14 +2,10 @@ package com.tickloom.testkit.dsl.quorum;
 
 import com.tickloom.ConsistencyChecker;
 import com.tickloom.ProcessId;
-import com.tickloom.algorithms.replication.quorum.QuorumMessageTypes;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
 import com.tickloom.algorithms.replication.quorum.VersionedValue;
 import com.tickloom.history.JepsenHistory;
-import com.tickloom.testkit.dsl.semanticmodel.DelayMessages;
-import com.tickloom.testkit.dsl.semanticmodel.Partition;
-import com.tickloom.testkit.dsl.semanticmodel.Reconnect;
-import com.tickloom.testkit.dsl.semanticmodel.Scenario;
+import com.tickloom.testkit.dsl.semanticmodel.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -18,6 +14,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
+import static com.tickloom.algorithms.replication.quorum.QuorumMessageTypes.INTERNAL_SET_REQUEST;
+import static com.tickloom.testkit.dsl.ClusterEvents.delay;
+import static com.tickloom.testkit.dsl.ClusterEvents.partition;
+import static com.tickloom.testkit.dsl.ClusterEvents.reconnect;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -59,15 +59,14 @@ class DDIA_LinearizabilityScenarioTest {
                     // delayed so only ATHENS sees the new value initially. We don't wait for the
                     // write future — only until ATHENS has applied locally.
                     s.client(WRITER).writes(KEY, VNEW)
-                            .whileClusterEvent(new DelayMessages(
-                                    QuorumMessageTypes.INTERNAL_SET_REQUEST,
-                                    ATHENS, List.of(BYZANTIUM, CYRENE), PROP_DELAY_TICKS))
+                            .whileClusterEvent(delay(INTERNAL_SET_REQUEST)
+                                    .from(ATHENS).to(BYZANTIUM, CYRENE).byTicks(PROP_DELAY_TICKS))
                             .await(cluster -> athensHas(cluster, VNEW));
 
                     // Alice reads via BYZANTIUM. Partitioning BYZANTIUM<->CYRENE forces the
                     // quorum to include ATHENS (which has VNEW), so Alice returns VNEW.
                     s.client(ALICE).reads(KEY)
-                            .whileClusterEvent(new Partition(List.of(BYZANTIUM), List.of(CYRENE)))
+                            .whileClusterEvent(partition(BYZANTIUM).from(CYRENE))
                             .expectSuccess();
 
                     // Bob reads via BYZANTIUM. We reconnect BYZANTIUM<->CYRENE and then
@@ -77,13 +76,13 @@ class DDIA_LinearizabilityScenarioTest {
                     // delayed write to BYZANTIUM/CYRENE eventually arrive and the writer's
                     // VNEW future complete (its :ok shows up last in the history).
                     s.client(BOB).reads(KEY)
-                            .whileClusterEvent(new Reconnect(BYZANTIUM))
-                            .whileClusterEvent(new Partition(List.of(BYZANTIUM), List.of(ATHENS)))
+                            .whileClusterEvent(reconnect(BYZANTIUM))
+                            .whileClusterEvent(partition(BYZANTIUM).from(ATHENS))
                             .await(DDIA_LinearizabilityScenarioTest::allConvergedToVNew);
                 });
 
-        JepsenHistory history = scenario.run();
-
+        ScenarioResult result = scenario.run();
+        JepsenHistory history = result.history();
         assertEquals(
                 "[{:process 0, :process-name \"writer\", :type :invoke, :f :write, :value \"x=0\"} " +
                 "{:process 0, :process-name \"writer\", :type :ok, :f :write, :value \"x=0\"} " +

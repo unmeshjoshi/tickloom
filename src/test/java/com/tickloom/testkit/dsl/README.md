@@ -22,8 +22,8 @@ Scenario<QuorumReplicaClient> s = QuorumStepBuilder.scenario("quorum write")
         
         // Step 2: Delay replication and write new value
         s.client(WRITER).writes("key", "v2")
-            .whileClusterEvent(new DelayMessages(
-                QuorumMessageTypes.INTERNAL_SET_REQUEST, ATHENS, List.of(BYZANTIUM), 100))
+            .whileClusterEvent(delay(INTERNAL_SET_REQUEST)
+                .from(ATHENS).to(BYZANTIUM).byTicks(100))
             .await(cluster -> athensHas(cluster, "v2"));
     });
 
