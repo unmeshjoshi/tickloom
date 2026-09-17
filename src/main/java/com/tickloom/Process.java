@@ -260,4 +260,20 @@ public abstract class Process implements Tickable, AutoCloseable {
         return resultFuture;
     }
 
+    public void start() {
+        TickCompletableFuture<?> startFuture = onStart();
+        startFuture.whenComplete((result, error) -> {
+            if (error != null) {
+                System.err.println(id + ": Startup failed: " + error.getMessage());
+                error.printStackTrace();
+            } else {
+               markInitialised();
+            }
+        });
+    }
+
+    public TickCompletableFuture onStart() {
+        return TickCompletableFuture.completed(true);
+    }
+
 }

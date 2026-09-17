@@ -628,6 +628,7 @@ public class Cluster implements Tickable, AutoCloseable {
 
         public void start() throws IOException {
             network.bind(id);
+            process.start();
         }
 
         public void tick() {
