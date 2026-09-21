@@ -134,8 +134,14 @@ public abstract class Process implements Tickable, AutoCloseable {
     // ========== INITIALIZATION SYSTEM ==========
 
     /**
-     * Non-abstract initialization method that ensures proper initialization flow.
-     * Calls the abstract onInit method and automatically marks as initialized when complete.
+     * Runs the deprecated {@link #onInit()} hook and marks the process initialised when it
+     * completes.
+     *
+     * <p><b>Invoked from the constructor</b> (see the {@code Process} constructor), which is why
+     * {@link #onInit()} is deprecated: a constructor calling an overridable method is the hazard
+     * described in <i>Effective Java</i> (3rd ed.), Item 19, <i>"Design and document for
+     * inheritance or else prohibit it"</i> — <q>constructors must not invoke overridable
+     * methods</q>. Use {@link #onStart()} instead.
      */
     protected final void initialise() {
 
@@ -153,13 +159,28 @@ public abstract class Process implements Tickable, AutoCloseable {
     }
 
     /**
-     * Method for subclasses to implement their initialization logic.
-     * Should return a ListenableFuture that completes when initialization is done.
-     * The Process class will automatically call markInitialised() when this future completes.
-     * 
-     * Default implementation is a no-op that completes immediately.
-     * Subclasses can override this method if they need initialization.
+     * Startup hook that runs <b>inside the {@code Process} constructor</b>.
+     *
+     * <p>This is the classic superclass-constructor-calls-overridable-method trap, set out in
+     * <i>Effective Java</i> (3rd ed.), Item 19, <i>"Design and document for inheritance or else
+     * prohibit it"</i>: <q>constructors must not invoke overridable methods.</q> A subclass
+     * overriding this runs before its own field initialisers and constructor body, so any field
+     * it touches is still {@code null} or zero — and anything it assigns is then <b>silently
+     * overwritten</b> when those initialisers finally run. Bloch's example fails visibly; this
+     * one usually does not, which is worse.
+     *
+     * <p>Subclasses worked around it by assigning nothing, returning an incomplete future, and
+     * finishing the job on the first {@link #onTick()}. {@link #onStart()} removes the hazard
+     * rather than working around it: it is called after every process is constructed, so fields
+     * are assigned and a subclass may register, open connections, or complete immediately.
+     *
+     * <p>Both paths call {@code markInitialised()} when their future completes, so moving an
+     * override from here to {@link #onStart()} does not change when {@link #isInitialised()}
+     * turns true — only whether the object was fully built when it happened.
+     *
+     * @deprecated Override {@link #onStart()} instead; it runs after construction.
      */
+    @Deprecated
     protected TickCompletableFuture<?> onInit() {
         // Default no-op implementation - subclasses can override if needed
         TickCompletableFuture<Void> initFuture = new TickCompletableFuture<>();
@@ -272,6 +293,19 @@ public abstract class Process implements Tickable, AutoCloseable {
         });
     }
 
+    /**
+     * Startup hook that runs <b>after</b> the process is fully constructed.
+     *
+     * <p>The safe counterpart to the deprecated {@link #onInit()}: by the time this is called the
+     * subclass's field initialisers and constructor body have run, so an override may use its own
+     * state, register itself, open connections, or complete immediately. Overriding
+     * {@link #onInit()} instead is the trap <i>Effective Java</i> (3rd ed.) Item 19 warns about —
+     * <q>constructors must not invoke overridable methods.</q>
+     *
+     * <p>Called once per process, from the harness that starts the cluster rather than from a
+     * constructor. The returned future completes when startup is done; the process is marked
+     * initialised then. Default implementation completes immediately.
+     */
     public TickCompletableFuture onStart() {
         return TickCompletableFuture.completed(true);
     }
