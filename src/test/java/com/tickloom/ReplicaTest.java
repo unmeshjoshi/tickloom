@@ -258,6 +258,44 @@ class ReplicaTest {
         assertNotNull(responseFuture.getException());
     }
 
+    @Test
+    public void shouldBroadcastOneWayMessageToAllNodes() {
+        SimulatedNetwork network = SimulatedNetwork.noLossNetwork(new Random());
+        List<ProcessId> peerIds = List.of(ProcessId.of("node1"), ProcessId.of("node2"));
+        TestableReplica replica = createTestReplica(peerIds, network);
+        MessageType pingType = new MessageType("HEARTBEAT_PING");
+
+        replica.broadcast(pingType, "ping");
+
+        List<Message> pending = network.getPendingMessages();
+        assertEquals(2, pending.size());
+        assertTrue(pending.stream().anyMatch(m -> m.destination().equals(peerIds.get(0)) && m.messageType().equals(pingType)));
+        assertTrue(pending.stream().anyMatch(m -> m.destination().equals(peerIds.get(1)) && m.messageType().equals(pingType)));
+
+        assertNotNull(replica.selfMessage);
+        assertEquals(pingType, replica.selfMessage.messageType());
+
+        assertEquals(0, replica.getWaitingListSize());
+    }
+
+    @Test
+    public void shouldBroadcastOneWayMessageToSpecificTargets() {
+        SimulatedNetwork network = SimulatedNetwork.noLossNetwork(new Random());
+        List<ProcessId> peerIds = List.of(ProcessId.of("node1"), ProcessId.of("node2"));
+        TestableReplica replica = createTestReplica(peerIds, network);
+        MessageType pingType = new MessageType("HEARTBEAT_PING");
+
+        replica.broadcast(List.of(peerIds.get(0)), pingType, "ping");
+
+        List<Message> pending = network.getPendingMessages();
+        assertEquals(1, pending.size());
+        assertEquals(peerIds.get(0), pending.get(0).destination());
+        assertEquals(pingType, pending.get(0).messageType());
+        assertNull(replica.selfMessage);
+
+        assertEquals(0, replica.getWaitingListSize());
+    }
+
     private static Message responseMessage(ProcessId from, MessageType type) {
         return responseMessage(from, type, new byte[0]);
     }

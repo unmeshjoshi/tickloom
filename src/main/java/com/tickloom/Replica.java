@@ -6,6 +6,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -52,6 +53,30 @@ public abstract class Replica extends Process {
 
     protected <T> QuorumRequestBuilder<T> quorumRequest(MessageType messageType, Object samePayload) {
         return this.<T>quorumRequest(messageType).withSamePayload(samePayload);
+    }
+
+    /**
+     * Broadcasts a one-way message (fire-and-forget) to all nodes in the cluster (peers + self).
+     * Does not register with the waiting list or expect any responses.
+     */
+    protected void broadcast(MessageType type, Object payload) {
+        broadcast(getAllNodes(), type, payload);
+    }
+
+    /**
+     * Broadcasts a one-way message (fire-and-forget) to the specified collection of target processes.
+     * Does not register with the waiting list or expect any responses.
+     */
+    protected void broadcast(Collection<ProcessId> targets, MessageType type, Object payload) {
+        Objects.requireNonNull(targets, "targets cannot be null");
+        Objects.requireNonNull(type, "type cannot be null");
+        Objects.requireNonNull(payload, "payload cannot be null");
+
+        for (ProcessId target : targets) {
+            String internalCorrelationId = internalCorrelationId();
+            Message message = createMessage(target, internalCorrelationId, payload, type);
+            send(message);
+        }
     }
 
     /**
