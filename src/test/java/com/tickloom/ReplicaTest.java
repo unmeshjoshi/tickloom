@@ -206,13 +206,69 @@ class ReplicaTest {
         assertEquals(3, responseFuture.getResult().size());
     }
 
+    @Test
+    public void shouldTolerateNodeRejectionWhenQuorumStillPossible() {
+        List<ProcessId> peerIds = List.of(ProcessId.of("node1"), ProcessId.of("node2"), ProcessId.of("node3"));
+        TestableReplica replica = createTestReplica(peerIds);
+
+        MessageType requestType = new MessageType("INTERNAL_GET_REQUEST");
+        MessageType responseType = new MessageType("INTERNAL_GET_RESPONSE");
+
+        TickCompletableFuture<Map<ProcessId, Message>> responseFuture = replica.<Message>quorumRequest(requestType, new byte[0])
+                .to(replica.getPeers())
+                .countResponseIf(msg -> "OK".equals(new String(msg.payload())))
+                .send();
+
+        // Node 1 rejects -> 1 failure (max allowed: 3 - 2 = 1) -> future remains pending!
+        replica.respond(peerIds.get(0), responseMessage(peerIds.get(0), responseType, "REJECT".getBytes()));
+        assertFalse(responseFuture.isCompleted());
+
+        // Node 2 accepts -> 1 success -> future remains pending!
+        replica.respond(peerIds.get(1), responseMessage(peerIds.get(1), responseType, "OK".getBytes()));
+        assertFalse(responseFuture.isCompleted());
+
+        // Node 3 accepts -> 2 successes (quorum reached!) -> future completes!
+        replica.respond(peerIds.get(2), responseMessage(peerIds.get(2), responseType, "OK".getBytes()));
+        assertTrue(responseFuture.isCompleted());
+        assertEquals(2, responseFuture.getResult().size());
+        assertTrue(responseFuture.getResult().containsKey(peerIds.get(1)));
+        assertTrue(responseFuture.getResult().containsKey(peerIds.get(2)));
+    }
+
+    @Test
+    public void shouldFailFastWhenRejectionsExceedMaxFailures() {
+        List<ProcessId> peerIds = List.of(ProcessId.of("node1"), ProcessId.of("node2"), ProcessId.of("node3"));
+        TestableReplica replica = createTestReplica(peerIds);
+
+        MessageType requestType = new MessageType("INTERNAL_GET_REQUEST");
+        MessageType responseType = new MessageType("INTERNAL_GET_RESPONSE");
+
+        TickCompletableFuture<Map<ProcessId, Message>> responseFuture = replica.<Message>quorumRequest(requestType, new byte[0])
+                .to(replica.getPeers())
+                .countResponseIf(msg -> "OK".equals(new String(msg.payload())))
+                .send();
+
+        // Node 1 rejects -> 1 failure (max allowed: 3 - 2 = 1) -> future remains pending!
+        replica.respond(peerIds.get(0), responseMessage(peerIds.get(0), responseType, "REJECT".getBytes()));
+        assertFalse(responseFuture.isCompleted());
+
+        // Node 2 rejects -> 2 failures (> 1 max allowed) -> FAIL FAST immediately without waiting for Node 3!
+        replica.respond(peerIds.get(1), responseMessage(peerIds.get(1), responseType, "REJECT".getBytes()));
+        assertTrue(responseFuture.isFailed());
+        assertNotNull(responseFuture.getException());
+    }
+
     private static Message responseMessage(ProcessId from, MessageType type) {
+        return responseMessage(from, type, new byte[0]);
+    }
+
+    private static Message responseMessage(ProcessId from, MessageType type, byte[] payload) {
         return Message.of(
                 from,
                 ProcessId.of("test"),
                 PeerType.SERVER,
                 type,
-                new byte[0],
+                payload,
                 "dummy-corr-id"
         );
     }
