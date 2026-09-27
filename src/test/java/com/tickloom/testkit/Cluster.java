@@ -540,6 +540,11 @@ public class Cluster implements Tickable, AutoCloseable {
     }
 
     public interface ClientFactory<T extends ClusterClient> {
+        default T createAndStart(List<ProcessId> replicaEndpoints, ProcessParams processParams) {
+            T clusterClient = create(replicaEndpoints, processParams);
+            clusterClient.start();
+            return clusterClient;
+        }
         T create(List<ProcessId> replicaEndpoints, ProcessParams processParams);
     }
 
@@ -585,7 +590,7 @@ public class Cluster implements Tickable, AutoCloseable {
         StubClock clientClock = new StubClock(initialClockTime);
         processClocks.put(id, clientClock);
         IdGen idGen = new IdGen(id.name(), random);
-        T clusterClient = factory.create(targetNodes, new ProcessParams(id, messageBus, messageCodec, requestTimeoutTicks, clientClock, idGen, new SimulatedStorage(random)));
+        T clusterClient = factory.createAndStart(targetNodes, new ProcessParams(id, messageBus, messageCodec, requestTimeoutTicks, clientClock, idGen, new SimulatedStorage(random)));
         clientNodes.add(new ClientNode(id, network, messageBus, clusterClient));
         return clusterClient;
     }
@@ -629,7 +634,6 @@ public class Cluster implements Tickable, AutoCloseable {
 
         public void start() throws IOException {
             network.bind(id);
-            process.start();
         }
 
         public void tick() {
@@ -726,7 +730,7 @@ public class Cluster implements Tickable, AutoCloseable {
             processClocks.put(processId, stubClock);
             Clock clock = stubClock;
             IdGen idGen = new IdGen(processId.name(), random);
-            com.tickloom.Process process = factory.create(peers, new ProcessParams(processId, messageBus, messageCodec, requestTimeoutTicks, clock, idGen, storage));
+            com.tickloom.Process process = factory.createAndStart(peers, new ProcessParams(processId, messageBus, messageCodec, requestTimeoutTicks, clock, idGen, storage));
             serverNodes.add(new Node(processId, network, messageBus, process, storage));
         }
         return this;

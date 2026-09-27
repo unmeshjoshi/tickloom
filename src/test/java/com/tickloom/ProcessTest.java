@@ -37,6 +37,7 @@ class ProcessTest {
 
         };
 
+        process.start();
         assertEquals(1, messageBus.getHandlers().size());
         assertEquals(messageBus.getHandlers().get(pid), process);
 

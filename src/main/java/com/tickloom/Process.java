@@ -41,8 +41,6 @@ public abstract class Process implements Tickable, AutoCloseable {
         processParams.messageBus().register(this);
         initialiseMessageHandlers();
         
-        // Call initialization
-        initialise();
     }
 
     public final void receiveMessage(Message message) {
@@ -133,64 +131,6 @@ public abstract class Process implements Tickable, AutoCloseable {
 
     // ========== INITIALIZATION SYSTEM ==========
 
-    /**
-     * Runs the deprecated {@link #onInit()} hook and marks the process initialised when it
-     * completes.
-     *
-     * <p><b>Invoked from the constructor</b> (see the {@code Process} constructor), which is why
-     * {@link #onInit()} is deprecated: a constructor calling an overridable method is the hazard
-     * described in <i>Effective Java</i> (3rd ed.), Item 19, <i>"Design and document for
-     * inheritance or else prohibit it"</i> — <q>constructors must not invoke overridable
-     * methods</q>. Use {@link #onStart()} instead.
-     */
-    protected final void initialise() {
-
-        TickCompletableFuture<?> initFuture = onInit();
-        // Don't mark as initialized if startup fails
-        initFuture.whenComplete((result, error) -> {
-            if (error == null) {
-                markInitialised();
-                return;
-            }
-            System.err.println(id + ": Initialization failed: " + error.getMessage());
-            error.printStackTrace();
-            // Don't mark as initialized if startup fails
-        });
-    }
-
-    /**
-     * Startup hook that runs <b>inside the {@code Process} constructor</b>.
-     *
-     * <p>This is the classic superclass-constructor-calls-overridable-method trap, set out in
-     * <i>Effective Java</i> (3rd ed.), Item 19, <i>"Design and document for inheritance or else
-     * prohibit it"</i>: <q>constructors must not invoke overridable methods.</q> A subclass
-     * overriding this runs before its own field initialisers and constructor body, so any field
-     * it touches is still {@code null} or zero — and anything it assigns is then <b>silently
-     * overwritten</b> when those initialisers finally run. Bloch's example fails visibly; this
-     * one usually does not, which is worse.
-     *
-     * <p>Subclasses worked around it by assigning nothing, returning an incomplete future, and
-     * finishing the job on the first {@link #onTick()}. {@link #onStart()} removes the hazard
-     * rather than working around it: it is called after every process is constructed, so fields
-     * are assigned and a subclass may register, open connections, or complete immediately.
-     *
-     * <p>Both paths call {@code markInitialised()} when their future completes, so moving an
-     * override from here to {@link #onStart()} does not change when {@link #isInitialised()}
-     * turns true — only whether the object was fully built when it happened.
-     *
-     * @deprecated Override {@link #onStart()} instead; it runs after construction.
-     */
-    @Deprecated
-    protected TickCompletableFuture<?> onInit() {
-        // Default no-op implementation - subclasses can override if needed
-        TickCompletableFuture<Void> initFuture = new TickCompletableFuture<>();
-        initFuture.complete(null);
-        return initFuture;
-    }
-
-    /**
-     * Check if the process is initialized.
-     */
     public Storage getStorage() {
         return storage;
     }
@@ -201,7 +141,7 @@ public abstract class Process implements Tickable, AutoCloseable {
 
     /**
      * Mark the process as initialized.
-     * Should only be called by Process.initialise().
+     * Should only be called by Process.start().
      */
     protected void markInitialised() {
         this.isInitialised = true;
@@ -282,13 +222,16 @@ public abstract class Process implements Tickable, AutoCloseable {
     }
 
     public void start() {
+        if (isInitialised) {
+            return;
+        }
         TickCompletableFuture<?> startFuture = onStart();
         startFuture.whenComplete((result, error) -> {
             if (error != null) {
                 System.err.println(id + ": Startup failed: " + error.getMessage());
                 error.printStackTrace();
             } else {
-               markInitialised();
+                markInitialised();
             }
         });
     }
@@ -296,18 +239,19 @@ public abstract class Process implements Tickable, AutoCloseable {
     /**
      * Startup hook that runs <b>after</b> the process is fully constructed.
      *
-     * <p>The safe counterpart to the deprecated {@link #onInit()}: by the time this is called the
-     * subclass's field initialisers and constructor body have run, so an override may use its own
-     * state, register itself, open connections, or complete immediately. Overriding
-     * {@link #onInit()} instead is the trap <i>Effective Java</i> (3rd ed.) Item 19 warns about —
-     * <q>constructors must not invoke overridable methods.</q>
+     * <p>This avoids the trap described in <i>Effective Java</i> (3rd ed.), Item 19:
+     * <i>"Design and document for inheritance or else prohibit it"</i> — <q>constructors must not
+     * invoke overridable methods</q>. Invoking an overridable method from the {@code Process}
+     * constructor would execute before subclass field initialisers and subclass constructor
+     * bodies have run. Any subclass fields accessed during that time would be observed as
+     * {@code null} or zero, and any assignments made would be silently overwritten when the
+     * subclass field initialisers finally run.
      *
-     * <p>Called once per process, from the harness that starts the cluster rather than from a
-     * constructor. The returned future completes when startup is done; the process is marked
-     * initialised then. Default implementation completes immediately.
+     * <p>Called once per process from {@link #start()} (e.g., via {@code ProcessFactory#createAndStart})
+     * after the object is fully constructed. The returned future completes when startup is done;
+     * the process is marked initialised then. The default implementation completes immediately.
      */
-    public TickCompletableFuture onStart() {
+    protected TickCompletableFuture<?> onStart() {
         return TickCompletableFuture.completed(true);
     }
-
 }

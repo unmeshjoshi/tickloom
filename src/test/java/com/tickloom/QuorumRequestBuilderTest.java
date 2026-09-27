@@ -46,6 +46,7 @@ class QuorumRequestBuilderTest {
                 new ArrayList<>(peers),
                 new ProcessParams(ProcessId.of("test"), messageBus, messageCodec, timeoutTicks, new SystemClock(), new IdGen(ProcessId.of("test").name(), new Random()), new SimulatedStorage(random))
         );
+        newReplica.start();
         messageBus.register(newReplica);
         return newReplica;
     }

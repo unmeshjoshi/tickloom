@@ -35,6 +35,12 @@ import java.util.List;
  */
 public interface ProcessFactory {
 
+    default Process createAndStart(List<ProcessId> peerIds,
+                                  ProcessParams processParams) {
+        Process process = create(peerIds, processParams);
+        process.start();
+        return process;
+    }
     /**
      * Constructs a configured {@link Process} instance for the given server id and cluster context.
      *

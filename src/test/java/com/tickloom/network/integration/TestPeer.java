@@ -78,7 +78,9 @@ class TestPeer extends com.tickloom.Process implements Tickable, AutoCloseable {
         JsonMessageCodec codec = new JsonMessageCodec();
         var network = new NioNetwork(codec, topology, selector);
         MessageBus messageBus = new MessageBus(network, codec);
-        return factory.create(id, messageBus, network, topology, codec);
+        T peer = factory.create(id, messageBus, network, topology, codec);
+        peer.start();
+        return peer;
     }
 
 

@@ -69,6 +69,7 @@ public class ServerMain {
             Storage storage = new RocksDbStorage(dataDir);
 
             Process replica = createProcess(options.get(OPT_FACTORY), processId, peerIds, messageBus, codec, storage, clock, timeoutTicks);
+            replica.start();
 
             addShutdownHook(network, storage);
 

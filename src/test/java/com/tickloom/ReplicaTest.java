@@ -339,11 +339,13 @@ class ReplicaTest {
 
         MessageBus messageBus = new MessageBus(network, messageCodec);
 
-        return new TestableReplica(peerIds, new SimulatedStorage(random),
+        TestableReplica replica = new TestableReplica(peerIds, new SimulatedStorage(random),
                 new ProcessParams(selfId,
                         messageBus, messageCodec, timeoutTicks,
                         new SystemClock(), new IdGen(selfId.name(),
                         new Random()), new SimulatedStorage(random)), network);
+        replica.start();
+        return replica;
     }
 
     // Test implementations

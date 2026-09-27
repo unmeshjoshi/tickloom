@@ -85,6 +85,7 @@ public class ClientMain {
             SimulatedStorage storage = new SimulatedStorage(new Random());
 
             QuorumReplicaClient client = new QuorumReplicaClient(replicas, new ProcessParams(clientId, bus, codec, timeoutTicks, clock, idGen, storage));
+            client.start();
 
             addShutdownHook(network);
 
