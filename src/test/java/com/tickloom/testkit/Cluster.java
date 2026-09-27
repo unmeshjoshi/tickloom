@@ -18,6 +18,7 @@ import com.tickloom.storage.rocksdb.RocksDbStorage;
 import com.tickloom.util.Clock;
 import com.tickloom.util.IdGen;
 import com.tickloom.util.StubClock;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -712,7 +713,7 @@ public class Cluster implements Tickable, AutoCloseable {
 
         for (int i = 0; i < processIds.size(); i++) {
             ProcessId processId = processIds.get(i);
-            List<ProcessId> peers = processIds.stream().filter(id -> !id.equals(processId)).toList();
+            List<ProcessId> peers = getPeerIdsFrom(processIds, processId);
             Network network = sharedNetwork; //We can create separate network, NioNetwork.create(topo, messageCodec);
             //create storage. Based on the configuration either @SimulatedStorage or @RocksDBStorage is created.
             //RocksDBStorage is useful when we want to test scenarios with crash recovery, particularly useful
@@ -729,6 +730,11 @@ public class Cluster implements Tickable, AutoCloseable {
             serverNodes.add(new Node(processId, network, messageBus, process, storage));
         }
         return this;
+    }
+
+    @NotNull
+    private static List<ProcessId> getPeerIdsFrom(List<ProcessId> processIds, ProcessId processId) {
+        return processIds.stream().filter(id -> !id.equals(processId)).toList();
     }
 
     private Storage createStorage(ProcessId processId) throws IOException {

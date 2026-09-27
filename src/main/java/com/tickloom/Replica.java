@@ -2,6 +2,7 @@ package com.tickloom;
 
 import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.messaging.*;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -45,11 +46,12 @@ public abstract class Replica extends Process {
     }
 
     protected <T> QuorumRequestBuilder<T> quorumRequest(MessageType messageType, Object request) {
-        return new QuorumRequestBuilder<>(majorityQuorum(), messageType, request);
+        return new QuorumRequestBuilder<>(messageType, request);
     }
 
-    private int majorityQuorum() {
-        return (getAllNodes().size() / 2) + 1;
+    @NotNull
+    public List<ProcessId> getPeers() {
+        return peerIds;
     }
 
     protected class QuorumRequestBuilder<T> {
@@ -58,11 +60,12 @@ public abstract class Replica extends Process {
         private final Object payload;
         private Predicate<T> successCondition;
         private BiFunction<ProcessId, String, Message> messageBuilder;
+        private List<ProcessId> targetNodes;
 
-        public QuorumRequestBuilder(int requiredQuorum, MessageType messageType, Object request) {
-            this.requiredQuorum = requiredQuorum;
+        public QuorumRequestBuilder(MessageType messageType, Object request) {
             this.messageType = messageType;
             this.payload = request;
+            this.targetNodes = getAllNodes();
         }
 
         public QuorumRequestBuilder<T> withQuorumSize(int requiredQuorum) {
@@ -81,8 +84,11 @@ public abstract class Replica extends Process {
         }
 
         public TickCompletableFuture<Map<ProcessId, T>> send() {
-            AsyncQuorumCallback<T> quorumCallback = new AsyncQuorumCallback<>(getAllNodes().size(), requiredQuorum, successCondition);
-            for (ProcessId node : getAllNodes()) {
+            resolveDefaults();
+            validate();
+
+            AsyncQuorumCallback<T> quorumCallback = new AsyncQuorumCallback<>(targetNodes.size(), requiredQuorum, successCondition);
+            for (ProcessId node : targetNodes) {
                 String internalCorrelationId = internalCorrelationId();
                 waitingList.add(internalCorrelationId, (RequestCallback<Object>) (RequestCallback) quorumCallback);
 
@@ -91,6 +97,29 @@ public abstract class Replica extends Process {
             }
             return quorumCallback.getQuorumFuture();
         }
+
+        public QuorumRequestBuilder<T> to(List<ProcessId> targetNodes) {
+            this.targetNodes = List.copyOf(targetNodes);
+            return this;
+        }
+
+        private void validate() {
+            if (requiredQuorum > targetNodes.size()) {
+                throw new IllegalArgumentException(
+                        "requiredQuorum (" + requiredQuorum + ") cannot exceed targetNodes count (" + targetNodes.size() + ")"
+                );
+            }
+        }
+
+        private void resolveDefaults() {
+            if (targetNodes == null || targetNodes.isEmpty()) {
+                targetNodes = getAllNodes();
+            }
+            if (requiredQuorum <= 0) {
+                requiredQuorum = (targetNodes.size() / 2) + 1;
+            }
+        }
+
     }
 
     protected void send(Message responseMessage) {
