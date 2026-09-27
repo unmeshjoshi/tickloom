@@ -69,6 +69,26 @@ class ReplicaTest {
     }
 
     @Test
+    void shouldSendHeterogeneousPayloadsPerNode() {
+        // Given
+        SimulatedNetwork network = SimulatedNetwork.noLossNetwork(new Random());
+        List<ProcessId> peerIds = List.of(ProcessId.of("node1"), ProcessId.of("node2"));
+        TestableReplica replica = createTestReplica(peerIds, network);
+
+        // When
+        replica.<Message>quorumRequest(new MessageType("SHARD_PUT"))
+                .to(replica.getPeers())
+                .withPayloadPerNode((node, index) -> "shard-" + index)
+                .send();
+
+        // Then
+        List<Message> pending = network.getPendingMessages();
+        assertEquals(2, pending.size());
+        assertEquals("shard-0", replica.deserializePayload(pending.get(0).payload(), String.class));
+        assertEquals("shard-1", replica.deserializePayload(pending.get(1).payload(), String.class));
+    }
+
+    @Test
     void shouldSendRequestsToSpecifiedNodes()  {
         // Given
         SimulatedNetwork network = SimulatedNetwork.noLossNetwork(new Random());
@@ -131,6 +151,59 @@ class ReplicaTest {
         replica.respond(peerIds.get(1), responseMessage(peerIds.get(1), responseType));
         assertTrue(responseFuture.isCompleted());
         assertEquals(2, responseFuture.getResult().size());
+    }
+
+    @Test
+    public void shouldWaitForAllResponsesWhenUsingWaitForAll() {
+        List<ProcessId> peerIds = List.of(ProcessId.of("node1"), ProcessId.of("node2"), ProcessId.of("node3"));
+        TestableReplica replica = createTestReplica(peerIds);
+
+        MessageType requestType = new MessageType("INTERNAL_GET_REQUEST");
+        MessageType responseType = new MessageType("INTERNAL_GET_RESPONSE");
+
+        TickCompletableFuture<Map<ProcessId, Message>> responseFuture = replica.<Message>quorumRequest(requestType, new byte[0])
+                .to(replica.getPeers())
+                .waitForAll()
+                .send();
+
+        // 1 of 3 responses
+        replica.respond(peerIds.get(0), responseMessage(peerIds.get(0), responseType));
+        assertFalse(responseFuture.isCompleted());
+
+        // 2 of 3 responses (would satisfy majority, but not waitForAll)
+        replica.respond(peerIds.get(1), responseMessage(peerIds.get(1), responseType));
+        assertFalse(responseFuture.isCompleted());
+
+        // 3 of 3 responses (100% completed!)
+        replica.respond(peerIds.get(2), responseMessage(peerIds.get(2), responseType));
+        assertTrue(responseFuture.isCompleted());
+        assertEquals(3, responseFuture.getResult().size());
+    }
+
+    @Test
+    public void shouldBroadcastRequestToAllNodesAndCompleteWhenAllRespond() {
+        List<ProcessId> peerIds = List.of(ProcessId.of("node1"), ProcessId.of("node2"));
+        TestableReplica replica = createTestReplica(peerIds);
+
+        MessageType requestType = new MessageType("CATALOG_LIST_REQUEST");
+        MessageType responseType = new MessageType("CATALOG_LIST_RESPONSE");
+
+        // Broadcast to all nodes (peers + self = 3 nodes)
+        TickCompletableFuture<Map<ProcessId, Message>> responseFuture =
+                replica.broadcastRequest(requestType, "list-all");
+
+        // Respond from self (1 of 3)
+        replica.respond(replica.id, responseMessage(replica.id, responseType));
+        assertFalse(responseFuture.isCompleted());
+
+        // Respond from peer 1 (2 of 3)
+        replica.respond(peerIds.get(0), responseMessage(peerIds.get(0), responseType));
+        assertFalse(responseFuture.isCompleted());
+
+        // Respond from peer 2 (3 of 3 - completes!)
+        replica.respond(peerIds.get(1), responseMessage(peerIds.get(1), responseType));
+        assertTrue(responseFuture.isCompleted());
+        assertEquals(3, responseFuture.getResult().size());
     }
 
     private static Message responseMessage(ProcessId from, MessageType type) {
@@ -216,6 +289,10 @@ class ReplicaTest {
         }
 
         void respond(ProcessId fromNode, Object responsePayload) {
+            if (fromNode.equals(this.id)) {
+                waitingList.handleResponse(selfMessage.correlationId(), responsePayload, fromNode);
+                return;
+            }
             // Find the message that was sent to this peer to get its correlation ID
             Message outgoing = network.getPendingMessages().stream()
                     .filter(m -> m.destination().equals(fromNode))
