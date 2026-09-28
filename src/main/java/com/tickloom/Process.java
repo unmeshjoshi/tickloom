@@ -26,8 +26,8 @@ public abstract class Process implements Tickable, AutoCloseable {
     protected final IdGen idGen;
     protected final Storage storage;
     
-    // Add initialization state
-    protected volatile boolean isInitialised = false;
+    // Lifecycle state
+    protected ProcessState state = ProcessState.CREATED;
 
     public Process(ProcessParams processParams) {
         this.messageBus = processParams.messageBus();
@@ -44,6 +44,9 @@ public abstract class Process implements Tickable, AutoCloseable {
     }
 
     public final void receiveMessage(Message message) {
+        if (state == ProcessState.STOPPED) {
+            return;
+        }
         onMessageReceived(message);
         MessageType messageType = message.messageType();
         Handler handler = getHandler(messageType);
@@ -52,8 +55,8 @@ public abstract class Process implements Tickable, AutoCloseable {
             return;
         }
         
-        // Check if process is initialized before handling message
-        if (!isInitialised) {
+        // Check if process is running before handling message
+        if (state != ProcessState.RUNNING) {
             System.err.println(id + ": Received message " + messageType + " but process not initialized yet");
             handleUninitializedMessage(message);
             return;
@@ -69,6 +72,9 @@ public abstract class Process implements Tickable, AutoCloseable {
 
     @Override
     public final void tick() {
+        if (state == ProcessState.STOPPED) {
+            return;
+        }
         waitingList.tick();
         onTick();
     }
@@ -84,6 +90,7 @@ public abstract class Process implements Tickable, AutoCloseable {
 
     @Override
     public void close() throws Exception {
+        stop();
     }
 
     protected interface Handler {
@@ -135,8 +142,12 @@ public abstract class Process implements Tickable, AutoCloseable {
         return storage;
     }
 
+    public ProcessState getState() {
+        return state;
+    }
+
     public boolean isInitialised() {
-        return isInitialised;
+        return state == ProcessState.RUNNING;
     }
 
     /**
@@ -144,7 +155,7 @@ public abstract class Process implements Tickable, AutoCloseable {
      * Should only be called by Process.start().
      */
     protected void markInitialised() {
-        this.isInitialised = true;
+        this.state = ProcessState.RUNNING;
         System.out.println(id + ": Process initialized successfully");
     }
 
@@ -222,18 +233,54 @@ public abstract class Process implements Tickable, AutoCloseable {
     }
 
     public void start() {
-        if (isInitialised) {
+        if (state == ProcessState.RUNNING || state == ProcessState.STARTING) {
             return;
         }
-        TickCompletableFuture<?> startFuture = onStart();
-        startFuture.whenComplete((result, error) -> {
-            if (error != null) {
-                System.err.println(id + ": Startup failed: " + error.getMessage());
-                error.printStackTrace();
-            } else {
-                markInitialised();
-            }
-        });
+        markInitialised();
+        try {
+            TickCompletableFuture<?> startFuture = onStart();
+            startFuture.whenComplete((result, error) -> {
+                if (error != null) {
+                    this.state = ProcessState.STOPPED;
+                    System.err.println(id + ": Startup failed: " + error.getMessage());
+                    error.printStackTrace();
+                }
+            });
+        } catch (Throwable t) {
+            this.state = ProcessState.STOPPED;
+            System.err.println(id + ": Startup failed: " + t.getMessage());
+            t.printStackTrace();
+            if (t instanceof RuntimeException re) throw re;
+            if (t instanceof Error e) throw e;
+            throw new RuntimeException(t);
+        }
+    }
+
+    /**
+     * Stops the process from participating in the cluster (halts ticks,
+     * drops incoming messages, and invokes {@link #onStop()}).
+     */
+    public void stop() {
+        if (state == ProcessState.STOPPED) {
+            return;
+        }
+        this.state = ProcessState.STOPPED;
+        onStop();
+    }
+
+    /**
+     * Hook method for subclasses to perform cleanup when stopped.
+     */
+    protected void onStop() {
+        // Subclasses can override to add specific stop processing
+    }
+
+    public boolean isStopped() {
+        return state == ProcessState.STOPPED;
+    }
+
+    public boolean isRunning() {
+        return state == ProcessState.RUNNING;
     }
 
     /**

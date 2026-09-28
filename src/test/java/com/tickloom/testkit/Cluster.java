@@ -222,6 +222,19 @@ public class Cluster implements Tickable, AutoCloseable {
         return this;
     }
 
+    public void stop() {
+        close();
+    }
+
+    public void stopNode(ProcessId processId) {
+        getNode(processId).stop();
+    }
+
+    public void startNode(ProcessId processId) {
+        getNode(processId).start();
+    }
+
+    @Override
     public void close() {
         serverNodes.forEach(node -> {
             try {
