@@ -223,6 +223,11 @@ public class NetworkPartitionTest {
             byte[] value = "updated_profile_data".getBytes();
 
             var delayedWrite = client.set(key, value);
+            // Quorum needs NEWYORK's ack: CALIFORNIA -> NEWYORK -> CALIFORNIA is a 10 tick round trip
+            for (int i = 0; i < 9; i++) {
+                cluster.tick();
+            }
+            assertFalse(delayedWrite.isCompleted(), "Write should not complete before the CALIFORNIA-NEWYORK round trip");
             assertEventually(cluster, delayedWrite::isCompleted);
             assertTrue(delayedWrite.getResult().success(), "Write should succeed despite network delays");
 

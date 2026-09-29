@@ -31,7 +31,10 @@ public class SimulatedStorage implements Storage {
     
     // Internal counter for operation timing (TigerBeetle pattern)
     private long currentTick = 0;
-    
+
+    // Monotonic issue counter; breaks ties between operations due in the same tick so they run in issue order
+    private long nextSequenceNumber = 0;
+
     /**
      * Creates a SimulatedStorage with no delays and no failures.
      * 
@@ -75,7 +78,7 @@ public class SimulatedStorage implements Storage {
         TickCompletableFuture<byte[]> future = new TickCompletableFuture<>();
         
         long completionTick = currentTick + defaultDelayTicks;
-        pendingOperations.offer(new GetOperation(key, future, completionTick));
+        enqueue(new GetOperation(key, future, completionTick));
         
         return future;
     }
@@ -100,7 +103,7 @@ public class SimulatedStorage implements Storage {
         TickCompletableFuture<Boolean> future = new TickCompletableFuture<>();
         
         long completionTick = currentTick + defaultDelayTicks;
-        pendingOperations.offer(new SetOperation(key, value, future, completionTick, options));
+        enqueue(new SetOperation(key, value, future, completionTick, options));
         
         return future;
     }
@@ -127,7 +130,7 @@ public class SimulatedStorage implements Storage {
         TickCompletableFuture<Boolean> future = new TickCompletableFuture<>();
         
         long completionTick = currentTick + defaultDelayTicks;
-        pendingOperations.offer(new BatchWriteOperation(writeBatch, future, completionTick, options));
+        enqueue(new BatchWriteOperation(writeBatch, future, completionTick, options));
         
         return future;
     }
@@ -144,7 +147,7 @@ public class SimulatedStorage implements Storage {
         TickCompletableFuture<Map<byte[], byte[]>> future = new TickCompletableFuture<>();
         
         long completionTick = currentTick + defaultDelayTicks;
-        pendingOperations.offer(new RangeOperation(startKey, endKey, future, completionTick));
+        enqueue(new RangeOperation(startKey, endKey, future, completionTick));
         
         return future;
     }
@@ -154,7 +157,7 @@ public class SimulatedStorage implements Storage {
         TickCompletableFuture<byte[]> future = new TickCompletableFuture<>();
         
         long completionTick = currentTick + defaultDelayTicks;
-        pendingOperations.offer(new LastKeyOperation(keyUpperBound, future, completionTick));
+        enqueue(new LastKeyOperation(keyUpperBound, future, completionTick));
         
         return future;
     }
@@ -164,7 +167,7 @@ public class SimulatedStorage implements Storage {
         TickCompletableFuture<Void> future = new TickCompletableFuture<>();
         
         long completionTick = currentTick + defaultDelayTicks;
-        pendingOperations.offer(new SyncOperation(future, completionTick));
+        enqueue(new SyncOperation(future, completionTick));
         
         return future;
     }
@@ -182,6 +185,11 @@ public class SimulatedStorage implements Storage {
         }
     }
     
+    private void enqueue(PendingOperation operation) {
+        operation.sequenceNumber = nextSequenceNumber++;
+        pendingOperations.offer(operation);
+    }
+
     private void processOperation(PendingOperation operation) {
         if (shouldSimulateFailure()) {
             operation.fail(new RuntimeException("Simulated storage failure"));
@@ -202,14 +210,19 @@ public class SimulatedStorage implements Storage {
     
     private abstract static class PendingOperation implements Comparable<PendingOperation> {
         protected final long completionTick;
-        
+        private long sequenceNumber;
+
         protected PendingOperation(long completionTick) {
             this.completionTick = completionTick;
         }
-        
+
         @Override
         public int compareTo(PendingOperation other) {
-            return Long.compare(this.completionTick, other.completionTick);
+            int tickComparison = Long.compare(this.completionTick, other.completionTick);
+            if (tickComparison != 0) {
+                return tickComparison;
+            }
+            return Long.compare(this.sequenceNumber, other.sequenceNumber);
         }
         
         abstract void execute(NavigableMap<byte[], byte[]> dataStore);

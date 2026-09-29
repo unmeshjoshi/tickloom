@@ -26,12 +26,18 @@ public class SimulatedNetwork extends Network {
     // Internal counter for delivery timing (TigerBeetle pattern)
     private long currentTick = 0;
 
+    // Monotonic send counter; breaks ties between messages due in the same tick so they are delivered in send order
+    private long nextSequenceNumber = 0;
+
     // Network partitioning state
     private final Set<NetworkLink> partitionedLinks = new HashSet<>();
 
-    private record DelayConfig(MessageType messageType, Long delayTicks){
-        public DelayConfig(Long delayTicks) {
-            this(null, delayTicks); //by default apply delay for all message types
+    private record DelayConfig(MessageType messageType, Long durationTicks, Long expiresAtTick){
+        public DelayConfig(MessageType messageType, Long durationTicks) {
+            this(messageType, durationTicks, Long.MAX_VALUE); //by default apply delay for all message types
+        }
+        public DelayConfig(Long durationTicks) {
+            this(null, durationTicks, Long.MAX_VALUE); //by default apply delay for all message types
         }
 
         public boolean matches(MessageType messageType) {
@@ -52,14 +58,21 @@ public class SimulatedNetwork extends Network {
 
     private boolean isClogged(NetworkLink link, MessageType messageType) {
         DelayConfig delayConfig = cloggedUntilTick.getOrDefault(link, new DelayConfig(0l));
-        return (delayConfig.matches(messageType) && delayConfig.delayTicks() > currentTick);
+        return (delayConfig.matches(messageType) && currentTick < delayConfig.expiresAtTick());
+    }
+
+    //Visibility for testing
+    void clogFor(ProcessId source, ProcessId destination, long durationTicks) {
+        clogFor(new NetworkLink(source, destination), durationTicks);
     }
 
     private void clogFor(NetworkLink link, long durationTicks) {
         if (durationTicks <= 0) return;
-        long until = currentTick + durationTicks;
-        cloggedUntilTick.merge(link, new DelayConfig(until), (existing, replacement) -> {
-            return new DelayConfig(Math.max(existing.delayTicks(), replacement.delayTicks()));
+
+        cloggedUntilTick.merge(link, new DelayConfig(null, durationTicks, currentTick + durationTicks), (existing, replacement) -> {
+            long maxDuration = Math.max(existing.durationTicks(), replacement.durationTicks());
+            long laterExpiry = Math.max(existing.expiresAtTick(), replacement.expiresAtTick());
+            return new DelayConfig(null, maxDuration, laterExpiry);
         }); // extend if already clogged
     }
 
@@ -250,7 +263,7 @@ public class SimulatedNetwork extends Network {
                     20,
                     0.02,
                     true,
-                    150, 1/100, 2000);
+                    150, 0.01, 2000);
             return networkOptions;
         }
 
@@ -424,15 +437,16 @@ public class SimulatedNetwork extends Network {
         long scheduleAtTick = currentTick + 1;
         if (isClogged(link, message.messageType())) {
             scheduleAtTick =
-                    currentTick + cloggedUntilTick.getOrDefault(link, new DelayConfig(defaultDelayTicks)).delayTicks();
+                    currentTick + cloggedUntilTick.getOrDefault(link, new DelayConfig(defaultDelayTicks)).durationTicks();
 
 
         }
         return scheduleAtTick;
     }
 
+    
     private void queueForDelivery(Message message, long deliveryTick) {
-        pendingMessages.offer(new QueuedMessage(message, deliveryTick, currentTick));
+        pendingMessages.offer(new QueuedMessage(message, deliveryTick, nextSequenceNumber++));
     }
 
     private void deliverPendingMessagesFor(long tickTime) {
@@ -528,13 +542,23 @@ public class SimulatedNetwork extends Network {
     }
 
     public void dropMessagesOfType(ProcessId source, ProcessId destination, MessageType messageType) {
-        linkFaultRules
-                .computeIfAbsent(new NetworkLink(source, destination), k -> new FaultRule(new NetworkLink(source, destination), messageType));
+        NetworkLink link = new NetworkLink(source, destination);
+        addFaultRule(link, new FaultRule(link, messageType));
     }
 
     public void dropNthMessagesOfType(ProcessId source, ProcessId destination, MessageType messageType, int nth) {
-        linkFaultRules
-                .computeIfAbsent(new NetworkLink(source, destination), k -> new FaultRule(new NetworkLink(source, destination), messageType, nth));
+        NetworkLink link = new NetworkLink(source, destination);
+        addFaultRule(link, new FaultRule(link, messageType, nth));
+    }
+
+    // Only one drop rule per link is supported; reject a second one instead of silently ignoring it
+    private void addFaultRule(NetworkLink link, FaultRule faultRule) {
+        FaultRule existing = linkFaultRules.get(link);
+        if (existing != null) {
+            throw new IllegalStateException("Link " + link.source() + "->" + link.destination()
+                    + " already has a drop rule for " + existing.messageType);
+        }
+        linkFaultRules.put(link, faultRule);
     }
 
     /**

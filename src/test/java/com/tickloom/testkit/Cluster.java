@@ -150,18 +150,6 @@ public class Cluster implements Tickable, AutoCloseable {
         }
     }
 
-    /**
-     * Converts a desired logical cluster delay into underlying simulated-network ticks.
-     *
-     * In a simulated cluster, one {@link #tick()} advances each client and each server once, and
-     * each node tick advances the shared simulated network through its ordered ticker. So a single
-     * logical cluster tick results in one network tick per ticking node. This helper scales a
-     * delay expressed in cluster ticks into the delay value expected by network fault injection.
-     */
-    public int delayForClusterTicks(int desiredDelayTicks) {
-        return (serverNodes.size() + clientNodes.size()) * desiredDelayTicks;
-    }
-
     //Following methods are the builder API for creating the cluster.
     public Cluster withSeed(long seed) {
         this.seed = seed;
@@ -598,6 +586,8 @@ public class Cluster implements Tickable, AutoCloseable {
      */
     private <T extends ClusterClient> T newClient(ProcessId id, List<ProcessId> targetNodes, Cluster.ClientFactory<T> factory) throws IOException {
         Network network = useSimulatedNetwork ? sharedNetwork : createNetwork(messageCodec);
+        networks.add(network);
+
         MessageBus messageBus = useSimulatedNetwork ? sharedMessageBus : new MessageBus(network, messageCodec);
         // Create a StubClock for the clientId as well
         StubClock clientClock = new StubClock(initialClockTime);
@@ -613,10 +603,14 @@ public class Cluster implements Tickable, AutoCloseable {
         return this;
     }
 
+    Set<Network> networks = new LinkedHashSet<>();
+
     private Network createNetwork(MessageCodec messageCodec) throws IOException {
         //as of now creating simulated network with no packet loss or delay
-        return useSimulatedNetwork ? createSimulatedNetwork()
+        Network network =  useSimulatedNetwork ? createSimulatedNetwork()
                 : NioNetwork.create(topo, messageCodec);
+        networks.add(network);
+        return network;
     }
 
     private SimulatedNetwork createSimulatedNetwork() {
@@ -651,7 +645,6 @@ public class Cluster implements Tickable, AutoCloseable {
 
         public void tick() {
             OrderedTicker.of(
-                            network,
                             messageBus,
                             process,
                             storage)
@@ -681,7 +674,6 @@ public class Cluster implements Tickable, AutoCloseable {
 
         public void tick() {
             OrderedTicker.of(
-                    network,
                     messageBus,
                     client).tick();
         }
@@ -696,8 +688,21 @@ public class Cluster implements Tickable, AutoCloseable {
 
     public void tick() {
         advanceTimeForAllProcesses(1);
-        clientNodes.forEach(ClientNode::tick);
+        tickNetworks();
+        tickClients();
+        tickServers();
+    }
+
+    private void tickServers() {
         serverNodes.forEach(Node::tick);
+    }
+
+    private void tickClients() {
+        clientNodes.forEach(ClientNode::tick);
+    }
+
+    private void tickNetworks() {
+        networks.forEach(Network::tick);
     }
 
     public <T extends com.tickloom.Process> Cluster build(ProcessFactory factory) throws IOException {

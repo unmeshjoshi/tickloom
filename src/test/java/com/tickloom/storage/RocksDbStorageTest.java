@@ -59,6 +59,22 @@ class RocksDbStorageTest {
     // ========== Basic Operations Tests ==========
 
     @Test
+    @DisplayName("Should apply operations due in the same tick in issue order")
+    void shouldApplyOperationsDueInSameTickInIssueOrder() {
+        byte[] key = "key".getBytes();
+
+        for (int i = 0; i < 12; i++) {
+            storage.put(key, ("value-" + i).getBytes());
+        }
+        TickCompletableFuture<byte[]> get = storage.get(key);
+
+        storage.tick();
+
+        assertTrue(get.isCompleted());
+        assertEquals("value-11", new String(get.getResult()));
+    }
+
+    @Test
     @DisplayName("Should perform basic get/set operations")
     void shouldPerformBasicSetAndGet() {
         byte[] key = "test:key".getBytes();

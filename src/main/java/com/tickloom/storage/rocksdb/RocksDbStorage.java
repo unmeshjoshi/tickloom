@@ -40,6 +40,9 @@ public class RocksDbStorage implements Storage {
     // Internal counter for operation timing
     private long currentTick = 0;
 
+    // Monotonic issue counter; breaks ties between operations due in the same tick so they run in issue order
+    private long nextSequenceNumber = 0;
+
     static {
         RocksDB.loadLibrary();
     }
@@ -109,7 +112,9 @@ public class RocksDbStorage implements Storage {
         TickCompletableFuture<T> future = new TickCompletableFuture<>();
 
         long completionTick = currentTick + defaultDelayTicks;
-        pendingOperations.offer(factory.create(future, completionTick));
+        PendingOperation operation = factory.create(future, completionTick);
+        operation.assignSequenceNumber(nextSequenceNumber++);
+        pendingOperations.offer(operation);
         return future;
     }
 

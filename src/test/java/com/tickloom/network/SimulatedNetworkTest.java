@@ -313,6 +313,95 @@ public class SimulatedNetworkTest {
         assertTrue(messageDispatcher.receivedMessages.isEmpty());
     }
     
+    @Test
+    void shouldApplyPerLinkDelaySetAfterNetworkHasBeenRunning() {
+        ProcessId nodeA = ProcessId.of("192.168.1.1");
+        ProcessId nodeB = ProcessId.of("192.168.1.2");
+        for (int i = 0; i < 10; i++) {
+            network.tick();
+        }
+
+        network.setDelay(nodeA, nodeB, 3); // 3 tick delay
+        Message message = Message.of(nodeA, nodeB, PeerType.SERVER, new MessageType("CLIENT_GET_REQUEST"), "delayed".getBytes(), "test-correlation-id-20");
+        network.send(message);
+
+        network.tick();
+        network.tick();
+        assertTrue(messageDispatcher.receivedMessages.isEmpty(), "Message should still be in flight after 2 ticks");
+
+        network.tick();
+        assertEquals(List.of(message), messageDispatcher.receivedMessages);
+    }
+
+    @Test
+    void shouldApplyDefaultDelayToLinksWithoutConfiguredDelay() {
+        SimulatedNetwork delayedNetwork = SimulatedNetwork.noLossNetwork(new Random(12345L)).withDelayTicks(3);
+        delayedNetwork.registerMessageDispatcher(messageDispatcher);
+        ProcessId nodeA = ProcessId.of("192.168.1.1");
+        ProcessId nodeB = ProcessId.of("192.168.1.2");
+
+        Message message = Message.of(nodeA, nodeB, PeerType.SERVER, new MessageType("CLIENT_GET_REQUEST"), "delayed".getBytes(), "test-correlation-id-21");
+        delayedNetwork.send(message);
+
+        delayedNetwork.tick();
+        delayedNetwork.tick();
+        assertTrue(messageDispatcher.receivedMessages.isEmpty(), "Message should still be in flight after 2 ticks");
+
+        delayedNetwork.tick();
+        assertEquals(List.of(message), messageDispatcher.receivedMessages);
+    }
+
+    @Test
+    void defaultNetworkOptionsShouldEnablePathClogging() {
+        assertEquals(0.01, SimulatedNetwork.NetworkOptions.create().pathClogProb);
+    }
+
+    @Test
+    void pathClogShouldExpireAfterItsDuration() {
+        ProcessId nodeA = ProcessId.of("192.168.1.1");
+        ProcessId nodeB = ProcessId.of("192.168.1.2");
+
+        network.clogFor(nodeA, nodeB, 5);
+        for (int i = 0; i < 10; i++) {
+            network.tick();
+        }
+
+        Message message = Message.of(nodeA, nodeB, PeerType.SERVER, new MessageType("CLIENT_GET_REQUEST"), "after-clog".getBytes(), "test-correlation-id-22");
+        network.send(message);
+        network.tick();
+
+        assertEquals(List.of(message), messageDispatcher.receivedMessages, "Clog should have expired after 5 ticks");
+    }
+
+    @Test
+    void shouldRejectSecondDropRuleOnSameLink() {
+        ProcessId nodeA = ProcessId.of("192.168.1.1");
+        ProcessId nodeB = ProcessId.of("192.168.1.2");
+        network.dropMessagesOfType(nodeA, nodeB, new MessageType("ACCEPT_REQUEST"));
+
+        assertThrows(IllegalStateException.class,
+                () -> network.dropMessagesOfType(nodeA, nodeB, new MessageType("COMMIT_REQUEST")));
+        assertThrows(IllegalStateException.class,
+                () -> network.dropNthMessagesOfType(nodeA, nodeB, new MessageType("COMMIT_REQUEST"), 2));
+    }
+
+    @Test
+    void shouldDeliverMessagesDueInSameTickInSendOrder() {
+        ProcessId nodeA = ProcessId.of("192.168.1.1");
+        ProcessId nodeB = ProcessId.of("192.168.1.2");
+
+        List<Message> sent = new ArrayList<>();
+        for (int i = 0; i < 12; i++) {
+            Message message = Message.of(nodeA, nodeB, PeerType.SERVER, new MessageType("CLIENT_GET_REQUEST"), ("msg" + i).getBytes(), "test-correlation-id-19-" + i);
+            sent.add(message);
+            network.send(message);
+        }
+
+        network.tick();
+
+        assertEquals(sent, messageDispatcher.receivedMessages);
+    }
+
     /**
      * Test message handler that collects received messages for verification.
      */

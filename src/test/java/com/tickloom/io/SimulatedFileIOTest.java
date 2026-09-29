@@ -33,6 +33,24 @@ class SimulatedFileIOTest {
     }
 
     @Test
+    void syncDueInSameTickMakesExactlyEarlierWritesDurable() {
+        for (int i = 0; i < 6; i++) {
+            fileIO.write(new byte[]{(byte) i}, i);
+        }
+        fileIO.sync();
+        for (int i = 6; i < 9; i++) {
+            fileIO.write(new byte[]{(byte) i}, i);
+        }
+        fileIO.tick();
+
+        fileIO.crash();
+
+        TickCompletableFuture<byte[]> readFuture = fileIO.read(0, 9);
+        fileIO.tick();
+        assertArrayEquals(new byte[]{0, 1, 2, 3, 4, 5}, readFuture.getResult());
+    }
+
+    @Test
     void writeAtOffset() {
         fileIO.write("aaaa".getBytes(), 0);
         fileIO.tick();

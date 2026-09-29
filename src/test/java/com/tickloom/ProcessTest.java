@@ -1,5 +1,6 @@
 package com.tickloom;
 
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.messaging.Message;
 import com.tickloom.messaging.MessageBus;
 import com.tickloom.messaging.MessageType;
@@ -122,6 +123,40 @@ class ProcessTest {
 
         process.tick();
         assertEquals(1, process.ticksHandled.get());
+    }
+
+    private static class SlowStartingProcess extends TestProcess {
+        final TickCompletableFuture<Boolean> startFuture = new TickCompletableFuture<>();
+
+        SlowStartingProcess(ProcessId pid, MessageBus messageBus) {
+            super(pid, messageBus);
+        }
+
+        @Override
+        protected TickCompletableFuture<?> onStart() {
+            return startFuture;
+        }
+    }
+
+    @Test
+    void isNotRunningUntilOnStartCompletes() {
+        ProcessId pid = ProcessId.random();
+        Network network = SimulatedNetwork.noLossNetwork(new Random());
+        MessageBus messageBus = new MessageBus(network, new JsonMessageCodec());
+        SlowStartingProcess process = new SlowStartingProcess(pid, messageBus);
+
+        process.start();
+        assertEquals(ProcessState.STARTING, process.getState());
+
+        Message msg = Message.of(ProcessId.random(), pid, PeerType.CLIENT, TestProcess.TEST_TYPE, new byte[0], "c1");
+        process.receiveMessage(msg);
+        assertEquals(0, process.messagesHandled.get(), "Messages must not be handled before startup completes");
+
+        process.startFuture.complete(true);
+        assertEquals(ProcessState.RUNNING, process.getState());
+
+        process.receiveMessage(msg);
+        assertEquals(1, process.messagesHandled.get());
     }
 
     @Test

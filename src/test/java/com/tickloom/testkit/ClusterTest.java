@@ -160,13 +160,6 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
         return this;
     }
 
-    public void delay(ProcessId processId, List<ProcessId> toProcesses, int propDelayTicks) {
-        for (ProcessId toProcess : toProcesses) {
-            cluster.setNetworkDelay(processId, toProcess, propDelayTicks);
-        }
-    }
-
-
     public void delayForMessageType(MessageType messageType, ProcessId processId, List<ProcessId> toProcessIds, int propDelayTicks) {
         cluster.delayForMessageType(messageType, processId, toProcessIds, propDelayTicks);
     }

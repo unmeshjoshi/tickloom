@@ -32,6 +32,9 @@ public class SimulatedFileIO implements FileIO {
     private final PriorityQueue<PendingOp> pendingOps = new PriorityQueue<>();
     private long currentTick = 0;
 
+    // Monotonic issue counter; breaks ties between ops due in the same tick so they run in issue order
+    private long nextSequenceNumber = 0;
+
     public SimulatedFileIO(String filename, Random random) {
         this(filename, random, 0, 0, 0, 0.0);
     }
@@ -51,28 +54,28 @@ public class SimulatedFileIO implements FileIO {
     @Override
     public TickCompletableFuture<Integer> write(byte[] data, long offset) {
         TickCompletableFuture<Integer> future = new TickCompletableFuture<>();
-        pendingOps.offer(new WriteOp(future, completionTick(writeDelayTicks), data, offset));
+        enqueue(new WriteOp(future, completionTick(writeDelayTicks), data, offset));
         return future;
     }
 
     @Override
     public TickCompletableFuture<byte[]> read(long offset, int length) {
         TickCompletableFuture<byte[]> future = new TickCompletableFuture<>();
-        pendingOps.offer(new ReadOp(future, completionTick(readDelayTicks), offset, length));
+        enqueue(new ReadOp(future, completionTick(readDelayTicks), offset, length));
         return future;
     }
 
     @Override
     public TickCompletableFuture<Void> sync() {
         TickCompletableFuture<Void> future = new TickCompletableFuture<>();
-        pendingOps.offer(new SyncOp(future, completionTick(syncDelayTicks)));
+        enqueue(new SyncOp(future, completionTick(syncDelayTicks)));
         return future;
     }
 
     @Override
     public TickCompletableFuture<Void> truncate(long size) {
         TickCompletableFuture<Void> future = new TickCompletableFuture<>();
-        pendingOps.offer(new TruncateOp(future, completionTick(writeDelayTicks), size));
+        enqueue(new TruncateOp(future, completionTick(writeDelayTicks), size));
         return future;
     }
 
@@ -109,6 +112,11 @@ public class SimulatedFileIO implements FileIO {
 
     // -- internal --
 
+    private void enqueue(PendingOp op) {
+        op.sequenceNumber = nextSequenceNumber++;
+        pendingOps.offer(op);
+    }
+
     private long completionTick(int delay) {
         return currentTick + delay;
     }
@@ -123,6 +131,7 @@ public class SimulatedFileIO implements FileIO {
 
     private abstract static class PendingOp implements Comparable<PendingOp> {
         final long completionTick;
+        private long sequenceNumber;
 
         PendingOp(long completionTick) {
             this.completionTick = completionTick;
@@ -133,7 +142,11 @@ public class SimulatedFileIO implements FileIO {
 
         @Override
         public int compareTo(PendingOp other) {
-            return Long.compare(this.completionTick, other.completionTick);
+            int tickComparison = Long.compare(this.completionTick, other.completionTick);
+            if (tickComparison != 0) {
+                return tickComparison;
+            }
+            return Long.compare(this.sequenceNumber, other.sequenceNumber);
         }
     }
 

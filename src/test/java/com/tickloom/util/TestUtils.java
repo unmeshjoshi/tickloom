@@ -1,6 +1,7 @@
 package com.tickloom.util;
 
 import com.tickloom.Tickable;
+import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.history.History;
 import org.junit.jupiter.api.TestInfo;
 
@@ -36,6 +37,24 @@ public class TestUtils {
             }
         }
         System.out.println("Condition met after " + tickCount + " ticks");
+    }
+
+    /**
+     * Ticks until the future completes and returns its result; fails the test if the
+     * future fails or does not complete within the tick limit.
+     */
+    public static <T> T tickUntilComplete(Tickable tickable, TickCompletableFuture<T> future) {
+        int tickCount = 0;
+        while (future.isPending()) {
+            tickable.tick();
+            if (++tickCount > noOfTicks) {
+                fail("Future did not complete within " + noOfTicks + " ticks");
+            }
+        }
+        if (future.isFailed()) {
+            fail("Future failed: " + future.getException(), future.getException());
+        }
+        return future.getResult();
     }
 
     public static String randomProcessId(String prefix) {
