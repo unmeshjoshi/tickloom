@@ -1,6 +1,5 @@
 package com.tickloom.testkit;
 
-import static com.tickloom.testkit.ClusterAssertions.assertEventually;
 import static com.tickloom.testkit.Cluster.createSimulated;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -48,10 +47,10 @@ public class ClientTargetingTest {
             byte[] value2 = "written_via_byzantium".getBytes();
 
             TickCompletableFuture<SetResponse> athensWrite = athensClient.set(key, value1);
-            assertEventually(cluster,() -> athensWrite.isCompleted() && athensWrite.getResult().success());
+            cluster.tickUntil(() -> athensWrite.isCompleted() && athensWrite.getResult().success());
 
             TickCompletableFuture<SetResponse> byzantiumWrite = byzantiumClient.set(key, value2);
-            assertEventually(cluster,() -> byzantiumWrite.isCompleted() && byzantiumWrite.getResult().success());
+            cluster.tickUntil(() -> byzantiumWrite.isCompleted() && byzantiumWrite.getResult().success());
 
             // Phase 2: Isolate Athens - clientId connected to Athens should fail, but Byzantium clientId continues
             cluster.isolateProcess(athens);
@@ -75,7 +74,7 @@ public class ClientTargetingTest {
             // Byzantium clientId should still work (writes to majority)
             byte[] workingValue = "byzantium_still_works".getBytes();
             TickCompletableFuture<SetResponse> byzantiumWorkingWrite = byzantiumClient.set(key, workingValue);
-            assertEventually(cluster,() -> byzantiumWorkingWrite.isCompleted() && byzantiumWorkingWrite.getResult().success());
+            cluster.tickUntil(() -> byzantiumWorkingWrite.isCompleted() && byzantiumWorkingWrite.getResult().success());
 
             // Phase 3: Reconnect Athens and verify both clients work again
             cluster.reconnectProcess(athens);
@@ -83,17 +82,17 @@ public class ClientTargetingTest {
 
             byte[] finalValue = "both_clients_working".getBytes();
             TickCompletableFuture<SetResponse> athensFinalWrite = athensClient.set(key, finalValue);
-            assertEventually(cluster,() -> athensFinalWrite.isCompleted() && athensFinalWrite.getResult().success());
+            cluster.tickUntil(() -> athensFinalWrite.isCompleted() && athensFinalWrite.getResult().success());
 
             // Verify consistency across all clients
             TickCompletableFuture<GetResponse> athensRead = athensClient.get(key);
-            assertEventually(cluster,() -> athensRead.isCompleted() && athensRead.getResult().found()
-                    && Arrays.equals(finalValue, athensRead.getResult().value()));
+            cluster.tickUntil(() -> athensRead.isCompleted() && athensRead.getResult().found()
+                        && Arrays.equals(finalValue, athensRead.getResult().value()));
 
             TickCompletableFuture<GetResponse> byzantiumRead = byzantiumClient.get(key);
-            assertEventually(cluster,(() -> byzantiumRead.isCompleted()
-                    && byzantiumRead.getResult().found()
-                    && Arrays.equals(finalValue, byzantiumRead.getResult().value())));
+            cluster.tickUntil((() -> byzantiumRead.isCompleted()
+                        && byzantiumRead.getResult().found()
+                        && Arrays.equals(finalValue, byzantiumRead.getResult().value())));
         }
     }
 

@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.util.Random;
 
-import static com.tickloom.testkit.ClusterAssertions.assertEventually;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class SingleRequestIssuerTest {
@@ -49,7 +48,7 @@ public class SingleRequestIssuerTest {
         assertTrue(requestIssuer.isInFlight(), "A request should be in flight");
 
         // Wait for the request to complete
-        assertEventually(cluster, () -> !requestIssuer.hasPendingRequests());
+        cluster.tickUntil(() -> !requestIssuer.hasPendingRequests());
 
         assertFalse(requestIssuer.isInFlight(), "Should have no in-flight requests after completion");
     }
@@ -66,7 +65,8 @@ public class SingleRequestIssuerTest {
         assertTrue(requestIssuer.hasPendingRequests(), "Should have pending requests after queuing");
 
         // Wait for all requests to complete
-        assertEventually(cluster, () -> !requestIssuer.hasPendingRequests()); // Use a longer timeout
+        // Use a longer timeout
+        cluster.tickUntil(() -> !requestIssuer.hasPendingRequests());
 
         assertFalse(requestIssuer.isInFlight(), "Should have no in-flight requests after all are processed");
     }

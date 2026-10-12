@@ -37,20 +37,19 @@ public class WalBackedKVStore {
     private final int groupWaitTicks;
 
     private static final class Pending {
+        final ByteBuffer key;
         final byte[] value;
-        final long sequence;
         final List<TickCompletableFuture<Void>> waiters = new ArrayList<>();
 
-        Pending(byte[] value, long sequence) {
+        Pending(ByteBuffer key, byte[] value) {
+            this.key = key;
             this.value = value;
-            this.sequence = sequence;
         }
     }
 
     private Map<ByteBuffer, byte[]> map = new HashMap<>();
     // Writes in the log pipeline but not yet durable, newest per key. Only for getLatest.
     private final Map<ByteBuffer, Pending> pending = new HashMap<>();
-    private long nextSequence;
     private FileIO file;
     private BatchedLog log;
     private int writesNotYetDurable;
@@ -112,30 +111,47 @@ public class WalBackedKVStore {
 
     /** Completes when the write is durable and in the map. */
     public TickCompletableFuture<Void> put(byte[] key, byte[] value) {
-        ByteBuffer mapKey = ByteBuffer.wrap(key.clone());
-        byte[] mapValue = value.clone();
-        long sequence = nextSequence++;
-        Pending entry = new Pending(mapValue, sequence);
-        pending.put(mapKey, entry);
+        Pending write = trackPendingWrite(key, value);
+        return appendToWal(write, encode(key, value));
+    }
+
+    private Pending trackPendingWrite(byte[] key, byte[] value) {
+        Pending write = new Pending(ByteBuffer.wrap(key.clone()), value.clone());
+        pending.put(write.key, write);
         writesNotYetDurable++;
+        return write;
+    }
+
+    private TickCompletableFuture<Void> appendToWal(Pending write, byte[] record) {
         TickCompletableFuture<Void> result = new TickCompletableFuture<>();
-        log.append(encode(key, value)).whenComplete((offset, error) -> {
+        log.append(record).whenComplete((offset, error) -> {
             writesNotYetDurable--;
-            Pending latest = pending.get(mapKey);
-            if (latest == entry) {
-                pending.remove(mapKey);   // a newer put to the same key keeps its own entry
-            }
-            if (error == null) {
-                map.put(mapKey, mapValue);
-            }
-            for (TickCompletableFuture<Void> waiter : entry.waiters) {
-                if (error == null) waiter.complete(null);
-                else waiter.fail(error);
-            }
-            if (error == null) result.complete(null);
-            else result.fail(error);
+            movePendingEntryToKV(write, error);
+            completeWaitingOperations(write, error);
+            completeFuture(error, result);
         });
         return result;
+    }
+
+    // On success the write goes from the in-flight overlay into the map. On failure it is just dropped.
+    private void movePendingEntryToKV(Pending write, Throwable error) {
+        if (pending.get(write.key) == write) {
+            pending.remove(write.key);   // a newer put to the same key keeps its own entry
+        }
+        if (error == null) {
+            map.put(write.key, write.value);
+        }
+    }
+
+    private static void completeWaitingOperations(Pending write, Throwable error) {
+        for (TickCompletableFuture<Void> waiter : write.waiters) {
+            completeFuture(error, waiter);
+        }
+    }
+
+    private static void completeFuture(Throwable error, TickCompletableFuture<Void> future) {
+        if (error == null) future.complete(null);
+        else future.fail(error);
     }
 
     /** True while some write has been put but is not yet durable. */

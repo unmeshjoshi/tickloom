@@ -20,7 +20,6 @@ import com.tickloom.util.StubClock;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.util.*;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
@@ -491,14 +490,6 @@ public class Cluster implements Tickable, AutoCloseable {
     }
 
     /**
-     * The value a replica holds locally for a key, as stored: an encoded {@code VersionedValue}, or null.
-     * Only durable writes are visible.
-     */
-    public byte[] getStoredValue(ProcessId processId, byte[] key) {
-        return ((QuorumReplica) getProcess(processId)).getStoredValue(key);
-    }
-
-    /**
      * True when nothing is in flight: no message on the simulated network and no write waiting to become durable.
      * A scenario that wants every reply of its last step recorded waits for this.
      */
@@ -514,7 +505,7 @@ public class Cluster implements Tickable, AutoCloseable {
     }
 
     public <T> T getDecodedStoredValue(ProcessId processId, byte[] key, Class<T> clazz) {
-        var value = getStoredValue(processId, key);
+        var value = ((QuorumReplica) getProcess(processId)).getStoredValue(key);
         return (value != null) ? messageCodec.decode(value, clazz) : null;//todo: use Optional
     }
 

@@ -181,7 +181,7 @@ class ClusterCrashRecoveryTest {
             SetResponse response = cluster.tickUntilComplete(client.set(key, "v".getBytes()));
             assertTrue(response.success());
             cluster.tickUntil(cluster::isQuiescent);
-            byte[] before = cluster.getStoredValue(athens, key);
+            byte[] before = ((QuorumReplica) cluster.getProcess(athens)).getStoredValue(key);
             assertNotNull(before);
 
             cluster.crashNode(athens);

@@ -4,6 +4,7 @@ import com.tickloom.ConsistencyChecker;
 import com.tickloom.ProcessFactory;
 import com.tickloom.ProcessId;
 import com.tickloom.algorithms.replication.ClusterClient;
+import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.history.History;
 import com.tickloom.messaging.MessageType;
@@ -295,7 +296,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
      */
     public ClusterTest<C, RGet, JepsenValue> assertNoValue(byte[] key, List<ProcessId> nodes) {
         for (ProcessId node : nodes) {
-            byte[] vv = cluster.getStoredValue(node, key);
+            byte[] vv = ((QuorumReplica) cluster.getProcess(node)).getStoredValue(key);
             assertNull(vv, () -> "Expected no value at " + node + " for key=" + pretty(key) +
                     " but found=" + (vv == null ? "null" : pretty(vv)));
         }

@@ -13,11 +13,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 
 import static com.tickloom.testkit.Cluster.createSimulated;
 import static org.junit.jupiter.api.Assertions.*;
-import static com.tickloom.testkit.ClusterAssertions.assertEventually;
 
 /** Scenarios illustrating differences between linearizability and sequential consistency. */
 public class ConsistencyPropertiesTest {
@@ -44,14 +44,14 @@ public class ConsistencyPropertiesTest {
             // Initialize to v0 under full connectivity
             history.invoke(ProcessId.of("client1"), Op.WRITE, v0);
             var init = clientWriter.set(key.getBytes(), v0.getBytes());
-            assertEventually(cluster, init::isCompleted);
+            cluster.tickUntil(init::isCompleted);
             assertTrue(init.getResult().success());
             history.ok(ProcessId.of("client1"), Op.WRITE, v0);
 
-            assertEventually(cluster, () -> {
-                var v = cluster.getDecodedStoredValue(ATHENS, key.getBytes(), VersionedValue.class);
-                return v != null && java.util.Arrays.equals(v.value(), v0.getBytes());
-            });
+            cluster.tickUntil(() -> {
+                    var v = cluster.getDecodedStoredValue(ATHENS, key.getBytes(), VersionedValue.class);
+                    return v != null && Arrays.equals(v.value(), v0.getBytes());
+                });
             // Partition to isolate ATHENS from writer majority
             var writerSide = NodeGroup.of(CYRENE, DELPHI, SPARTA);
             var otherSide  = NodeGroup.of(ATHENS, BYZANTIUM);
@@ -60,7 +60,7 @@ public class ConsistencyPropertiesTest {
             // Quorum write v1 on writer side
             history.invoke(ProcessId.of("client1"), Op.WRITE, v1);
             var w1 = clientWriter.set(key.getBytes(), v1.getBytes());
-            assertEventually(cluster, () -> w1.isCompleted() && w1.getResult().success());
+            cluster.tickUntil(() -> w1.isCompleted() && w1.getResult().success());
             assertTrue(w1.getResult().success());
             history.ok(ProcessId.of("client1"), Op.WRITE, v1);
 
@@ -94,7 +94,7 @@ public class ConsistencyPropertiesTest {
             // Initialize v0
             history.invoke(ProcessId.of("clientX"), Op.WRITE, v0);
             var init = client.set(key.getBytes(), v0.getBytes());
-            assertEventually(cluster, init::isCompleted);
+            cluster.tickUntil(init::isCompleted);
             assertTrue(init.getResult().success());
             history.ok(ProcessId.of("clientX"), Op.WRITE, v0);
 
@@ -106,7 +106,7 @@ public class ConsistencyPropertiesTest {
             // Same client quorum write v1
             history.invoke(ProcessId.of("clientX"), Op.WRITE, v1);
             var w1 = client.set(key.getBytes(), v1.getBytes());
-            assertEventually(cluster, () -> w1.isCompleted() && w1.getResult().success());
+            cluster.tickUntil(() -> w1.isCompleted() && w1.getResult().success());
             assertTrue(w1.getResult().success());
             history.ok(ProcessId.of("clientX"), Op.WRITE, v1);
 

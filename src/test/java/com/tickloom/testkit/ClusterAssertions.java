@@ -5,7 +5,6 @@ import com.tickloom.algorithms.replication.quorum.VersionedValue;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.BooleanSupplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -42,10 +41,6 @@ public class ClusterAssertions {
             fail();
         }
         return Arrays.equals(actual.value(), expectedValue);
-    }
-
-    public static void assertEventually(Cluster cluster,BooleanSupplier cond) {
-        cluster.tickUntil(cond);
     }
 
 }
