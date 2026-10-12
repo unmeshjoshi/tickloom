@@ -252,8 +252,11 @@ public class QuorumReplica extends Replica {
         if (result != null) {
             VersionedValue existingValue = messageCodec.decode(result, VersionedValue.class);
             if (existingValue.timestamp() >= value.timestamp()) {
-                //Already set with a higher timestamp, so we return true, but dont overwrite the value.
-                sendInternalSetResponse(message, true, null, setRequest);
+                // Not written: a write with a higher or equal timestamp is already accepted. Say it succeeded only
+                // once that write is durable, or a crash could lose it after we have told the caller it is safe.
+                store.whenLatestDurable(setRequest.key())
+                        .whenComplete((ignored, waitError) ->
+                                sendInternalSetResponse(message, waitError == null, waitError, setRequest));
                 return;
             }
         }

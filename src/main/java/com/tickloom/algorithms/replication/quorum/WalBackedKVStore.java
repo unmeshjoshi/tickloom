@@ -8,7 +8,9 @@ import com.tickloom.wal.BatchedLog;
 import com.tickloom.wal.Wal;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -34,7 +36,16 @@ public class WalBackedKVStore {
     private final String fileName;
     private final int groupWaitTicks;
 
-    private record Pending(byte[] value, long sequence) {}
+    private static final class Pending {
+        final byte[] value;
+        final long sequence;
+        final List<TickCompletableFuture<Void>> waiters = new ArrayList<>();
+
+        Pending(byte[] value, long sequence) {
+            this.value = value;
+            this.sequence = sequence;
+        }
+    }
 
     private Map<ByteBuffer, byte[]> map = new HashMap<>();
     // Writes in the log pipeline but not yet durable, newest per key. Only for getLatest.
@@ -81,7 +92,22 @@ public class WalBackedKVStore {
     /** The newest accepted value, durable or not, or null. For deciding about a new write, not for reads. */
     public byte[] getLatest(byte[] key) {
         Pending inFlight = pending.get(ByteBuffer.wrap(key));
-        return inFlight != null ? inFlight.value() : get(key);
+        return inFlight != null ? inFlight.value : get(key);
+    }
+
+    /**
+     * Completes when the newest accepted write for the key is durable: at once if nothing is in flight, and with
+     * the failure if that write fails. A caller that skips a write because a newer one is already accepted waits
+     * on this before it reports success, so it never reports a write as safe that a crash could still take back.
+     */
+    public TickCompletableFuture<Void> whenLatestDurable(byte[] key) {
+        Pending inFlight = pending.get(ByteBuffer.wrap(key));
+        if (inFlight == null) {
+            return TickCompletableFuture.completed(null);
+        }
+        TickCompletableFuture<Void> waiter = new TickCompletableFuture<>();
+        inFlight.waiters.add(waiter);
+        return waiter;
     }
 
     /** Completes when the write is durable and in the map. */
@@ -89,21 +115,25 @@ public class WalBackedKVStore {
         ByteBuffer mapKey = ByteBuffer.wrap(key.clone());
         byte[] mapValue = value.clone();
         long sequence = nextSequence++;
-        pending.put(mapKey, new Pending(mapValue, sequence));
+        Pending entry = new Pending(mapValue, sequence);
+        pending.put(mapKey, entry);
         writesNotYetDurable++;
         TickCompletableFuture<Void> result = new TickCompletableFuture<>();
         log.append(encode(key, value)).whenComplete((offset, error) -> {
             writesNotYetDurable--;
             Pending latest = pending.get(mapKey);
-            if (latest != null && latest.sequence() == sequence) {
+            if (latest == entry) {
                 pending.remove(mapKey);   // a newer put to the same key keeps its own entry
             }
-            if (error != null) {
-                result.fail(error);
-                return;
+            if (error == null) {
+                map.put(mapKey, mapValue);
             }
-            map.put(mapKey, mapValue);
-            result.complete(null);
+            for (TickCompletableFuture<Void> waiter : entry.waiters) {
+                if (error == null) waiter.complete(null);
+                else waiter.fail(error);
+            }
+            if (error == null) result.complete(null);
+            else result.fail(error);
         });
         return result;
     }

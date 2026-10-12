@@ -74,6 +74,41 @@ class WalBackedKVStoreTest {
     }
 
     @Test
+    void whenLatestDurableCompletesAtOnceWhenNothingIsInFlight() {
+        open();
+        assertTrue(store.whenLatestDurable(b("k")).isCompleted());
+        await(store.put(b("k"), b("v")));
+        assertTrue(store.whenLatestDurable(b("k")).isCompleted());
+    }
+
+    @Test
+    void whenLatestDurableWaitsForTheNewestWriteToTheKey() {
+        open();
+        TickCompletableFuture<Void> first = store.put(b("k"), b("one"));
+        TickCompletableFuture<Void> second = store.put(b("k"), b("two"));
+        TickCompletableFuture<Void> waiter = store.whenLatestDurable(b("k"));
+        assertTrue(waiter.isPending());
+
+        await(first);
+        await(second);
+
+        assertTrue(waiter.isCompleted());
+        assertArrayEquals(b("two"), store.get(b("k")));
+    }
+
+    @Test
+    void whenLatestDurableFailsIfTheWriteFails() {
+        open();
+        store.put(b("k"), b("v"));
+        TickCompletableFuture<Void> waiter = store.whenLatestDurable(b("k"));
+
+        fs.crash();   // the next flush finds a dead file and fails the write
+        for (int i = 0; i < 20; i++) tick();
+
+        assertTrue(waiter.isFailed());
+    }
+
+    @Test
     void writesToOneKeyAreAppliedInTheOrderTheyWerePut() {
         open();
         TickCompletableFuture<Void> first = store.put(b("k"), b("first"));
