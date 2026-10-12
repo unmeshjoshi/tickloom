@@ -1,5 +1,6 @@
 package com.tickloom;
 
+import com.tickloom.fs.FileSystem;
 import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.messaging.*;
 import com.tickloom.network.MessageCodec;
@@ -25,6 +26,7 @@ public abstract class Process implements Tickable, AutoCloseable {
     protected final Clock clock;
     protected final IdGen idGen;
     protected final Storage storage;
+    protected final FileSystem fileSystem;
     
     // Lifecycle state
     protected ProcessState state = ProcessState.CREATED;
@@ -38,6 +40,7 @@ public abstract class Process implements Tickable, AutoCloseable {
         this.waitingList = new RequestWaitingList<>(processParams.timeoutTicks());
         this.idGen = processParams.idGenerator();
         this.storage = processParams.storage();
+        this.fileSystem = processParams.fileSystem();
         processParams.messageBus().register(this);
         initialiseMessageHandlers();
         
@@ -140,6 +143,10 @@ public abstract class Process implements Tickable, AutoCloseable {
 
     public Storage getStorage() {
         return storage;
+    }
+
+    public FileSystem getFileSystem() {
+        return fileSystem;
     }
 
     public ProcessState getState() {

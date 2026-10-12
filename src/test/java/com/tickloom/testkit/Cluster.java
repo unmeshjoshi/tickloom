@@ -12,6 +12,7 @@ import com.tickloom.config.ProcessConfig;
 import com.tickloom.messaging.MessageBus;
 import com.tickloom.messaging.MessageType;
 import com.tickloom.network.*;
+import com.tickloom.fs.SimulatedFileSystem;
 import com.tickloom.storage.SimulatedStorage;
 import com.tickloom.storage.Storage;
 import com.tickloom.storage.rocksdb.RocksDbStorage;
@@ -220,6 +221,44 @@ public class Cluster implements Tickable, AutoCloseable {
 
     public void startNode(ProcessId processId) {
         getNode(processId).start();
+    }
+
+    /**
+     * A power cut for one node. The process stops at once and runs no shutdown logic worth waiting for, and its
+     * disk goes back to what was synced: unsynced writes and unsynced file creations, deletions and renames are
+     * lost, and its old file handles are dead. Messages for the node are dropped while it is down.
+     * Its in-memory {@code Storage} is not affected.
+     */
+    public void crashNode(ProcessId processId) {
+        Node node = serverNode(processId);
+        node.process.stop();
+        node.fileSystem.crash();
+    }
+
+    /**
+     * Brings a crashed node back as a new process on the same disk. The new process starts empty, opens its files
+     * again and recovers from them; it takes part in the cluster once its startup completes.
+     */
+    public void restartNode(ProcessId processId) {
+        Node node = serverNode(processId);
+        if (!node.process.isStopped()) {
+            throw new IllegalStateException(processId + " is running; crashNode first");
+        }
+        node.fileSystem.restart();
+        // The message bus keeps one process per id, so registering the new one replaces the crashed one.
+        node.process = node.factory.createAndStart(node.peers, node.params);
+    }
+
+    public SimulatedFileSystem getFileSystemForProcess(ProcessId processId) {
+        return serverNode(processId).fileSystem;
+    }
+
+    private Node serverNode(ProcessId processId) {
+        Node node = findServerNode(processId);
+        if (node == null) {
+            throw new IllegalArgumentException("Process not found: " + processId);
+        }
+        return node;
     }
 
     @Override
@@ -630,13 +669,23 @@ public class Cluster implements Tickable, AutoCloseable {
         MessageBus messageBus;
         com.tickloom.Process process;
         Storage storage;
+        // What restartNode needs to build a new incarnation of the process on the same disk.
+        final SimulatedFileSystem fileSystem;
+        final ProcessFactory factory;
+        final List<ProcessId> peers;
+        final ProcessParams params;
 
-        public Node(ProcessId id, Network network, MessageBus messageBus, com.tickloom.Process process, Storage storage) {
+        public Node(ProcessId id, Network network, MessageBus messageBus, com.tickloom.Process process, Storage storage,
+                    SimulatedFileSystem fileSystem, ProcessFactory factory, List<ProcessId> peers, ProcessParams params) {
             this.id = id;
             this.network = network;
             this.messageBus = messageBus;
             this.process = process;
             this.storage = storage;
+            this.fileSystem = fileSystem;
+            this.factory = factory;
+            this.peers = peers;
+            this.params = params;
         }
 
         public void start() throws IOException {
@@ -647,7 +696,8 @@ public class Cluster implements Tickable, AutoCloseable {
             OrderedTicker.of(
                             messageBus,
                             process,
-                            storage)
+                            storage,
+                            fileSystem)
                     .tick();
         }
 
@@ -748,8 +798,11 @@ public class Cluster implements Tickable, AutoCloseable {
             processClocks.put(processId, stubClock);
             Clock clock = stubClock;
             IdGen idGen = new IdGen(processId.name(), random);
-            com.tickloom.Process process = factory.createAndStart(peers, new ProcessParams(processId, messageBus, messageCodec, requestTimeoutTicks, clock, idGen, storage));
-            serverNodes.add(new Node(processId, network, messageBus, process, storage));
+            // Each process has its own simulated disk. A crash of the node (see crashNode) loses what it did not sync.
+            SimulatedFileSystem fileSystem = new SimulatedFileSystem();
+            ProcessParams params = new ProcessParams(processId, messageBus, messageCodec, requestTimeoutTicks, clock, idGen, storage, fileSystem);
+            com.tickloom.Process process = factory.createAndStart(peers, params);
+            serverNodes.add(new Node(processId, network, messageBus, process, storage, fileSystem, factory, peers, params));
         }
         return this;
     }
