@@ -6,11 +6,11 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class LogBackedKeyValueStoreTest {
+class WalBackedKVStoreTest {
     private static final int GROUP_WAIT = 2;
 
     private final SimulatedFileSystem fs = new SimulatedFileSystem();
-    private LogBackedKeyValueStore store = new LogBackedKeyValueStore(fs, "kv", GROUP_WAIT);
+    private WalBackedKVStore store = new WalBackedKVStore(fs, "kv", GROUP_WAIT);
 
     private void tick() {
         fs.tick();
@@ -31,7 +31,7 @@ class LogBackedKeyValueStoreTest {
     private void crashAndRestart() {
         fs.crash();
         fs.restart();
-        store = new LogBackedKeyValueStore(fs, "kv", GROUP_WAIT);
+        store = new WalBackedKVStore(fs, "kv", GROUP_WAIT);
         open();
     }
 
@@ -46,13 +46,47 @@ class LogBackedKeyValueStoreTest {
     }
 
     @Test
-    void aWriteIsVisibleAtOnceAndDurableLater() {
+    void aWriteIsInTheMapOnlyOnceItIsDurable() {
         open();
         TickCompletableFuture<Void> put = store.put(b("k"), b("v"));
 
-        assertArrayEquals(b("v"), store.get(b("k")));
         assertTrue(put.isPending(), "not durable yet");
+        assertNull(store.get(b("k")), "a read never sees a write that a crash could take back");
+        assertTrue(store.hasWritesNotYetDurable());
+
         await(put);
+        assertArrayEquals(b("v"), store.get(b("k")));
+        assertFalse(store.hasWritesNotYetDurable());
+    }
+
+    @Test
+    void getLatestSeesWritesThatAreNotDurableYet() {
+        open();
+        await(store.put(b("k"), b("old")));
+        TickCompletableFuture<Void> put = store.put(b("k"), b("new"));
+
+        assertArrayEquals(b("old"), store.get(b("k")));
+        assertArrayEquals(b("new"), store.getLatest(b("k")));
+
+        await(put);
+        assertArrayEquals(b("new"), store.get(b("k")));
+        assertArrayEquals(b("new"), store.getLatest(b("k")));
+    }
+
+    @Test
+    void writesToOneKeyAreAppliedInTheOrderTheyWerePut() {
+        open();
+        TickCompletableFuture<Void> first = store.put(b("k"), b("first"));
+        TickCompletableFuture<Void> second = store.put(b("k"), b("second"));
+        assertArrayEquals(b("second"), store.getLatest(b("k")));
+
+        await(first);
+        await(second);
+
+        assertArrayEquals(b("second"), store.get(b("k")));
+        assertArrayEquals(b("second"), store.getLatest(b("k")));
+        crashAndRestart();
+        assertArrayEquals(b("second"), store.get(b("k")), "replay gives the same answer as the live map");
     }
 
     @Test
@@ -93,14 +127,15 @@ class LogBackedKeyValueStoreTest {
     void reopeningTheSameInstanceRebuildsFromTheLog() {
         open();
         await(store.put(b("k"), b("v")));
-        store.put(b("unsynced"), b("x"));   // in the map, not durable
+        store.put(b("unsynced"), b("x"));   // not durable
 
         fs.crash();
         fs.restart();
         open();   // same instance, as a stop followed by a start does
 
         assertArrayEquals(b("v"), store.get(b("k")));
-        assertNull(store.get(b("unsynced")), "the map is rebuilt, not kept");
+        assertNull(store.get(b("unsynced")));
+        assertNull(store.getLatest(b("unsynced")), "nothing in flight survives the reopen");
     }
 
     @Test

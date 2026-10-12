@@ -21,11 +21,11 @@ public class QuorumReplica extends Replica {
     static final int GROUP_WAIT_TICKS = 2;
 
     // Keys in memory, writes in a log on this process's own disk. A set is acknowledged only once it is durable.
-    private final LogBackedKeyValueStore store;
+    private final WalBackedKVStore store;
 
     public QuorumReplica(List<ProcessId> peerIds, ProcessParams processParams) {
         super(peerIds, processParams);
-        this.store = new LogBackedKeyValueStore(fileSystem, STORE_FILE, GROUP_WAIT_TICKS);
+        this.store = new WalBackedKVStore(fileSystem, STORE_FILE, GROUP_WAIT_TICKS);
     }
 
     /** The replica is not running until its store is rebuilt from the log. */
@@ -44,7 +44,7 @@ public class QuorumReplica extends Replica {
         return store.hasWritesNotYetDurable();
     }
 
-    /** The value this replica holds locally for the key, as stored (an encoded {@link VersionedValue}), or null. */
+    /** The durable value this replica holds for the key, as stored (an encoded {@link VersionedValue}), or null. */
     public byte[] getStoredValue(byte[] key) {
         return store.get(key);
     }
@@ -246,8 +246,9 @@ public class QuorumReplica extends Replica {
                 ", valueLength: " + setRequest.value().length + ", timestamp: " + setRequest.timestamp() +
                 ", from: " + message.source());
 
-        //Set only if the key does not exist or the existing value has a lower timestamp.
-        byte[] result = store.get(setRequest.key());
+        //Set only if the key does not exist or the existing value has a lower timestamp. Compare with writes that are
+        // still becoming durable too, or two concurrent sets could both pass against the old value.
+        byte[] result = store.getLatest(setRequest.key());
         if (result != null) {
             VersionedValue existingValue = messageCodec.decode(result, VersionedValue.class);
             if (existingValue.timestamp() >= value.timestamp()) {
@@ -256,7 +257,7 @@ public class QuorumReplica extends Replica {
                 return;
             }
         }
-        // The map changes now; the response goes out only when the write is durable.
+        // The map changes, and the response goes out, only when the write is durable.
         store.put(setRequest.key(), messageCodec.encode(value))
                 .whenComplete((ignored, setError) ->
                         sendInternalSetResponse(message, setError == null, setError, setRequest));

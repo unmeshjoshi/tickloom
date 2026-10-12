@@ -15,27 +15,36 @@ import java.util.Map;
  * A key-value store that keeps every key in memory and every write in a log on disk.
  *
  * <ul>
- *   <li>{@code get} reads the map and completes at once.</li>
- *   <li>{@code put} changes the map at once, so later reads and writes in the same process see it, and returns a
- *       future that completes when the write is durable. A caller that tells anyone the write happened must wait for
- *       that future. A crash loses a write whose future had not completed.</li>
+ *   <li>The map changes only after the write is durable. {@code get} reads the map, so it never returns a value
+ *       that a crash could take back.</li>
+ *   <li>{@code put} appends to the log and returns a future that completes once the record is durable and the map
+ *       is updated. Writes become durable, and are applied, in the order they were put.</li>
+ *   <li>{@link #getLatest(byte[])} also sees writes that are not durable yet. It is for a caller that must decide
+ *       about a new write by comparing it with every write already accepted, such as a last-write-wins check, so
+ *       two concurrent writes to one key are not both judged against the old value. Do not use it to answer
+ *       reads.</li>
  *   <li>{@link #open()} opens the file and rebuilds the map from the log, last write wins. It runs again on a
  *       restart and starts from an empty map each time.</li>
  * </ul>
  *
  * The log only grows. There is no compaction yet. The loop owner must call {@link #tick()} and tick the file system.
  */
-public class LogBackedKeyValueStore {
+public class WalBackedKVStore {
     private final FileSystem fileSystem;
     private final String fileName;
     private final int groupWaitTicks;
 
+    private record Pending(byte[] value, long sequence) {}
+
     private Map<ByteBuffer, byte[]> map = new HashMap<>();
+    // Writes in the log pipeline but not yet durable, newest per key. Only for getLatest.
+    private final Map<ByteBuffer, Pending> pending = new HashMap<>();
+    private long nextSequence;
     private FileIO file;
     private BatchedLog log;
     private int writesNotYetDurable;
 
-    public LogBackedKeyValueStore(FileSystem fileSystem, String fileName, int groupWaitTicks) {
+    public WalBackedKVStore(FileSystem fileSystem, String fileName, int groupWaitTicks) {
         this.fileSystem = fileSystem;
         this.fileName = fileName;
         this.groupWaitTicks = groupWaitTicks;
@@ -49,6 +58,7 @@ public class LogBackedKeyValueStore {
         map = new HashMap<>();
         log = null;
         writesNotYetDurable = 0;
+        pending.clear();
         return fileSystem.open(fileName, OpenMode.OPEN_OR_CREATE)
                 // A new file's name is durable only after the directory is synced.
                 .thenCompose(opened -> fileSystem.syncDirectory().thenApply(ignored -> opened))
@@ -63,22 +73,42 @@ public class LogBackedKeyValueStore {
                 });
     }
 
-    /** The current value, or null. Includes writes that are not yet durable. */
+    /** The durable value, or null. */
     public byte[] get(byte[] key) {
         return map.get(ByteBuffer.wrap(key));
     }
 
-    /** Completes when the write is durable. */
-    public TickCompletableFuture<Void> put(byte[] key, byte[] value) {
-        map.put(ByteBuffer.wrap(key.clone()), value.clone());
-        writesNotYetDurable++;
-        return log.append(encode(key, value)).thenApply(offset -> {
-            writesNotYetDurable--;
-            return (Void) null;
-        });
+    /** The newest accepted value, durable or not, or null. For deciding about a new write, not for reads. */
+    public byte[] getLatest(byte[] key) {
+        Pending inFlight = pending.get(ByteBuffer.wrap(key));
+        return inFlight != null ? inFlight.value() : get(key);
     }
 
-    /** True while some write is in the map but not yet durable. */
+    /** Completes when the write is durable and in the map. */
+    public TickCompletableFuture<Void> put(byte[] key, byte[] value) {
+        ByteBuffer mapKey = ByteBuffer.wrap(key.clone());
+        byte[] mapValue = value.clone();
+        long sequence = nextSequence++;
+        pending.put(mapKey, new Pending(mapValue, sequence));
+        writesNotYetDurable++;
+        TickCompletableFuture<Void> result = new TickCompletableFuture<>();
+        log.append(encode(key, value)).whenComplete((offset, error) -> {
+            writesNotYetDurable--;
+            Pending latest = pending.get(mapKey);
+            if (latest != null && latest.sequence() == sequence) {
+                pending.remove(mapKey);   // a newer put to the same key keeps its own entry
+            }
+            if (error != null) {
+                result.fail(error);
+                return;
+            }
+            map.put(mapKey, mapValue);
+            result.complete(null);
+        });
+        return result;
+    }
+
+    /** True while some write has been put but is not yet durable. */
     public boolean hasWritesNotYetDurable() {
         return writesNotYetDurable > 0;
     }

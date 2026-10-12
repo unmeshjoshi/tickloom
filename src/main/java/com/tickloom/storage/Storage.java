@@ -8,7 +8,7 @@ import java.util.Map;
 /**
  * Standalone key-value storage interface, used by the RocksDB multi-log example. Processes no longer take a
  * Storage: they get a {@link com.tickloom.fs.FileSystem}, and build what they need (see
- * {@code LogBackedKeyValueStore}) on files and the WAL. Do not wire this back into {@code Process}.
+ * {@code WalBackedKVStore}) on files and the WAL. Do not wire this back into {@code Process}.
  * <p>
  * Interface for asynchronous key-value storage operations.
  * All operations return ListenableFuture to support non-blocking I/O

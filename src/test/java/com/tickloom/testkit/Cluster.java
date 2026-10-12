@@ -492,7 +492,7 @@ public class Cluster implements Tickable, AutoCloseable {
 
     /**
      * The value a replica holds locally for a key, as stored: an encoded {@code VersionedValue}, or null.
-     * It includes a write that is not yet durable.
+     * Only durable writes are visible.
      */
     public byte[] getStoredValue(ProcessId processId, byte[] key) {
         return ((QuorumReplica) getProcess(processId)).getStoredValue(key);
