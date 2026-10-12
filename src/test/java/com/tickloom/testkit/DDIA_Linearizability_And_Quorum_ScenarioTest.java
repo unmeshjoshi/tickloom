@@ -137,8 +137,9 @@ public final class DDIA_Linearizability_And_Quorum_ScenarioTest
         read(withReader(bob, key)); // → vOld
 
         // Let delayed messages arrive; replicas converge.
+        // Converged, and the last write's acknowledgements have all been delivered.
         assertEventually(() -> {
-           return List.of(ATHENS, BYZANTIUM, CYRENE).stream().allMatch(node -> {
+           return cluster.isQuiescent() && List.of(ATHENS, BYZANTIUM, CYRENE).stream().allMatch(node -> {
                 return getNodeValue(node, key).isPresent() && Arrays.equals(vNew, getNodeValue(node, key).get());
             });
         });

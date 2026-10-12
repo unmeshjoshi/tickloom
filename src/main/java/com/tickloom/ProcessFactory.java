@@ -22,10 +22,10 @@ import java.util.List;
  *                         List<ProcessId> peerIds,
  *                         MessageBus bus,
  *                         MessageCodec codec,
- *                         Storage storage,
+ *                         FileSystem fileSystem,
  *                         Clock clock,
  *                         int timeoutTicks) {
- *     return new MyReplica(id, peerIds, bus, codec, storage, clock, timeoutTicks);
+ *     return new MyReplica(id, peerIds, bus, codec, fileSystem, clock, timeoutTicks);
  *   }
  * }
  * // Run:

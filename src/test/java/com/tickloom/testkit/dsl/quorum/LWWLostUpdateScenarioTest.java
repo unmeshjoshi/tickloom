@@ -5,7 +5,6 @@ import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
 import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.history.JepsenHistory;
-import com.tickloom.storage.Storage;
 import com.tickloom.testkit.dsl.semanticmodel.ClusterSnapshot;
 import com.tickloom.testkit.dsl.semanticmodel.Scenario;
 import com.tickloom.testkit.dsl.semanticmodel.ScenarioResult;
@@ -110,7 +109,7 @@ class LWWLostUpdateScenarioTest {
     }
 
     /**
-     * Reads the raw stored bytes for {@code KEY} from {@code processId}'s storage
+     * Reads the raw stored bytes for {@code KEY} from {@code processId}'s store
      * (without decoding the {@code VersionedValue} JSON) and asserts the bytes
      * contain {@code expectedBase64} as a substring and do not contain {@code rejectedBase64}.
      */
@@ -121,12 +120,7 @@ class LWWLostUpdateScenarioTest {
         QuorumReplica replica = snapshot.node(processId);
         assertNotNull(replica, processId + " replica should be inspectable from snapshot");
 
-        Storage storage = replica.getStorage();
-        TickCompletableFuture<byte[]> future = storage.get(KEY.getBytes(StandardCharsets.UTF_8));
-        while (!future.isCompleted()) {
-            storage.tick();
-        }
-        byte[] raw = future.getResult();
+        byte[] raw = replica.getStoredValue(KEY.getBytes(StandardCharsets.UTF_8));
         assertNotNull(raw, processId + " should have a persisted value for '" + KEY + "'");
 
         String stored = new String(raw, StandardCharsets.UTF_8);

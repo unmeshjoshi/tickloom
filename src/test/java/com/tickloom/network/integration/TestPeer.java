@@ -11,7 +11,6 @@ import com.tickloom.network.JsonMessageCodec;
 import com.tickloom.network.MessageCodec;
 import com.tickloom.network.NioNetwork;
 import com.tickloom.network.PeerType;
-import com.tickloom.storage.SimulatedStorage;
 import com.tickloom.util.SystemClock;
 import com.tickloom.util.IdGen;
 
@@ -28,7 +27,7 @@ class TestPeer extends com.tickloom.Process implements Tickable, AutoCloseable {
     protected final List<Message> receivedMessages = new ArrayList<>();
 
     protected TestPeer(ProcessId id, MessageBus messageBus, NioNetwork network, ClusterTopology topology, MessageCodec codec) {
-        super(new ProcessParams(id, messageBus, codec, 1, new SystemClock(), new IdGen(id.name(), new Random()), new SimulatedStorage(new Random())));
+        super(new ProcessParams(id, messageBus, codec, 1, new SystemClock(), new IdGen(id.name(), new Random())));
         this.network = network;
         this.topology = topology;
     }

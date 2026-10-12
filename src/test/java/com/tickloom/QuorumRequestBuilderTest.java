@@ -2,8 +2,6 @@ package com.tickloom;
 
 import com.tickloom.messaging.*;
 import com.tickloom.network.*;
-import com.tickloom.storage.SimulatedStorage;
-import com.tickloom.storage.Storage;
 import com.tickloom.util.IdGen;
 import com.tickloom.util.SystemClock;
 import org.junit.jupiter.api.Test;
@@ -44,7 +42,7 @@ class QuorumRequestBuilderTest {
 
         TestableReplica newReplica = new TestableReplica(
                 new ArrayList<>(peers),
-                new ProcessParams(ProcessId.of("test"), messageBus, messageCodec, timeoutTicks, new SystemClock(), new IdGen(ProcessId.of("test").name(), new Random()), new SimulatedStorage(random))
+                new ProcessParams(ProcessId.of("test"), messageBus, messageCodec, timeoutTicks, new SystemClock(), new IdGen(ProcessId.of("test").name(), new Random()))
         );
         newReplica.start();
         messageBus.register(newReplica);

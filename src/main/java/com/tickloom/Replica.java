@@ -17,7 +17,7 @@ public abstract class Replica extends Process {
     protected final List<ProcessId> peerIds;
 
     public Replica(List<ProcessId> peerIds, ProcessParams processParams) {
-        super(processParams); // Storage is now handled by Process
+        super(processParams);
         this.peerIds = List.copyOf(peerIds);
     }
 

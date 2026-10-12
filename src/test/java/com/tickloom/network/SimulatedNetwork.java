@@ -398,6 +398,11 @@ public class SimulatedNetwork extends Network {
      * This method must be called by the simulation master thread in the correct
      * order relative to other components' tick() methods to maintain determinism.
      */
+    /** True while some message is still on its way, delayed or not yet delivered. */
+    public boolean hasPendingMessages() {
+        return !pendingMessages.isEmpty();
+    }
+
     @Override
     public void tick() {
         currentTick++; // Increment internal counter (TigerBeetle pattern)

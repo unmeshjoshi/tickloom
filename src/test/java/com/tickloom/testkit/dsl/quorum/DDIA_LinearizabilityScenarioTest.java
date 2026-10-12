@@ -106,7 +106,8 @@ class DDIA_LinearizabilityScenarioTest {
     private static boolean allConvergedToVNew(com.tickloom.testkit.Cluster cluster) {
         byte[] expected = VNEW.getBytes(StandardCharsets.UTF_8);
         byte[] keyBytes = KEY.getBytes(StandardCharsets.UTF_8);
-        return List.of(ATHENS, BYZANTIUM, CYRENE).stream().allMatch(node -> {
+        // Converged, and the last write's acknowledgements have all been delivered.
+        return cluster.isQuiescent() && List.of(ATHENS, BYZANTIUM, CYRENE).stream().allMatch(node -> {
             VersionedValue stored = cluster.getDecodedStoredValue(node, keyBytes, VersionedValue.class);
             return stored != null && Arrays.equals(expected, stored.value());
         });

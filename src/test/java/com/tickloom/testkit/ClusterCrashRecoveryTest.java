@@ -4,6 +4,10 @@ import com.tickloom.Process;
 import com.tickloom.ProcessFactory;
 import com.tickloom.ProcessId;
 import com.tickloom.ProcessParams;
+import com.tickloom.algorithms.replication.quorum.QuorumReplica;
+import com.tickloom.algorithms.replication.quorum.QuorumReplicaClient;
+import com.tickloom.algorithms.replication.quorum.QuorumReplicaProcessFactory;
+import com.tickloom.algorithms.replication.quorum.SetResponse;
 import com.tickloom.fs.FileIO;
 import com.tickloom.fs.OpenMode;
 import com.tickloom.future.TickCompletableFuture;
@@ -163,6 +167,30 @@ class ClusterCrashRecoveryTest {
             ProcessId id = cluster.getServerProcessIds().get(0);
             cluster.tickUntil(() -> cluster.getProcess(id).isRunning());
             assertThrows(IllegalStateException.class, () -> cluster.restartNode(id));
+        }
+    }
+
+    @Test
+    void aQuorumReplicaKeepsAnAcknowledgedWriteAcrossACrashOfOneReplica() throws Exception {
+        try (Cluster cluster = Cluster.createSimulated(3, new QuorumReplicaProcessFactory(), 11)) {
+            ProcessId athens = cluster.getServerProcessIds().get(0);
+            QuorumReplicaClient client = cluster.newClientConnectedTo(
+                    ProcessId.of("client"), athens, QuorumReplicaClient::new);
+            byte[] key = "k".getBytes();
+
+            SetResponse response = cluster.tickUntilComplete(client.set(key, "v".getBytes()));
+            assertTrue(response.success());
+            cluster.tickUntil(cluster::isQuiescent);
+            byte[] before = cluster.getStoredValue(athens, key);
+            assertNotNull(before);
+
+            cluster.crashNode(athens);
+            cluster.restartNode(athens);
+            QuorumReplica restarted = cluster.getNode(athens);
+            assertNull(restarted.getStoredValue(key), "a new process starts with an empty map");
+            cluster.tickUntil(restarted::isRunning);
+
+            assertArrayEquals(before, restarted.getStoredValue(key), "rebuilt from the log");
         }
     }
 }

@@ -295,7 +295,7 @@ public abstract class ClusterTest<C extends ClusterClient, RGet, JepsenValue> {
      */
     public ClusterTest<C, RGet, JepsenValue> assertNoValue(byte[] key, List<ProcessId> nodes) {
         for (ProcessId node : nodes) {
-            byte[] vv = cluster.getStorageValue(node, key);
+            byte[] vv = cluster.getStoredValue(node, key);
             assertNull(vv, () -> "Expected no value at " + node + " for key=" + pretty(key) +
                     " but found=" + (vv == null ? "null" : pretty(vv)));
         }

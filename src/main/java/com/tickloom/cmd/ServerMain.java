@@ -11,13 +11,14 @@ import com.tickloom.config.ProcessConfig;
 import com.tickloom.messaging.MessageBus;
 import com.tickloom.network.JsonMessageCodec;
 import com.tickloom.network.NioNetwork;
-import com.tickloom.storage.rocksdb.RocksDbStorage;
-import com.tickloom.storage.Storage;
+import com.tickloom.fs.FileSystem;
+import com.tickloom.fs.RealFileSystem;
 import com.tickloom.util.Clock;
 import com.tickloom.util.IdGen;
 import com.tickloom.util.SystemClock;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Random;
 import java.nio.file.Paths;
@@ -33,6 +34,7 @@ public class ServerMain {
     private static final String OPT_ID = "--id";
     private static final String OPT_DATA = "--data";
     private static final String OPT_TIMEOUT = "--timeout"; // in ticks
+    private static final long FILE_TIMEOUT_TICKS = 5_000; // a file call slower than this means a failing disk
     private static final String OPT_FACTORY = "--factory"; // fully-qualified class name implementing ProcessFactory
 
     public static void main(String[] args) {
@@ -66,12 +68,13 @@ public class ServerMain {
 
             List<ProcessId> peerIds = peersExcludingSelf(config, processId);
             Clock clock = new SystemClock();
-            Storage storage = new RocksDbStorage(dataDir);
+            Files.createDirectories(Paths.get(dataDir));
+            RealFileSystem fileSystem = new RealFileSystem(Paths.get(dataDir), FILE_TIMEOUT_TICKS);
 
-            Process replica = createProcess(options.get(OPT_FACTORY), processId, peerIds, messageBus, codec, storage, clock, timeoutTicks);
+            Process replica = createProcess(options.get(OPT_FACTORY), processId, peerIds, messageBus, codec, fileSystem, clock, timeoutTicks);
             replica.start();
 
-            addShutdownHook(network, storage);
+            addShutdownHook(network, fileSystem);
 
             System.out.println("TickLoom QuorumReplica starting");
             System.out.println("  id        = " + processId);
@@ -79,7 +82,7 @@ public class ServerMain {
             System.out.println("  dataDir   = " + dataDir);
             System.out.println("  timeout   = " + timeoutTicks + " ticks");
 
-            runEventLoop(network, replica, storage);
+            runEventLoop(network, replica, fileSystem);
 
         } catch (IOException e) {
             System.err.println("Failed to start server: " + e.getMessage());
@@ -93,12 +96,12 @@ public class ServerMain {
                                          List<ProcessId> peerIds,
                                          MessageBus messageBus,
                                          JsonMessageCodec codec,
-                                         Storage storage,
+                                         FileSystem fileSystem,
                                          Clock clock,
                                          int timeoutTicks) {
         if (factoryClassName == null || factoryClassName.isBlank()) {
             IdGen idGen = new IdGen(processId.name(), new Random());
-            return new QuorumReplica(peerIds, new ProcessParams(processId, messageBus, codec, timeoutTicks, clock, idGen, storage));
+            return new QuorumReplica(peerIds, new ProcessParams(processId, messageBus, codec, timeoutTicks, clock, idGen, fileSystem));
         }
         try {
             Class<?> clazz = Class.forName(factoryClassName);
@@ -108,25 +111,25 @@ public class ServerMain {
             }
             ProcessFactory factory = (ProcessFactory) instance;
             IdGen idGen = new IdGen(processId.name(), new Random());
-            return factory.create(peerIds, new ProcessParams(processId, messageBus, codec, timeoutTicks, clock, idGen, storage));
+            return factory.create(peerIds, new ProcessParams(processId, messageBus, codec, timeoutTicks, clock, idGen, fileSystem));
         } catch (Exception e) {
             throw new RuntimeException("Failed to instantiate factory: " + factoryClassName, e);
         }
     }
 
-    private static void runEventLoop(NioNetwork network, com.tickloom.Process replica, Storage storage) throws IOException {
+    private static void runEventLoop(NioNetwork network, com.tickloom.Process replica, RealFileSystem fileSystem) throws IOException {
         while (true) {
             network.runToNanos(NioNetwork.MAX_IDLE_MS);
             replica.tick();
-            storage.tick();
+            fileSystem.tick();
         }
     }
 
-    private static void addShutdownHook(NioNetwork network, Storage storage) {
+    private static void addShutdownHook(NioNetwork network, RealFileSystem fileSystem) {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("Shutting down...");
             try {
-                if (storage != null) storage.close();
+                if (fileSystem != null) fileSystem.shutdown();
             } catch (Exception ignored) {
             }
             try {

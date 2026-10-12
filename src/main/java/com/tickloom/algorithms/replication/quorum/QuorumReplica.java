@@ -17,9 +17,36 @@ import java.util.Map;
  * agreement from replicas before completing successfully.
  */
 public class QuorumReplica extends Replica {
+    static final String STORE_FILE = "quorum-kv";
+    static final int GROUP_WAIT_TICKS = 2;
+
+    // Keys in memory, writes in a log on this process's own disk. A set is acknowledged only once it is durable.
+    private final LogBackedKeyValueStore store;
 
     public QuorumReplica(List<ProcessId> peerIds, ProcessParams processParams) {
         super(peerIds, processParams);
+        this.store = new LogBackedKeyValueStore(fileSystem, STORE_FILE, GROUP_WAIT_TICKS);
+    }
+
+    /** The replica is not running until its store is rebuilt from the log. */
+    @Override
+    protected TickCompletableFuture<?> onStart() {
+        return store.open();
+    }
+
+    @Override
+    protected void onTick() {
+        store.tick();
+    }
+
+    /** True while a write this replica applied is not yet durable on its disk. */
+    public boolean hasWritesNotYetDurable() {
+        return store.hasWritesNotYetDurable();
+    }
+
+    /** The value this replica holds locally for the key, as stored (an encoded {@link VersionedValue}), or null. */
+    public byte[] getStoredValue(byte[] key) {
+        return store.get(key);
     }
 
     @Override
@@ -182,11 +209,7 @@ public class QuorumReplica extends Replica {
         var getRequest = deserializePayload(message.payload(), InternalGetRequest.class);
         System.out.println("QuorumReplica: Processing internal GET request - keyLength: " + getRequest.key().length
                 + ", from: " + message.source());
-        // Perform local storage operation
-        var future = storage.get(getRequest.key());
-        future.whenComplete((value, error) -> {
-            sendInternalGetResponse(message, value, error, getRequest);
-        });
+        sendInternalGetResponse(message, store.get(getRequest.key()), null, getRequest);
     }
 
     private void sendInternalGetResponse(Message incomingMessage, byte[] value, Throwable error, InternalGetRequest getRequest) {
@@ -223,28 +246,20 @@ public class QuorumReplica extends Replica {
                 ", valueLength: " + setRequest.value().length + ", timestamp: " + setRequest.timestamp() +
                 ", from: " + message.source());
 
-        //First get the value and set only if it does not exist or its of lower timestamp.
-        TickCompletableFuture<byte[]> getFuture = storage.get(setRequest.key());
-        //Already set with higher timestamp, so we return true, but dont overwrite the value.
-        // Perform local storage operation
-        getFuture.whenComplete((result, error) -> {
-            if (error != null) {
-                sendInternalSetResponse(message, false, error, setRequest);
+        //Set only if the key does not exist or the existing value has a lower timestamp.
+        byte[] result = store.get(setRequest.key());
+        if (result != null) {
+            VersionedValue existingValue = messageCodec.decode(result, VersionedValue.class);
+            if (existingValue.timestamp() >= value.timestamp()) {
+                //Already set with a higher timestamp, so we return true, but dont overwrite the value.
+                sendInternalSetResponse(message, true, null, setRequest);
                 return;
             }
-            if (result != null) {
-                VersionedValue existingValue = messageCodec.decode(result, VersionedValue.class);
-                if (existingValue.timestamp() >= value.timestamp()) {
-                    //Already set with higher timestamp, so we return true, but dont overwrite the value.
-                    sendInternalSetResponse(message, true, null, setRequest);
-                    return;
-                }
-            }
-            // Perform local storage operation
-            var future = storage.put(setRequest.key(), messageCodec.encode(value));
-            future.whenComplete((success, setError)
-                    -> sendInternalSetResponse(message, success, setError, setRequest));
-        });
+        }
+        // The map changes now; the response goes out only when the write is durable.
+        store.put(setRequest.key(), messageCodec.encode(value))
+                .whenComplete((ignored, setError) ->
+                        sendInternalSetResponse(message, setError == null, setError, setRequest));
     }
 
     private void sendInternalSetResponse(Message message, Boolean success, Throwable error, InternalSetRequest setRequest) {

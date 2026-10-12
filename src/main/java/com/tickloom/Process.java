@@ -5,7 +5,6 @@ import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.messaging.*;
 import com.tickloom.network.MessageCodec;
 import com.tickloom.network.PeerType;
-import com.tickloom.storage.Storage;
 import com.tickloom.util.Clock;
 import com.tickloom.util.IdGen;
 
@@ -25,7 +24,6 @@ public abstract class Process implements Tickable, AutoCloseable {
 
     protected final Clock clock;
     protected final IdGen idGen;
-    protected final Storage storage;
     protected final FileSystem fileSystem;
     
     // Lifecycle state
@@ -39,7 +37,6 @@ public abstract class Process implements Tickable, AutoCloseable {
         this.timeoutTicks = processParams.timeoutTicks();
         this.waitingList = new RequestWaitingList<>(processParams.timeoutTicks());
         this.idGen = processParams.idGenerator();
-        this.storage = processParams.storage();
         this.fileSystem = processParams.fileSystem();
         processParams.messageBus().register(this);
         initialiseMessageHandlers();
@@ -141,10 +138,6 @@ public abstract class Process implements Tickable, AutoCloseable {
 
     // ========== INITIALIZATION SYSTEM ==========
 
-    public Storage getStorage() {
-        return storage;
-    }
-
     public FileSystem getFileSystem() {
         return fileSystem;
     }
@@ -172,71 +165,6 @@ public abstract class Process implements Tickable, AutoCloseable {
      */
     protected void handleUninitializedMessage(Message message) {
         System.err.println(id + ": Ignoring message " + message.messageType() + " - process not initialized");
-    }
-
-    // ========== PERSISTENCE METHODS ==========
-
-    /**
-     * Persist state with automatic serialization.
-     */
-    protected <T> TickCompletableFuture<Boolean> persist(String key, T stateObject) {
-        byte[] keyBytes = key.getBytes();
-        byte[] serializedState = messageCodec.encode(stateObject);
-        return storage.put(keyBytes, serializedState);
-    }
-    
-    /**
-     * Persist state with success and failure handlers.
-     */
-    protected <T> void persist(String key, T stateObject, Runnable onSuccess, Runnable onFailure) {
-        TickCompletableFuture<Boolean> persistFuture = persist(key, stateObject);
-
-        persistFuture.whenComplete((success, error) -> {
-            if (error != null) {
-                if (onFailure != null) {
-                    onFailure.run();
-                }
-            } else if (success) {
-                if (onSuccess != null) {
-                    onSuccess.run();
-                }
-            }
-        });
-    }
-    
-    /**
-     * Persist state with only success handler (failure is logged).
-     */
-    protected <T> void persist(String key, T stateObject, Runnable onSuccess) {
-        persist(key, stateObject, onSuccess, () -> {
-            System.err.println(id + ": Failed to persist state for key: " + key);
-        });
-    }
-    
-    /**
-     * Load persisted state with automatic deserialization.
-     */
-    protected <T> TickCompletableFuture<T> load(String key, Class<T> stateClass) {
-        byte[] keyBytes = key.getBytes();
-        TickCompletableFuture<byte[]> loadFuture = storage.get(keyBytes);
-        
-        TickCompletableFuture<T> resultFuture = new TickCompletableFuture<>();
-        loadFuture.whenComplete((loadedValue, error) -> {
-            if (error != null) {
-                resultFuture.fail(error);
-            } else if (loadedValue == null) {
-                resultFuture.complete(null);
-            } else {
-                try {
-                    T result = messageCodec.decode(loadedValue, stateClass);
-                    resultFuture.complete(result);
-                } catch (Exception e) {
-                    resultFuture.fail(e);
-                }
-            }
-        });
-
-        return resultFuture;
     }
 
     public void start() {

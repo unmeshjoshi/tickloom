@@ -33,6 +33,7 @@ public class LogBackedKeyValueStore {
     private Map<ByteBuffer, byte[]> map = new HashMap<>();
     private FileIO file;
     private BatchedLog log;
+    private int writesNotYetDurable;
 
     public LogBackedKeyValueStore(FileSystem fileSystem, String fileName, int groupWaitTicks) {
         this.fileSystem = fileSystem;
@@ -47,6 +48,7 @@ public class LogBackedKeyValueStore {
         }
         map = new HashMap<>();
         log = null;
+        writesNotYetDurable = 0;
         return fileSystem.open(fileName, OpenMode.OPEN_OR_CREATE)
                 // A new file's name is durable only after the directory is synced.
                 .thenCompose(opened -> fileSystem.syncDirectory().thenApply(ignored -> opened))
@@ -69,7 +71,16 @@ public class LogBackedKeyValueStore {
     /** Completes when the write is durable. */
     public TickCompletableFuture<Void> put(byte[] key, byte[] value) {
         map.put(ByteBuffer.wrap(key.clone()), value.clone());
-        return log.append(encode(key, value)).thenApply(offset -> (Void) null);
+        writesNotYetDurable++;
+        return log.append(encode(key, value)).thenApply(offset -> {
+            writesNotYetDurable--;
+            return (Void) null;
+        });
+    }
+
+    /** True while some write is in the map but not yet durable. */
+    public boolean hasWritesNotYetDurable() {
+        return writesNotYetDurable > 0;
     }
 
     public void tick() {

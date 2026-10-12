@@ -4,7 +4,6 @@ import com.tickloom.fs.FileSystem;
 import com.tickloom.fs.SimulatedFileSystem;
 import com.tickloom.messaging.MessageBus;
 import com.tickloom.network.MessageCodec;
-import com.tickloom.storage.Storage;
 import com.tickloom.util.Clock;
 import com.tickloom.util.IdGen;
 
@@ -15,7 +14,7 @@ import java.util.Objects;
  * process are not visible to another. Whoever owns the loop must tick it, or file calls never complete.
  */
 public record ProcessParams(ProcessId id, MessageBus messageBus, MessageCodec messageCodec, int timeoutTicks,
-                            Clock clock, IdGen idGenerator, Storage storage, FileSystem fileSystem) {
+                            Clock clock, IdGen idGenerator, FileSystem fileSystem) {
 
     public ProcessParams {
         Objects.requireNonNull(fileSystem, "fileSystem");
@@ -26,7 +25,7 @@ public record ProcessParams(ProcessId id, MessageBus messageBus, MessageCodec me
      * so a process that opens files needs the caller to pass a filesystem it ticks, as {@code Cluster} does.
      */
     public ProcessParams(ProcessId id, MessageBus messageBus, MessageCodec messageCodec, int timeoutTicks,
-                         Clock clock, IdGen idGenerator, Storage storage) {
-        this(id, messageBus, messageCodec, timeoutTicks, clock, idGenerator, storage, new SimulatedFileSystem());
+                         Clock clock, IdGen idGenerator) {
+        this(id, messageBus, messageCodec, timeoutTicks, clock, idGenerator, new SimulatedFileSystem());
     }
 }

@@ -6,6 +6,7 @@ import com.tickloom.ProcessParams;
 import com.tickloom.Tickable;
 import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.algorithms.replication.ClusterClient;
+import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.config.ClusterTopology;
 import com.tickloom.config.Config;
 import com.tickloom.config.ProcessConfig;
@@ -13,9 +14,6 @@ import com.tickloom.messaging.MessageBus;
 import com.tickloom.messaging.MessageType;
 import com.tickloom.network.*;
 import com.tickloom.fs.SimulatedFileSystem;
-import com.tickloom.storage.SimulatedStorage;
-import com.tickloom.storage.Storage;
-import com.tickloom.storage.rocksdb.RocksDbStorage;
 import com.tickloom.util.Clock;
 import com.tickloom.util.IdGen;
 import com.tickloom.util.StubClock;
@@ -55,7 +53,6 @@ public class Cluster implements Tickable, AutoCloseable {
     List<Node> serverNodes = new ArrayList<>();
     List<Cluster.ClientNode> clientNodes = new ArrayList<>();
     boolean useSimulatedNetwork = false;
-    boolean useSimulatedStorage = true;
     Map<ProcessId, StubClock> processClocks = new HashMap<>();
 
     public ClusterClient getClient(ProcessId id) {
@@ -164,11 +161,6 @@ public class Cluster implements Tickable, AutoCloseable {
 
     public Cluster useSimulatedNetwork() {
         useSimulatedNetwork(false);
-        return this;
-    }
-
-    public Cluster useRocksDBStorage() {
-        useSimulatedStorage = false;
         return this;
     }
 
@@ -468,23 +460,7 @@ public class Cluster implements Tickable, AutoCloseable {
         }
     }
 
-    // ========== Storage Access for Testing ==========
-
-    /**
-     * Gets the storage instance for a specific process.
-     * Useful for direct storage assertions in tests.
-     *
-     * @param processId the ID of the process
-     * @return the Storage instance for the process
-     * @throws IllegalArgumentException if the process ID is not found
-     */
-    public Storage getStorageForProcess(ProcessId processId) {
-        Node node = findServerNode(processId);
-        if (node == null) {
-            throw new IllegalArgumentException("Process not found: " + processId);
-        }
-        return node.storage;
-    }
+    // ========== Stored Values for Testing ==========
 
     /**
      * Gets the process instance for a specific process ID.
@@ -515,27 +491,30 @@ public class Cluster implements Tickable, AutoCloseable {
     }
 
     /**
-     * Retrieves a name from storage on a specific process for testing.
-     * This method handles the asynchronous nature of storage operations.
-     *
-     * @param processId the ID of the process
-     * @param key       the key to retrieve
-     * @return the VersionedValue if found, null otherwise
+     * The value a replica holds locally for a key, as stored: an encoded {@code VersionedValue}, or null.
+     * It includes a write that is not yet durable.
      */
-    public byte[] getStorageValue(ProcessId processId, byte[] key) {
-        Storage storage = getStorageForProcess(processId);
-        TickCompletableFuture<byte[]> future = storage.get(key);
+    public byte[] getStoredValue(ProcessId processId, byte[] key) {
+        return ((QuorumReplica) getProcess(processId)).getStoredValue(key);
+    }
 
-        // Tick until the storage operation completes
-        while (!future.isCompleted()) {
-            tick();
-        }
+    /**
+     * True when nothing is in flight: no message on the simulated network and no write waiting to become durable.
+     * A scenario that wants every reply of its last step recorded waits for this.
+     */
+    public boolean isQuiescent() {
+        ensureSimulatedNetwork();
+        return !((SimulatedNetwork) sharedNetwork).hasPendingMessages()
+                && getServerProcessIds().stream().noneMatch(this::hasWritesNotYetDurable);
+    }
 
-        return future.getResult();
+    /** True while a write the replica applied is not yet durable on its disk, so it has not been acknowledged. */
+    public boolean hasWritesNotYetDurable(ProcessId processId) {
+        return ((QuorumReplica) getProcess(processId)).hasWritesNotYetDurable();
     }
 
     public <T> T getDecodedStoredValue(ProcessId processId, byte[] key, Class<T> clazz) {
-        var value = getStorageValue(processId, key);
+        var value = getStoredValue(processId, key);
         return (value != null) ? messageCodec.decode(value, clazz) : null;//todo: use Optional
     }
 
@@ -632,7 +611,7 @@ public class Cluster implements Tickable, AutoCloseable {
         StubClock clientClock = new StubClock(initialClockTime);
         processClocks.put(id, clientClock);
         IdGen idGen = new IdGen(id.name(), random);
-        T clusterClient = factory.createAndStart(targetNodes, new ProcessParams(id, messageBus, messageCodec, requestTimeoutTicks, clientClock, idGen, new SimulatedStorage(random)));
+        T clusterClient = factory.createAndStart(targetNodes, new ProcessParams(id, messageBus, messageCodec, requestTimeoutTicks, clientClock, idGen));
         clientNodes.add(new ClientNode(id, network, messageBus, clusterClient));
         return clusterClient;
     }
@@ -668,20 +647,18 @@ public class Cluster implements Tickable, AutoCloseable {
         Network network;
         MessageBus messageBus;
         com.tickloom.Process process;
-        Storage storage;
         // What restartNode needs to build a new incarnation of the process on the same disk.
         final SimulatedFileSystem fileSystem;
         final ProcessFactory factory;
         final List<ProcessId> peers;
         final ProcessParams params;
 
-        public Node(ProcessId id, Network network, MessageBus messageBus, com.tickloom.Process process, Storage storage,
+        public Node(ProcessId id, Network network, MessageBus messageBus, com.tickloom.Process process,
                     SimulatedFileSystem fileSystem, ProcessFactory factory, List<ProcessId> peers, ProcessParams params) {
             this.id = id;
             this.network = network;
             this.messageBus = messageBus;
             this.process = process;
-            this.storage = storage;
             this.fileSystem = fileSystem;
             this.factory = factory;
             this.peers = peers;
@@ -696,7 +673,6 @@ public class Cluster implements Tickable, AutoCloseable {
             OrderedTicker.of(
                             messageBus,
                             process,
-                            storage,
                             fileSystem)
                     .tick();
         }
@@ -705,7 +681,6 @@ public class Cluster implements Tickable, AutoCloseable {
             network.close();
             messageBus.close();
             process.close();
-            storage.close();
         }
     }
 
@@ -787,11 +762,6 @@ public class Cluster implements Tickable, AutoCloseable {
             ProcessId processId = processIds.get(i);
             List<ProcessId> peers = getPeerIdsFrom(processIds, processId);
             Network network = sharedNetwork; //We can create separate network, NioNetwork.create(topo, messageCodec);
-            //create storage. Based on the configuration either @SimulatedStorage or @RocksDBStorage is created.
-            //RocksDBStorage is useful when we want to test scenarios with crash recovery, particularly useful
-            // while testing consensus algorithms like Paxos and Raft.
-            Storage storage = createStorage(processId);
-
             MessageBus messageBus = sharedMessageBus; //new MessageBus(network, messageCodec);
             // Always use StubClock for deterministic testing
             StubClock stubClock = new StubClock(initialClockTime);
@@ -800,9 +770,9 @@ public class Cluster implements Tickable, AutoCloseable {
             IdGen idGen = new IdGen(processId.name(), random);
             // Each process has its own simulated disk. A crash of the node (see crashNode) loses what it did not sync.
             SimulatedFileSystem fileSystem = new SimulatedFileSystem();
-            ProcessParams params = new ProcessParams(processId, messageBus, messageCodec, requestTimeoutTicks, clock, idGen, storage, fileSystem);
+            ProcessParams params = new ProcessParams(processId, messageBus, messageCodec, requestTimeoutTicks, clock, idGen, fileSystem);
             com.tickloom.Process process = factory.createAndStart(peers, params);
-            serverNodes.add(new Node(processId, network, messageBus, process, storage, fileSystem, factory, peers, params));
+            serverNodes.add(new Node(processId, network, messageBus, process, fileSystem, factory, peers, params));
         }
         return this;
     }
@@ -810,16 +780,6 @@ public class Cluster implements Tickable, AutoCloseable {
     @NotNull
     private static List<ProcessId> getPeerIdsFrom(List<ProcessId> processIds, ProcessId processId) {
         return processIds.stream().filter(id -> !id.equals(processId)).toList();
-    }
-
-    private Storage createStorage(ProcessId processId) throws IOException {
-        return useSimulatedStorage ? new SimulatedStorage(random) : new RocksDbStorage(rocksDBPath(processId));
-    }
-
-    private String rocksDBPath(ProcessId processId) throws IOException {
-        String tmpPath = Files.createTempDirectory("testkit-rocksdb-" + processId.name() + "-"  + random.nextInt()).toString();
-        System.out.println("Creating RocksDB instance at path = " + tmpPath);
-        return tmpPath;
     }
 
     private static List<ProcessId> generateDefaultIds(int numProcesses) {
@@ -837,7 +797,22 @@ public class Cluster implements Tickable, AutoCloseable {
         for (Node node : serverNodes) {
             node.start(); //All nodes start listening on the socket.
         }
+        awaitStartup();
         return this;
+    }
+
+    /**
+     * A replica opens and recovers its files at startup, which takes a few ticks of its disk, and ignores
+     * requests until then. Wait for that here, as a cluster is up before its clients talk to it. Only the servers
+     * are ticked, so the clocks and the network do not move.
+     */
+    private void awaitStartup() {
+        for (int ticks = 0; !areAllNodesInitialized(); ticks++) {
+            if (ticks > DEFAULT_TIMEOUT_TICKS) {
+                throw new IllegalStateException("Servers did not finish starting after " + DEFAULT_TIMEOUT_TICKS + " ticks");
+            }
+            tickServers();
+        }
     }
 
     public boolean areAllNodesInitialized() {

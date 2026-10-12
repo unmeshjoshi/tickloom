@@ -3,8 +3,6 @@ package com.tickloom;
 import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.messaging.*;
 import com.tickloom.network.*;
-import com.tickloom.storage.SimulatedStorage;
-import com.tickloom.storage.Storage;
 import com.tickloom.util.IdGen;
 import com.tickloom.util.SystemClock;
 import org.jetbrains.annotations.NotNull;
@@ -339,11 +337,11 @@ class ReplicaTest {
 
         MessageBus messageBus = new MessageBus(network, messageCodec);
 
-        TestableReplica replica = new TestableReplica(peerIds, new SimulatedStorage(random),
+        TestableReplica replica = new TestableReplica(peerIds,
                 new ProcessParams(selfId,
                         messageBus, messageCodec, timeoutTicks,
                         new SystemClock(), new IdGen(selfId.name(),
-                        new Random()), new SimulatedStorage(random)), network);
+                        new Random())), network);
         replica.start();
         return replica;
     }
@@ -354,7 +352,7 @@ class ReplicaTest {
         boolean onTickCalled = false;
         private Message selfMessage;
 
-        public TestableReplica(List<ProcessId> peerIds, Storage storage, ProcessParams processParams, SimulatedNetwork network) {
+        public TestableReplica(List<ProcessId> peerIds, ProcessParams processParams, SimulatedNetwork network) {
             super(peerIds, processParams);
             this.network = network;
         }
