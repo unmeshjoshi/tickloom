@@ -115,6 +115,11 @@ public class Wal {
         return result;
     }
 
+    /** Closes the file. Calls already issued finish first. */
+    public TickCompletableFuture<Void> close() {
+        return file.close();
+    }
+
     /**
      * Reads the file from the start and returns the valid records in order. The first invalid or incomplete record
      * ends the log. Sets nextOffset and durableOffset to the end of the last valid record, then cuts off whatever

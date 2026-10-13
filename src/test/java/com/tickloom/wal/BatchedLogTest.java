@@ -1,48 +1,64 @@
 package com.tickloom.wal;
 
 import org.junit.jupiter.api.Test;
+import com.tickloom.fs.FileIO;
+import com.tickloom.fs.OpenMode;
+import com.tickloom.fs.SimulatedFileSystem;
 import com.tickloom.future.TickCompletableFuture;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * BatchedLog on a Wal on the simulated disk. A simulated call completes on the next tick, so a sync issued on
+ * tick n completes on tick n + 1. What reached the disk is checked by crashing, restarting and recovering.
+ */
 class BatchedLogTest {
     private static final int WAIT = 3;
-    private final RecordingFileIO file = new RecordingFileIO();
+    private static final int RECORD = RecordCodec.HEADER_SIZE + 4;
+
+    private final SimulatedFileSystem fs = new SimulatedFileSystem();
+    private final FileIO file;
     private final BatchedLog log;
 
     BatchedLogTest() {
+        file = await(fs.open("wal", OpenMode.CREATE_NEW));
+        await(fs.syncDirectory());
         Wal wal = new Wal(file);
-        wal.recover();
-        file.ops.get(0).future().complete(ByteBuffer.allocate(0));
-        file.ops.clear();
+        await(wal.recover());
         log = new BatchedLog(wal, WAIT);
     }
 
-    private void tick(int n) {
-        for (int i = 0; i < n; i++) log.tick();
+    private <T> T await(TickCompletableFuture<T> future) {
+        for (int i = 0; i < 1_000 && future.isPending(); i++) fs.tick();
+        assertTrue(future.isCompleted(), "not completed: " + (future.isFailed() ? future.getException() : "pending"));
+        return future.getResult();
     }
 
-    private void completeWrites() {
-        file.ofKind("write").forEach(op -> {
-            if (op.future().isPending()) op.future().complete(1);
-        });
+    private void tick(int n) {
+        for (int i = 0; i < n; i++) {
+            fs.tick();
+            log.tick();
+        }
+    }
+
+    private List<Wal.Entry> crashAndRecover() {
+        fs.crash();
+        fs.restart();
+        return await(new Wal(await(fs.open("wal", OpenMode.OPEN_EXISTING))).recover());
     }
 
     @Test
-    void threeAppendsInOneTickGiveThreePendingFuturesAndNoSync() {
+    void appendsAreWrittenAtOnceButNotSyncedBeforeTheGroupWait() {
         TickCompletableFuture<Long> a = log.append(new byte[4]);
         TickCompletableFuture<Long> b = log.append(new byte[4]);
         TickCompletableFuture<Long> c = log.append(new byte[4]);
-        completeWrites();
-        tick(WAIT - 1);
+        tick(WAIT);   // the writes are done; the sync goes out on this tick but has not completed
 
         assertTrue(a.isPending() && b.isPending() && c.isPending());
-        assertTrue(file.ofKind("sync").isEmpty());
-        assertEquals(3, file.ofKind("write").size());   // the writes went out at once
+        assertTrue(crashAndRecover().isEmpty(), "nothing was synced, so nothing survives the crash");
     }
 
     @Test
@@ -50,74 +66,62 @@ class BatchedLogTest {
         TickCompletableFuture<Long> a = log.append(new byte[4]);
         TickCompletableFuture<Long> b = log.append(new byte[4]);
         TickCompletableFuture<Long> c = log.append(new byte[4]);
-        completeWrites();
-        tick(WAIT);
+        tick(WAIT + 1);
 
-        assertEquals(1, file.ofKind("sync").size());
-        assertTrue(a.isPending());   // written, not durable
-
-        file.ofKind("sync").get(0).future().complete(null);
-
-        int record = RecordCodec.HEADER_SIZE + 4;
         assertEquals(0, a.getResult());
-        assertEquals(record, b.getResult());
-        assertEquals(2 * record, c.getResult());
-    }
-
-    @Test
-    void aLoneAppendWaitsExactlyTheGroupWait() {
-        log.append(new byte[4]);
-        completeWrites();
-        tick(WAIT - 1);
-        assertTrue(file.ofKind("sync").isEmpty());
-        tick(1);
-        assertEquals(1, file.ofKind("sync").size());
+        assertEquals(RECORD, b.getResult());
+        assertEquals(2 * RECORD, c.getResult());
+        assertEquals(3, crashAndRecover().size());
     }
 
     @Test
     void appendsDuringASyncWaitForTheNextOne() {
         TickCompletableFuture<Long> first = log.append(new byte[4]);
-        completeWrites();
-        tick(WAIT);
-        TickCompletableFuture<Long> second = log.append(new byte[4]);   // sync 1 is in flight
-        completeWrites();
-        tick(WAIT + 2);
-        assertEquals(1, file.ofKind("sync").size(), "at most one sync in flight");
+        tick(WAIT);   // the sync for the first record is in flight
+        TickCompletableFuture<Long> second = log.append(new byte[4]);
+        tick(1);
 
-        file.ofKind("sync").get(0).future().complete(null);
         assertTrue(first.isCompleted());
         assertTrue(second.isPending(), "the second record was not covered by the first sync");
 
-        tick(1);
-        assertEquals(2, file.ofKind("sync").size());
-        file.ofKind("sync").get(1).future().complete(null);
-        assertTrue(second.isCompleted());
+        tick(WAIT);
+        assertEquals(RECORD, second.getResult());
+        assertEquals(2, crashAndRecover().size());
     }
 
     @Test
     void aFailedSyncFailsAllWaitersAndLaterAppends() {
         TickCompletableFuture<Long> a = log.append(new byte[4]);
         TickCompletableFuture<Long> b = log.append(new byte[4]);
-        completeWrites();
-        tick(WAIT);
-        IOException failure = new IOException("disk on fire");
-        file.ofKind("sync").get(0).future().fail(failure);
+        tick(1);   // the writes are done
+        file.close();   // every later call on the file fails, so the sync will
+        tick(WAIT - 1);
 
-        assertSame(failure, a.getException());
-        assertSame(failure, b.getException());
+        assertInstanceOf(IOException.class, a.getException());
+        assertInstanceOf(IOException.class, b.getException());
         assertTrue(log.append(new byte[4]).isFailed());
     }
 
     @Test
-    void aFailedWriteFailsAllWaiters() {
-        TickCompletableFuture<Long> a = log.append(new byte[4]);
-        TickCompletableFuture<Long> b = log.append(new byte[4]);
-        IOException failure = new IOException("bad sector");
-        file.ofKind("write").get(0).future().fail(failure);
+    void aFailedWriteFailsAllWaitersAndLaterAppends() {
+        file.close();   // every later call on the file fails
 
-        assertTrue(a.isFailed());
-        assertTrue(b.isFailed());
-        tick(WAIT);
-        assertTrue(file.ofKind("sync").isEmpty());
+        TickCompletableFuture<Long> a = log.append(new byte[4]);
+
+        assertInstanceOf(IOException.class, a.getException());
+        assertTrue(log.append(new byte[4]).isFailed());
+    }
+
+    @Test
+    void closeSyncsTheRecordsStillWaitingBeforeClosing() {
+        TickCompletableFuture<Long> waiting = log.append(new byte[4]);
+
+        TickCompletableFuture<Void> close = log.close();
+        fs.tick();   // only the file is ticked, so the sync must come from close(), not from the batching in log.tick()
+
+        assertTrue(close.isCompleted());
+        assertEquals(0, waiting.getResult(), "the record was made durable before the file closed");
+        assertTrue(log.append(new byte[4]).isFailed());
+        assertEquals(1, crashAndRecover().size());
     }
 }

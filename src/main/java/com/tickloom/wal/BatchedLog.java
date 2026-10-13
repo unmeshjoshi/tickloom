@@ -35,6 +35,7 @@ public class BatchedLog {
     private final Deque<Waiter> waiting = new ArrayDeque<>();   // written, not yet covered by a sync call
     private List<Waiter> syncing = new ArrayList<>();            // covered by the sync in flight
     private boolean syncInFlight;
+    private boolean closed;
     private Throwable failure;
     private long tickCount;
 
@@ -48,9 +49,9 @@ public class BatchedLog {
 
     /** Completes with the record's offset once it is durable. */
     public TickCompletableFuture<Long> append(byte[] payload) {
-        if (failure != null) {
+        if (closed || failure != null) {
             TickCompletableFuture<Long> rejected = new TickCompletableFuture<>();
-            rejected.fail(failure);
+            rejected.fail(closed ? new IllegalStateException("log is closed") : failure);
             return rejected;
         }
         Waiter waiter = new Waiter(tickCount);
@@ -63,6 +64,26 @@ public class BatchedLog {
             }
         });
         return waiter.durable;
+    }
+
+    /**
+     * Syncs the records still waiting, without waiting for the group wait, then closes the Wal. Their futures complete
+     * before the returned one. A sync already in flight completes its own records. Later appends fail.
+     */
+    public TickCompletableFuture<Void> close() {
+        closed = true;
+        List<Waiter> remaining = new ArrayList<>(waiting);
+        waiting.clear();
+        wal.sync().whenComplete((durableOffset, error) -> {
+            for (Waiter waiter : remaining) {
+                if (error != null) {
+                    waiter.durable.fail(error);
+                } else {
+                    completeDurable(waiter);
+                }
+            }
+        });
+        return wal.close();
     }
 
     public void tick() {

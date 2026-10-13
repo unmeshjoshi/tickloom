@@ -122,6 +122,11 @@ fault atlas keeping faults recoverable).
     latency (min/mean exponential).
   - Corruption must be detectable (checksums) and placed so the cluster can recover (TigerBeetle fault atlas), so a
     failing seed means a bug.
+- [x] **S8. `Wal.close()` (and `BatchedLog.close()`)**
+  - Neither has a `close()`, so a user that may restart in place keeps the `FileIO` beside the `Wal` only to close it
+    (`WalBackedKVStore`; workshop `PaxosServer` had a `decisionFile` field for this, removed 2026-10-13).
+  - `Wal.close()` closes the underlying `FileIO` after the calls already issued; `BatchedLog.close()` syncs the records
+    still waiting first, without waiting for the group wait. Appends after close fail.
 
 Dropped: old item 17 (decouple Process from storage by going in-memory) and item 18 (remove Storage) — superseded by
 S3 (process gets a node-owned filesystem). `SimulatedStorage` crash semantics (old 15) — superseded by S1.
