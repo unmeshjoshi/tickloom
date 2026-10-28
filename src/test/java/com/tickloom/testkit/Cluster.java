@@ -10,7 +10,6 @@ import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.config.ClusterTopology;
 import com.tickloom.config.Config;
 import com.tickloom.config.ProcessConfig;
-import com.tickloom.messaging.MessageBus;
 import com.tickloom.messaging.MessageType;
 import com.tickloom.network.*;
 import com.tickloom.fs.SimulatedFileSystem;
@@ -68,7 +67,6 @@ public class Cluster implements Tickable, AutoCloseable {
     private ClusterTopology topo;
     private MessageCodec messageCodec = new JsonMessageCodec();
     private Network sharedNetwork;
-    private MessageBus sharedMessageBus;
     private boolean useLossyNetwork = false;
     private int requestTimeoutTicks = 10000;
 
@@ -597,13 +595,12 @@ public class Cluster implements Tickable, AutoCloseable {
         Network network = useSimulatedNetwork ? sharedNetwork : createNetwork(messageCodec);
         networks.add(network);
 
-        MessageBus messageBus = useSimulatedNetwork ? sharedMessageBus : new MessageBus(network, messageCodec);
         // Create a StubClock for the clientId as well
         StubClock clientClock = new StubClock(initialClockTime);
         processClocks.put(id, clientClock);
         IdGen idGen = new IdGen(id.name(), random);
-        T clusterClient = factory.createAndStart(targetNodes, new ProcessParams(id, messageBus, messageCodec, requestTimeoutTicks, clientClock, idGen));
-        clientNodes.add(new ClientNode(id, network, messageBus, clusterClient));
+        T clusterClient = factory.createAndStart(targetNodes, new ProcessParams(id, network, messageCodec, requestTimeoutTicks, clientClock, idGen));
+        clientNodes.add(new ClientNode(id, network, clusterClient));
         return clusterClient;
     }
 
@@ -636,7 +633,6 @@ public class Cluster implements Tickable, AutoCloseable {
     static class Node implements Tickable {
         ProcessId id;
         Network network;
-        MessageBus messageBus;
         com.tickloom.Process process;
         // What restartNode needs to build a new incarnation of the process on the same disk.
         final SimulatedFileSystem fileSystem;
@@ -644,11 +640,10 @@ public class Cluster implements Tickable, AutoCloseable {
         final List<ProcessId> peers;
         final ProcessParams params;
 
-        public Node(ProcessId id, Network network, MessageBus messageBus, com.tickloom.Process process,
+        public Node(ProcessId id, Network network, com.tickloom.Process process,
                     SimulatedFileSystem fileSystem, ProcessFactory factory, List<ProcessId> peers, ProcessParams params) {
             this.id = id;
             this.network = network;
-            this.messageBus = messageBus;
             this.process = process;
             this.fileSystem = fileSystem;
             this.factory = factory;
@@ -662,7 +657,6 @@ public class Cluster implements Tickable, AutoCloseable {
 
         public void tick() {
             OrderedTicker.of(
-                            messageBus,
                             process,
                             fileSystem)
                     .tick();
@@ -670,7 +664,6 @@ public class Cluster implements Tickable, AutoCloseable {
 
         public void close() throws Exception {
             network.close();
-            messageBus.close();
             process.close();
         }
     }
@@ -678,25 +671,21 @@ public class Cluster implements Tickable, AutoCloseable {
     static class ClientNode {
         ProcessId id;
         Network network;
-        MessageBus messageBus;
         ClusterClient client;
 
-        public ClientNode(ProcessId id, Network network, MessageBus messageBus, ClusterClient client) {
+        public ClientNode(ProcessId id, Network network, ClusterClient client) {
             this.id = id;
             this.network = network;
-            this.messageBus = messageBus;
             this.client = client;
         }
 
         public void tick() {
             OrderedTicker.of(
-                    messageBus,
                     client).tick();
         }
 
         public void close() throws Exception {
             network.close();
-            messageBus.close();
             client.close();
         }
     }
@@ -741,19 +730,14 @@ public class Cluster implements Tickable, AutoCloseable {
         topo = new ClusterTopology(new Config(endpoints.values().stream().toList()));
         JsonMessageCodec messageCodec = new JsonMessageCodec();
 
-        //In simulation mode, we use a single shared messagebus. so that message delivery
-        //destinations are registered on the same messagebus. If different messagebuses are used
-        //we need to do some wiring at the network layer.
-        //When we use a real NIO network, we can use different networks and messagebuses as
-        //messages are routed with the real network layer.
+        //All server processes register with one shared network, which delivers each message
+        //to the process registered for its destination.
         this.sharedNetwork = createNetwork(messageCodec);
-        this.sharedMessageBus = new MessageBus(sharedNetwork, messageCodec);
 
         for (int i = 0; i < processIds.size(); i++) {
             ProcessId processId = processIds.get(i);
             List<ProcessId> peers = getPeerIdsFrom(processIds, processId);
             Network network = sharedNetwork; //We can create separate network, NioNetwork.create(topo, messageCodec);
-            MessageBus messageBus = sharedMessageBus; //new MessageBus(network, messageCodec);
             // Always use StubClock for deterministic testing
             StubClock stubClock = new StubClock(initialClockTime);
             processClocks.put(processId, stubClock);
@@ -761,9 +745,9 @@ public class Cluster implements Tickable, AutoCloseable {
             IdGen idGen = new IdGen(processId.name(), random);
             // Each process has its own simulated disk. A crash of the node (see crashNode) loses what it did not sync.
             SimulatedFileSystem fileSystem = new SimulatedFileSystem();
-            ProcessParams params = new ProcessParams(processId, messageBus, messageCodec, requestTimeoutTicks, clock, idGen, fileSystem);
+            ProcessParams params = new ProcessParams(processId, network, messageCodec, requestTimeoutTicks, clock, idGen, fileSystem);
             com.tickloom.Process process = factory.createAndStart(peers, params);
-            serverNodes.add(new Node(processId, network, messageBus, process, fileSystem, factory, peers, params));
+            serverNodes.add(new Node(processId, network, process, fileSystem, factory, peers, params));
         }
         return this;
     }

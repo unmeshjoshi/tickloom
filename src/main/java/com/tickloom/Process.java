@@ -4,6 +4,7 @@ import com.tickloom.fs.FileSystem;
 import com.tickloom.future.TickCompletableFuture;
 import com.tickloom.messaging.*;
 import com.tickloom.network.MessageCodec;
+import com.tickloom.network.Network;
 import com.tickloom.network.PeerType;
 import com.tickloom.util.Clock;
 import com.tickloom.util.IdGen;
@@ -17,7 +18,7 @@ import java.util.Map;
  */
 public abstract class Process implements Tickable, AutoCloseable {
     public final ProcessId id;
-    public final MessageBus messageBus;
+    public final Network network;
     protected final MessageCodec messageCodec;
     protected final RequestWaitingList<String, Object> waitingList;
     protected final int timeoutTicks;
@@ -30,7 +31,7 @@ public abstract class Process implements Tickable, AutoCloseable {
     protected ProcessState state = ProcessState.CREATED;
 
     public Process(ProcessParams processParams) {
-        this.messageBus = processParams.messageBus();
+        this.network = processParams.network();
         this.id = processParams.id();
         this.clock = processParams.clock();
         this.messageCodec = processParams.messageCodec();
@@ -38,12 +39,12 @@ public abstract class Process implements Tickable, AutoCloseable {
         this.waitingList = new RequestWaitingList<>(processParams.timeoutTicks());
         this.idGen = processParams.idGenerator();
         this.fileSystem = processParams.fileSystem();
-        processParams.messageBus().register(this);
+        network.register(this);
         initialiseMessageHandlers();
         
     }
 
-    public final void receiveMessage(Message message) {
+    public final void onMessage(Message message) {
         if (state == ProcessState.STOPPED) {
             return;
         }

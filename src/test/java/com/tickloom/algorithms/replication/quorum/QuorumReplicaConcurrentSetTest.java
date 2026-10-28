@@ -5,7 +5,6 @@ import com.tickloom.ProcessId;
 import com.tickloom.ProcessParams;
 import com.tickloom.fs.SimulatedFileSystem;
 import com.tickloom.messaging.Message;
-import com.tickloom.messaging.MessageBus;
 import com.tickloom.messaging.MessageType;
 import com.tickloom.network.JsonMessageCodec;
 import com.tickloom.network.PeerType;
@@ -33,11 +32,10 @@ class QuorumReplicaConcurrentSetTest {
 
     private final JsonMessageCodec codec = new JsonMessageCodec();
     private final SimulatedNetwork network = SimulatedNetwork.noLossNetwork(new Random(1));
-    private final MessageBus bus = new MessageBus(network, codec);
     private final SimulatedFileSystem fileSystem = new SimulatedFileSystem();
     private final QuorumReplica replica = new QuorumReplica(List.of(),
-            new ProcessParams(REPLICA, bus, codec, 1000, new SystemClock(), new IdGen("replica", new Random(2)), fileSystem));
-    private final Probe probe = new Probe(new ProcessParams(PROBE, bus, codec, 1000, new SystemClock(),
+            new ProcessParams(REPLICA, network, codec, 1000, new SystemClock(), new IdGen("replica", new Random(2)), fileSystem));
+    private final Probe probe = new Probe(new ProcessParams(PROBE, network, codec, 1000, new SystemClock(),
             new IdGen("probe", new Random(3)), new SimulatedFileSystem()));
     private int tick;
 
@@ -64,7 +62,6 @@ class QuorumReplicaConcurrentSetTest {
     private void step() {
         tick++;
         network.tick();
-        bus.tick();
         replica.tick();
         fileSystem.tick();
     }
@@ -78,7 +75,7 @@ class QuorumReplicaConcurrentSetTest {
 
     private void send(String value, long timestamp) throws IOException {
         InternalSetRequest request = new InternalSetRequest(KEY, value.getBytes(), timestamp);
-        bus.sendMessage(Message.of(PROBE, REPLICA, PeerType.SERVER, QuorumMessageTypes.INTERNAL_SET_REQUEST,
+        network.send(Message.of(PROBE, REPLICA, PeerType.SERVER, QuorumMessageTypes.INTERNAL_SET_REQUEST,
                 codec.encode(request), "c-" + value));
     }
 

@@ -47,17 +47,20 @@ The core components implement `Tickable` and are invoked **in sequence**:
 1. **Network** – delivers pending messages  
    - **Simulated mode**: `SimulatedNetwork` decides delivery time based on configured delays, partitions, and packet loss. Messages are delivered only when their scheduled delivery tick is reached.  
    - **Production mode**: `NioNetwork` processes available `SelectionKey`s from Java NIO’s selector in each tick.
-2. **MessageBus** – dispatches delivered messages to the correct target processes.  
-3. **Process** – runs user-defined logic, handles incoming messages, and schedules outgoing ones.  
-4. **Storage** – applies and commits any pending writes.
+
+   Every process registers with its network when it is created. The network delivers each message to the process
+   registered for the message's destination. A message a process sends to itself goes through the network like any
+   other, and is delivered on a later tick.
+2. **Process** – runs user-defined logic, handles incoming messages, and schedules outgoing ones.  
+3. **File system** – completes pending file operations, such as writes and syncs.
 
 ### Asynchronous Actions in a Synchronous Tick
 While network and storage operations are **asynchronous in nature**, Tickloom models them explicitly within the tick loop:
 - Outgoing network messages are queued and delivered later according to the network model.
-- Storage writes are acknowledged only when committed in a later tick.
+- File writes and syncs complete only on a later tick of the file system.
 
 ### The Driver Loop
-A **driver** calls `tick()` on all components in the defined order: Network → MessageBus → Process → Storage
+A **driver** calls `tick()` on all components in the defined order: Network → Process → File system
 
 - In **production**, the driver is the system’s main event loop.  
 - In **tests**, the driver is the test itself, using **Cluster testkit** helpers to:
@@ -158,25 +161,20 @@ dependencies {
 Below is a minimal Echo example that shows how to build on Tickloom’s primitives:
 - `EchoServer` extends `Process`
 - `EchoClient` extends `ClusterClient`
-- A JUnit test uses the `Cluster` testkit and `assertEventually`
+- A JUnit test uses the `Cluster` testkit and `tickUntil`
 
 ### EchoServer and EchoClient
-*(Full code retained as in original)*
+
+A process gets everything it needs, including the network it sends on, in `ProcessParams`.
+It registers with that network in the `Process` constructor.
 
 ```java
-// Example EchoServer and EchoClient code 
 public class EchoServer extends Process {
 
     private final List<ProcessId> peerIds;
 
-    public EchoServer(ProcessId id,
-                      List<ProcessId> peerIds,
-                      MessageBus messageBus,
-                      MessageCodec messageCodec,
-                      Storage storage,
-                      Clock clock,
-                      int timeoutTicks) {
-        super(id, messageBus, messageCodec, timeoutTicks, clock);
+    public EchoServer(List<ProcessId> peerIds, ProcessParams processParams) {
+        super(processParams);
         this.peerIds = peerIds;
     }
 
@@ -192,7 +190,7 @@ public class EchoServer extends Process {
         EchoResponse response = new EchoResponse(request.text());
         Message responseMessage = createResponseMessage(msg, response, ECHO_RESPONSE);
         try {
-            messageBus.sendMessage(responseMessage);
+            network.send(responseMessage);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -201,16 +199,11 @@ public class EchoServer extends Process {
 
 public class EchoClient extends ClusterClient {
 
-    public EchoClient(ProcessId clientId,
-                      List<ProcessId> replicaEndpoints,
-                      MessageBus messageBus,
-                      MessageCodec messageCodec,
-                      Clock clock,
-                      int timeoutTicks) {
-        super(clientId, replicaEndpoints, messageBus, messageCodec, clock, timeoutTicks);
+    public EchoClient(List<ProcessId> replicaEndpoints, ProcessParams processParams) {
+        super(replicaEndpoints, processParams);
     }
 
-    public ListenableFuture<EchoResponse> echo(ProcessId server, String text) {
+    public TickCompletableFuture<EchoResponse> echo(ProcessId server, String text) {
         EchoRequest req = new EchoRequest(text);
         return sendRequest(req, server, ECHO_REQUEST);
     }
@@ -238,7 +231,7 @@ public class EchoClusterTest {
     @BeforeEach
     void setup() throws Exception {
         cluster = new Cluster()
-                .withNumProcesses(1)
+                .withProcessIds(ProcessId.of("process-1"))
                 .useSimulatedNetwork()
                 .build(EchoServer::new)
                 .start();
@@ -253,11 +246,10 @@ public class EchoClusterTest {
     void echo_roundtrip() throws Exception {
         ProcessId serverId = ProcessId.of("process-1");
 
-        EchoClient client = cluster.newClient(ProcessId.of("client-1"), (clientId, endpoints, bus, codec, clock, timeoutTicks) ->
-                new EchoClient(clientId, java.util.List.of(serverId), bus, codec, clock, timeoutTicks));
+        EchoClient client = cluster.newClient(ProcessId.of("client-1"), EchoClient::new);
 
         var future = client.echo(serverId, "hello");
-        assertEventually(cluster, () -> future.isCompleted());
+        cluster.tickUntil(future::isCompleted);
 
         assertEquals("hello", future.getResult().text());
     }
@@ -285,12 +277,12 @@ Cluster cluster = new Cluster()
     .withProcessIds(ProcessId.of("n1"), ProcessId.of("n2"), ProcessId.of("n3"))
     .useSimulatedNetwork()
     .withInitialClockTime(1)
-    .build((id, peers, bus, codec, storage, clock, timeout) -> /* create Replica */)
+    .build((peers, processParams) -> /* create Replica */)
     .start();
 
 cluster.partitionNodes(ProcessId.of("n1"), ProcessId.of("n3"));
 // Advance ticks until a condition is met
-// assertEventually(cluster, () -> ...);
+// cluster.tickUntil(() -> ...);
 
 cluster.healPartition(ProcessId.of("n1"), ProcessId.of("n3"));
 cluster.close();
@@ -442,11 +434,12 @@ For more examples of using Jepsen, see `src/test/java/com/tickloom/JepsenTest.ja
 
 - **Process** – deterministic event-driven unit of logic (`tick()` loop)
 - **Replica** – process with built-in cluster utilities (peer tracking, broadcast, quorum handling)
-- **Messaging** – messages, message types, buses, correlation IDs
+- **Messaging** – messages, message types, correlation IDs
 - **Network**:
   - `SimulatedNetwork`: deterministic delivery with configurable delays, partitions, and loss
   - `NioNetwork`: non-blocking networking for real deployments
-- **Storage** – in-memory, RocksDB-backed, or simulated
+  - Each process registers with its network, which delivers messages to the process registered for their destination
+- **File system** – each process's own files: `SimulatedFileSystem` in tests, `RealFileSystem` in production
 
 ---
 

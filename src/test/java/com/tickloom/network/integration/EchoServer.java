@@ -3,7 +3,6 @@ package com.tickloom.network.integration;
 import com.tickloom.ProcessId;
 import com.tickloom.config.ClusterTopology;
 import com.tickloom.messaging.Message;
-import com.tickloom.messaging.MessageBus;
 import com.tickloom.messaging.MessageType;
 import com.tickloom.network.InetAddressAndPort;
 import com.tickloom.network.MessageCodec;
@@ -16,8 +15,8 @@ import java.io.IOException;
 class EchoServer extends TestPeer {
     private final InetAddressAndPort address;
 
-    public EchoServer(ProcessId id, MessageBus messageBus, NioNetwork network, ClusterTopology topology, MessageCodec codec) {
-        super(id, messageBus, network, topology, codec);
+    public EchoServer(ProcessId id, NioNetwork network, ClusterTopology topology, MessageCodec codec) {
+        super(id, network, topology, codec);
         this.address = topology.getInetAddress(id);
     }
 

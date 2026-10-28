@@ -7,7 +7,6 @@ import com.tickloom.config.ClusterTopology;
 import com.tickloom.config.Config;
 import com.tickloom.config.ProcessConfig;
 import com.tickloom.future.TickCompletableFuture;
-import com.tickloom.messaging.MessageBus;
 import com.tickloom.network.JsonMessageCodec;
 import com.tickloom.network.NioNetwork;
 import com.tickloom.util.Clock;
@@ -77,12 +76,11 @@ public class ClientMain {
         JsonMessageCodec codec = new JsonMessageCodec();
         try {
             NioNetwork network = NioNetwork.create(clusterTopology, codec);
-            MessageBus bus = new MessageBus(network, codec);
 
             Clock clock = new SystemClock();
             IdGen idGen = new IdGen(clientId.name(), new Random());
 
-            QuorumReplicaClient client = new QuorumReplicaClient(replicas, new ProcessParams(clientId, bus, codec, timeoutTicks, clock, idGen));
+            QuorumReplicaClient client = new QuorumReplicaClient(replicas, new ProcessParams(clientId, network, codec, timeoutTicks, clock, idGen));
             client.start();
 
             addShutdownHook(network);

@@ -217,7 +217,7 @@ public class NioNetwork extends Network {
         }
         System.out.println("message = " + message);
 
-        dispatchReceivedMessage(message);
+        deliver(message);
     }
 
     @Override

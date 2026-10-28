@@ -99,7 +99,6 @@ class ReplicaTest {
                 .send();
 
         assertMessageSentToAllPeers(replica, network);
-        assertNull(replica.selfMessage);
     }
 
     @Test
@@ -265,13 +264,12 @@ class ReplicaTest {
 
         replica.broadcast(pingType, "ping");
 
+        // The message to self goes through the network like the others.
         List<Message> pending = network.getPendingMessages();
-        assertEquals(2, pending.size());
+        assertEquals(3, pending.size());
         assertTrue(pending.stream().anyMatch(m -> m.destination().equals(peerIds.get(0)) && m.messageType().equals(pingType)));
         assertTrue(pending.stream().anyMatch(m -> m.destination().equals(peerIds.get(1)) && m.messageType().equals(pingType)));
-
-        assertNotNull(replica.selfMessage);
-        assertEquals(pingType, replica.selfMessage.messageType());
+        assertTrue(pending.stream().anyMatch(m -> m.destination().equals(replica.id) && m.messageType().equals(pingType)));
 
         assertEquals(0, replica.getWaitingListSize());
     }
@@ -289,7 +287,6 @@ class ReplicaTest {
         assertEquals(1, pending.size());
         assertEquals(peerIds.get(0), pending.get(0).destination());
         assertEquals(pingType, pending.get(0).messageType());
-        assertNull(replica.selfMessage);
 
         assertEquals(0, replica.getWaitingListSize());
     }
@@ -309,13 +306,10 @@ class ReplicaTest {
         );
     }
 
+    // The message to self goes through the network like the others.
     private static void assertMessageSentToAllNodesIncludingSelf(TestableReplica replica, SimulatedNetwork network) {
-        assertMessageSentToAllPeers(replica, network);
-        assertMessageSentToSelf(replica);
-    }
-
-    private static void assertMessageSentToSelf(TestableReplica replica) {
-        assertEquals(replica.selfMessage.messageType(), new MessageType("INTERNAL_GET_REQUEST"));
+        var targetNodes = network.getPendingMessages().stream().map(message -> message.destination()).toList();
+        assertEquals(replica.getAllNodes(), targetNodes);
     }
 
     private static void assertMessageSentToAllPeers(TestableReplica replica, SimulatedNetwork network) {
@@ -335,11 +329,9 @@ class ReplicaTest {
         Random random = new Random();
         JsonMessageCodec messageCodec = new JsonMessageCodec();
 
-        MessageBus messageBus = new MessageBus(network, messageCodec);
-
         TestableReplica replica = new TestableReplica(peerIds,
                 new ProcessParams(selfId,
-                        messageBus, messageCodec, timeoutTicks,
+                        network, messageCodec, timeoutTicks,
                         new SystemClock(), new IdGen(selfId.name(),
                         new Random())), network);
         replica.start();
@@ -350,7 +342,6 @@ class ReplicaTest {
     private static class TestableReplica extends Replica {
         private final SimulatedNetwork network;
         boolean onTickCalled = false;
-        private Message selfMessage;
 
         public TestableReplica(List<ProcessId> peerIds, ProcessParams processParams, SimulatedNetwork network) {
             super(peerIds, processParams);
@@ -377,17 +368,8 @@ class ReplicaTest {
         }
 
 
-        @Override
-        public void onMessageReceived(Message message) {
-            this.selfMessage = message;
-        }
-
         void respond(ProcessId fromNode, Object responsePayload) {
-            if (fromNode.equals(this.id)) {
-                waitingList.handleResponse(selfMessage.correlationId(), responsePayload, fromNode);
-                return;
-            }
-            // Find the message that was sent to this peer to get its correlation ID
+            // Find the message that was sent to this node to get its correlation ID
             Message outgoing = network.getPendingMessages().stream()
                     .filter(m -> m.destination().equals(fromNode))
                     .findFirst()

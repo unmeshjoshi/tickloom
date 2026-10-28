@@ -5,7 +5,6 @@ import com.tickloom.ProcessId;
 import com.tickloom.Tickable;
 import com.tickloom.config.ClusterTopology;
 import com.tickloom.messaging.Message;
-import com.tickloom.messaging.MessageBus;
 import com.tickloom.messaging.MessageType;
 import com.tickloom.network.JsonMessageCodec;
 import com.tickloom.network.MessageCodec;
@@ -26,8 +25,8 @@ class TestPeer extends com.tickloom.Process implements Tickable, AutoCloseable {
     private final ClusterTopology topology;
     protected final List<Message> receivedMessages = new ArrayList<>();
 
-    protected TestPeer(ProcessId id, MessageBus messageBus, NioNetwork network, ClusterTopology topology, MessageCodec codec) {
-        super(new ProcessParams(id, messageBus, codec, 1, new SystemClock(), new IdGen(id.name(), new Random())));
+    protected TestPeer(ProcessId id, NioNetwork network, ClusterTopology topology, MessageCodec codec) {
+        super(new ProcessParams(id, network, codec, 1, new SystemClock(), new IdGen(id.name(), new Random())));
         this.network = network;
         this.topology = topology;
     }
@@ -39,7 +38,6 @@ class TestPeer extends com.tickloom.Process implements Tickable, AutoCloseable {
 
     @Override
     public void onTick() {
-        messageBus.tick();
         network.tick();
     }
 
@@ -65,7 +63,7 @@ class TestPeer extends com.tickloom.Process implements Tickable, AutoCloseable {
     }
 
     static interface TestPeerFactory<T extends TestPeer> {
-        T create(ProcessId id, MessageBus messageBus, NioNetwork network, ClusterTopology topology, MessageCodec codec);
+        T create(ProcessId id, NioNetwork network, ClusterTopology topology, MessageCodec codec);
     }
 
     public static TestPeer createNew(ProcessId id, ClusterTopology topology) throws IOException {
@@ -76,8 +74,7 @@ class TestPeer extends com.tickloom.Process implements Tickable, AutoCloseable {
         Selector selector = Selector.open();
         JsonMessageCodec codec = new JsonMessageCodec();
         var network = new NioNetwork(codec, topology, selector);
-        MessageBus messageBus = new MessageBus(network, codec);
-        T peer = factory.create(id, messageBus, network, topology, codec);
+        T peer = factory.create(id, network, topology, codec);
         peer.start();
         return peer;
     }

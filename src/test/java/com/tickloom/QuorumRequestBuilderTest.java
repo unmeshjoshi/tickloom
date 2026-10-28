@@ -28,7 +28,7 @@ class QuorumRequestBuilderTest {
                 .send();
 
         // Then
-        assertMessageSentToNetworkFor("peer1");
+        assertMessagesSentToNetworkFor("peer1", "test");
         assertWaitingListHasEntriesFor(replica, 2);
     }
 
@@ -38,21 +38,19 @@ class QuorumRequestBuilderTest {
         Random random = new Random();
         JsonMessageCodec messageCodec = new JsonMessageCodec();
         network = SimulatedNetwork.noLossNetwork(random);
-        MessageBus messageBus = new MessageBus(network, messageCodec);
 
         TestableReplica newReplica = new TestableReplica(
                 new ArrayList<>(peers),
-                new ProcessParams(ProcessId.of("test"), messageBus, messageCodec, timeoutTicks, new SystemClock(), new IdGen(ProcessId.of("test").name(), new Random()))
+                new ProcessParams(ProcessId.of("test"), network, messageCodec, timeoutTicks, new SystemClock(), new IdGen(ProcessId.of("test").name(), new Random()))
         );
         newReplica.start();
-        messageBus.register(newReplica);
         return newReplica;
     }
 
-    private void assertMessageSentToNetworkFor(String expectedDestination) {
-        List<Message> sentMessages = network.getPendingMessages();
-        assertEquals(1, sentMessages.size(), "Expected exactly 1 message sent to the network");
-        assertEquals(ProcessId.of(expectedDestination), sentMessages.get(0).destination());
+    // The message to self goes through the network like the others.
+    private void assertMessagesSentToNetworkFor(String... expectedDestinations) {
+        List<ProcessId> destinations = network.getPendingMessages().stream().map(Message::destination).toList();
+        assertEquals(java.util.Arrays.stream(expectedDestinations).map(ProcessId::of).toList(), destinations);
     }
 
     private void assertWaitingListHasEntriesFor(TestableReplica replica, int expectedCount) {

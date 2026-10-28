@@ -1,13 +1,18 @@
 package com.tickloom.network;
 
+import com.tickloom.Process;
 import com.tickloom.ProcessId;
+import com.tickloom.ProcessParams;
 import com.tickloom.messaging.Message;
 import com.tickloom.messaging.MessageType;
+import com.tickloom.util.IdGen;
+import com.tickloom.util.SystemClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -21,14 +26,14 @@ public class SimulatedNetworkTest {
     
     private SimulatedNetwork network;
     private Random seededRandom;
-    private TestMessageDispatcher messageDispatcher;
+    private MessageRecorder recorder;
     
     @BeforeEach
     void setUp() {
         seededRandom = new Random(12345L); // Fixed seed for deterministic tests
-        messageDispatcher = new TestMessageDispatcher();
+        recorder = new MessageRecorder();
         network = SimulatedNetwork.noLossNetwork(seededRandom).withDelayTicks(1); // 1 tick delay, no packet loss
-        network.registerMessageDispatcher(messageDispatcher);
+        recorder.listenOn(network);
     }
 
     @Test
@@ -44,8 +49,8 @@ public class SimulatedNetworkTest {
         network.tick(); // Process the message
         
         // Then
-        assertEquals(1, messageDispatcher.receivedMessages.size());
-        assertEquals(message, messageDispatcher.receivedMessages.get(0));
+        assertEquals(1, recorder.receivedMessages.size());
+        assertEquals(message, recorder.receivedMessages.get(0));
     }
     
     @Test
@@ -64,9 +69,9 @@ public class SimulatedNetworkTest {
         network.tick(); // Process both messages
 
         // Then - both messages should be delivered to the callback
-        assertEquals(2, messageDispatcher.receivedMessages.size());
-        assertTrue(messageDispatcher.receivedMessages.contains(message1));
-        assertTrue(messageDispatcher.receivedMessages.contains(message2));
+        assertEquals(2, recorder.receivedMessages.size());
+        assertTrue(recorder.receivedMessages.contains(message1));
+        assertTrue(recorder.receivedMessages.contains(message2));
     }
 
     @Test
@@ -76,7 +81,7 @@ public class SimulatedNetworkTest {
         network.tick();
 
         // Then - no messages should be delivered
-        assertTrue(messageDispatcher.receivedMessages.isEmpty());
+        assertTrue(recorder.receivedMessages.isEmpty());
     }
 
     @Test
@@ -95,9 +100,9 @@ public class SimulatedNetworkTest {
         network.tick(); // Process both messages
         
         // Then
-        assertEquals(2, messageDispatcher.receivedMessages.size());
-        assertTrue(messageDispatcher.receivedMessages.contains(message1));
-        assertTrue(messageDispatcher.receivedMessages.contains(message2));
+        assertEquals(2, recorder.receivedMessages.size());
+        assertTrue(recorder.receivedMessages.contains(message1));
+        assertTrue(recorder.receivedMessages.contains(message2));
     }
     
     @Test
@@ -109,9 +114,9 @@ public class SimulatedNetworkTest {
     @Test
     void shouldSimulatePacketLoss() {
         // Given - network with 100% packet loss
-        TestMessageDispatcher lossyHandler = new TestMessageDispatcher();
+        MessageRecorder lossyHandler = new MessageRecorder();
         SimulatedNetwork lossyNetwork = SimulatedNetwork.lossyNetwork(new Random(), 1.0); // No delay, 100% packet loss
-        lossyNetwork.registerMessageDispatcher(lossyHandler);
+        lossyHandler.listenOn(lossyNetwork);
 
         ProcessId source = ProcessId.of("192.168.1.1");
         ProcessId destination = ProcessId.of("192.168.1.2");
@@ -127,15 +132,15 @@ public class SimulatedNetworkTest {
     
     @Test
     void shouldBeDeterministicWithSameSeeds() {
-        TestMessageDispatcher handler1 = new TestMessageDispatcher();
-        TestMessageDispatcher handler2 = new TestMessageDispatcher();
+        MessageRecorder handler1 = new MessageRecorder();
+        MessageRecorder handler2 = new MessageRecorder();
         // Given - two networks with same seed
         Random seed1 = new Random(42L);
         Random seed2 = new Random(42L);
         SimulatedNetwork network1 = SimulatedNetwork.lossyNetwork(seed1,  0.5 ).withDelayTicks(1); // 50% packet loss
-        network1.registerMessageDispatcher(handler1);
+        handler1.listenOn(network1);
         SimulatedNetwork network2 = SimulatedNetwork.lossyNetwork(seed2,  0.5 ).withDelayTicks(1); // 50% packet loss
-        network2.registerMessageDispatcher(handler2);
+        handler2.listenOn(network2);
 
         ProcessId source = ProcessId.of("192.168.1.1");
         ProcessId destination = ProcessId.of("192.168.1.2");
@@ -171,7 +176,7 @@ public class SimulatedNetworkTest {
         network.tick();
         
         // Then - neither message should be delivered
-        assertTrue(messageDispatcher.receivedMessages.isEmpty());
+        assertTrue(recorder.receivedMessages.isEmpty());
     }
     
     @Test
@@ -191,8 +196,8 @@ public class SimulatedNetworkTest {
         network.tick();
         
         // Then - only A->B message should be delivered
-        assertEquals(1, messageDispatcher.receivedMessages.size());
-        assertEquals(messageAtoB, messageDispatcher.receivedMessages.get(0));
+        assertEquals(1, recorder.receivedMessages.size());
+        assertEquals(messageAtoB, recorder.receivedMessages.get(0));
     }
 
     @Test
@@ -209,8 +214,8 @@ public class SimulatedNetworkTest {
         network.tick();
 
         // Then - only A->B message should be delivered
-        assertEquals(1, messageDispatcher.receivedMessages.size());
-        assertEquals(setRequest, messageDispatcher.receivedMessages.get(0));
+        assertEquals(1, recorder.receivedMessages.size());
+        assertEquals(setRequest, recorder.receivedMessages.get(0));
     }
     
     @Test
@@ -226,7 +231,7 @@ public class SimulatedNetworkTest {
         network.tick();
         
         // Then - message should be blocked
-        assertTrue(messageDispatcher.receivedMessages.isEmpty());
+        assertTrue(recorder.receivedMessages.isEmpty());
         
         // When - heal partition and send again
         network.healPartition(nodeA, nodeB);
@@ -234,8 +239,8 @@ public class SimulatedNetworkTest {
         network.tick();
         
         // Then - message should be delivered
-        assertEquals(1, messageDispatcher.receivedMessages.size());
-        assertEquals(message, messageDispatcher.receivedMessages.get(0));
+        assertEquals(1, recorder.receivedMessages.size());
+        assertEquals(message, recorder.receivedMessages.get(0));
     }
     
     @Test
@@ -257,17 +262,17 @@ public class SimulatedNetworkTest {
         
         // Then - message to C should arrive first (1 tick delay)
         network.tick();
-        assertEquals(1, messageDispatcher.receivedMessages.size());
-        assertEquals(messageToC, messageDispatcher.receivedMessages.get(0));
+        assertEquals(1, recorder.receivedMessages.size());
+        assertEquals(messageToC, recorder.receivedMessages.get(0));
         
         // Then - message to B should arrive later (3 tick delay)
-        messageDispatcher.receivedMessages.clear();
+        recorder.receivedMessages.clear();
         network.tick(); // tick 2
-        assertTrue(messageDispatcher.receivedMessages.isEmpty());
+        assertTrue(recorder.receivedMessages.isEmpty());
         
         network.tick(); // tick 3
-        assertEquals(1, messageDispatcher.receivedMessages.size());
-        assertEquals(messageToB, messageDispatcher.receivedMessages.get(0));
+        assertEquals(1, recorder.receivedMessages.size());
+        assertEquals(messageToB, recorder.receivedMessages.get(0));
     }
     
     @Test
@@ -290,8 +295,8 @@ public class SimulatedNetworkTest {
         network.tick();
         
         // Then - only message to C should be delivered (B has 100% loss)
-        assertEquals(1, messageDispatcher.receivedMessages.size());
-        assertEquals(messageToC, messageDispatcher.receivedMessages.get(0));
+        assertEquals(1, recorder.receivedMessages.size());
+        assertEquals(messageToC, recorder.receivedMessages.get(0));
     }
     
     @Test
@@ -310,7 +315,7 @@ public class SimulatedNetworkTest {
         }
         
         // Then - no messages should be delivered due to partition
-        assertTrue(messageDispatcher.receivedMessages.isEmpty());
+        assertTrue(recorder.receivedMessages.isEmpty());
     }
     
     @Test
@@ -327,16 +332,16 @@ public class SimulatedNetworkTest {
 
         network.tick();
         network.tick();
-        assertTrue(messageDispatcher.receivedMessages.isEmpty(), "Message should still be in flight after 2 ticks");
+        assertTrue(recorder.receivedMessages.isEmpty(), "Message should still be in flight after 2 ticks");
 
         network.tick();
-        assertEquals(List.of(message), messageDispatcher.receivedMessages);
+        assertEquals(List.of(message), recorder.receivedMessages);
     }
 
     @Test
     void shouldApplyDefaultDelayToLinksWithoutConfiguredDelay() {
         SimulatedNetwork delayedNetwork = SimulatedNetwork.noLossNetwork(new Random(12345L)).withDelayTicks(3);
-        delayedNetwork.registerMessageDispatcher(messageDispatcher);
+        recorder.listenOn(delayedNetwork);
         ProcessId nodeA = ProcessId.of("192.168.1.1");
         ProcessId nodeB = ProcessId.of("192.168.1.2");
 
@@ -345,10 +350,10 @@ public class SimulatedNetworkTest {
 
         delayedNetwork.tick();
         delayedNetwork.tick();
-        assertTrue(messageDispatcher.receivedMessages.isEmpty(), "Message should still be in flight after 2 ticks");
+        assertTrue(recorder.receivedMessages.isEmpty(), "Message should still be in flight after 2 ticks");
 
         delayedNetwork.tick();
-        assertEquals(List.of(message), messageDispatcher.receivedMessages);
+        assertEquals(List.of(message), recorder.receivedMessages);
     }
 
     @Test
@@ -370,7 +375,7 @@ public class SimulatedNetworkTest {
         network.send(message);
         network.tick();
 
-        assertEquals(List.of(message), messageDispatcher.receivedMessages, "Clog should have expired after 5 ticks");
+        assertEquals(List.of(message), recorder.receivedMessages, "Clog should have expired after 5 ticks");
     }
 
     @Test
@@ -399,18 +404,40 @@ public class SimulatedNetworkTest {
 
         network.tick();
 
-        assertEquals(sent, messageDispatcher.receivedMessages);
+        assertEquals(sent, recorder.receivedMessages);
     }
 
     /**
-     * Test message handler that collects received messages for verification.
+     * Collects the messages delivered to any of the test's addresses. The network delivers only to registered
+     * processes, so it registers a recording process for each address the tests send to.
      */
-    private static class TestMessageDispatcher implements MessageDispatcher {
+    private static class MessageRecorder {
+        private static final List<ProcessId> ADDRESSES = List.of(
+                ProcessId.of("192.168.1.1"), ProcessId.of("192.168.1.2"), ProcessId.of("192.168.1.3"));
+
         public final List<Message> receivedMessages = new ArrayList<>();
-        
-        @Override
-        public void onMessage(Message message) {
-            receivedMessages.add(message);
+
+        void listenOn(Network network) {
+            ADDRESSES.forEach(id -> new RecordingProcess(id, network, receivedMessages));
         }
     }
-} 
+
+    private static class RecordingProcess extends Process {
+        private final List<Message> receivedMessages;
+
+        RecordingProcess(ProcessId id, Network network, List<Message> receivedMessages) {
+            super(new ProcessParams(id, network, new JsonMessageCodec(), 1, new SystemClock(), new IdGen(id.name(), new Random())));
+            this.receivedMessages = receivedMessages;
+        }
+
+        @Override
+        protected void onMessageReceived(Message message) {
+            receivedMessages.add(message);
+        }
+
+        @Override
+        protected Map<MessageType, Handler> initialiseHandlers() {
+            return Map.of();
+        }
+    }
+}

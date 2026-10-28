@@ -203,7 +203,7 @@ public abstract class Replica extends Process {
 
     protected void send(Message responseMessage) {
         try {
-            messageBus.sendMessage(responseMessage);
+            network.send(responseMessage);
             System.out.println("sent message = " + responseMessage);
         } catch (IOException e) {
             System.err.println("QuorumReplica: Failed to send response: " + e.getMessage());

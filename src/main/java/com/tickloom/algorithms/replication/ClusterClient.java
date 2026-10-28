@@ -64,7 +64,7 @@ public abstract class ClusterClient extends Process {
     
     protected void sendMessageOrHandleError(Message message, String correlationId) {
         try {
-            messageBus.sendMessage(message);
+            network.send(message);
         } catch (IOException e) {
             waitingList.handleError(correlationId, e);
         }

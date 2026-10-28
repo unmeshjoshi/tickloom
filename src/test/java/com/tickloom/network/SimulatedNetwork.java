@@ -29,9 +29,6 @@ public class SimulatedNetwork extends Network {
     // Monotonic send counter; breaks ties between messages due in the same tick so they are delivered in send order
     private long nextSequenceNumber = 0;
 
-    // Network partitioning state
-    private final Set<NetworkLink> partitionedLinks = new HashSet<>();
-
     private record DelayConfig(MessageType messageType, Long durationTicks, Long expiresAtTick){
         public DelayConfig(MessageType messageType, Long durationTicks) {
             this(messageType, durationTicks, Long.MAX_VALUE); //by default apply delay for all message types
@@ -48,13 +45,13 @@ public class SimulatedNetwork extends Network {
             return this.messageType == null;
         }
     }
+    // Network partitioning state
+    private final Set<NetworkLink> partitionedLinks = new HashSet<>();
+
     // Per-link configuration
     private final Map<NetworkLink, Double> linkPacketLoss = new HashMap<>();
     private final Map<NetworkLink, DelayConfig> cloggedUntilTick = new HashMap<>();
     private final Map<NetworkLink, FaultRule> linkFaultRules = new HashMap<>();
-    //Should use LinkedHashset for determinstic ordering while iterating for introducing
-    //network partitions
-    private LinkedHashSet<ProcessId> knownNodes = new LinkedHashSet<>();
 
     private boolean isClogged(NetworkLink link, MessageType messageType) {
         DelayConfig delayConfig = cloggedUntilTick.getOrDefault(link, new DelayConfig(0l));
@@ -119,8 +116,6 @@ public class SimulatedNetwork extends Network {
         }
     }
 
-    private Message lastDeliveredMessage;
-
 
     /**
      * Creates a SimulatedNetwork with configurable behavior.
@@ -168,8 +163,6 @@ public class SimulatedNetwork extends Network {
     public void send(Message message) {
         validateMessage(message);
 
-        addKnownProcessIds(message);
-
         NetworkLink link = linkFrom(message);
 
         if (link.isPartitioned(partitionedLinks)) {
@@ -189,23 +182,12 @@ public class SimulatedNetwork extends Network {
         queueForDelivery(message, deliveryTick);
     }
 
-    private void addKnownProcessIds(Message message) {
-        addIfAbsent(message.destination());
-        addIfAbsent(message.source());
-    }
-
-    private void addIfAbsent(ProcessId message) {
-        if (!knownNodes.contains(message)) {
-            knownNodes.add(message);
-        }
-    }
-
     private void maybeClogPaths() {
         if (shouldClog()) {
             //create network links for all known nodes.
             List<NetworkLink> links = new ArrayList<>();
-            for (ProcessId source : knownNodes) {
-                for (ProcessId destination : knownNodes) {
+            for (ProcessId source : registeredProcessIds()) {
+                for (ProcessId destination : registeredProcessIds()) {
                     if (source != destination) {
                         NetworkLink link = new NetworkLink(source, destination);
                         links.add(link);
@@ -301,11 +283,12 @@ public class SimulatedNetwork extends Network {
         }
 
         // Otherwise maybe create a new partition:
-        if (knownNodes.size() < 2) return; // nothing to split
+        Set<ProcessId> processIds = registeredProcessIds();
+        if (processIds.size() < 2) return; // nothing to split
         if (random.nextDouble() >= options.partitionProb) return;
 
         // Build a randomized list of nodes to split
-        List<ProcessId> nodes = new ArrayList<>(knownNodes);
+        List<ProcessId> nodes = new ArrayList<>(processIds);
 
         int sizeA;
         switch (options.partitionMode) {
@@ -462,9 +445,7 @@ public class SimulatedNetwork extends Network {
 
             QueuedMessage queuedMessage = pendingMessages.poll();
             Message message = queuedMessage.message;
-            lastDeliveredMessage = message;
-
-            dispatchReceivedMessage(message);
+            deliver(message);
 
             System.out.println("SimNet: delivered " + message + " for tick " + tickTime);
         }
@@ -564,13 +545,6 @@ public class SimulatedNetwork extends Network {
                     + " already has a drop rule for " + existing.messageType);
         }
         linkFaultRules.put(link, faultRule);
-    }
-
-    /**
-     * Returns the most recently delivered message (for testing).
-     */
-    public Message getLastDeliveredMessage() {
-        return lastDeliveredMessage;
     }
 
     public List<Message> getPendingMessages() {

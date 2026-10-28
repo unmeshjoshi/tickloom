@@ -8,7 +8,6 @@ import com.tickloom.algorithms.replication.quorum.QuorumReplica;
 import com.tickloom.config.ClusterTopology;
 import com.tickloom.config.Config;
 import com.tickloom.config.ProcessConfig;
-import com.tickloom.messaging.MessageBus;
 import com.tickloom.network.JsonMessageCodec;
 import com.tickloom.network.NioNetwork;
 import com.tickloom.fs.FileSystem;
@@ -63,7 +62,6 @@ public class ServerMain {
         JsonMessageCodec codec = new JsonMessageCodec();
         try {
             NioNetwork network = NioNetwork.create(clusterTopology, codec);
-            MessageBus messageBus = new MessageBus(network, codec);
             network.bind(processId);
 
             List<ProcessId> peerIds = peersExcludingSelf(config, processId);
@@ -71,7 +69,7 @@ public class ServerMain {
             Files.createDirectories(Paths.get(dataDir));
             RealFileSystem fileSystem = new RealFileSystem(Paths.get(dataDir), FILE_TIMEOUT_TICKS);
 
-            Process replica = createProcess(options.get(OPT_FACTORY), processId, peerIds, messageBus, codec, fileSystem, clock, timeoutTicks);
+            Process replica = createProcess(options.get(OPT_FACTORY), processId, peerIds, network, codec, fileSystem, clock, timeoutTicks);
             replica.start();
 
             addShutdownHook(network, fileSystem);
@@ -94,14 +92,14 @@ public class ServerMain {
     private static Process createProcess(String factoryClassName,
                                          ProcessId processId,
                                          List<ProcessId> peerIds,
-                                         MessageBus messageBus,
+                                         NioNetwork network,
                                          JsonMessageCodec codec,
                                          FileSystem fileSystem,
                                          Clock clock,
                                          int timeoutTicks) {
         if (factoryClassName == null || factoryClassName.isBlank()) {
             IdGen idGen = new IdGen(processId.name(), new Random());
-            return new QuorumReplica(peerIds, new ProcessParams(processId, messageBus, codec, timeoutTicks, clock, idGen, fileSystem));
+            return new QuorumReplica(peerIds, new ProcessParams(processId, network, codec, timeoutTicks, clock, idGen, fileSystem));
         }
         try {
             Class<?> clazz = Class.forName(factoryClassName);
@@ -111,7 +109,7 @@ public class ServerMain {
             }
             ProcessFactory factory = (ProcessFactory) instance;
             IdGen idGen = new IdGen(processId.name(), new Random());
-            return factory.create(peerIds, new ProcessParams(processId, messageBus, codec, timeoutTicks, clock, idGen, fileSystem));
+            return factory.create(peerIds, new ProcessParams(processId, network, codec, timeoutTicks, clock, idGen, fileSystem));
         } catch (Exception e) {
             throw new RuntimeException("Failed to instantiate factory: " + factoryClassName, e);
         }

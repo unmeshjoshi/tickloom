@@ -20,12 +20,12 @@ import java.util.List;
  *   @Override
  *   public Process create(ProcessId id,
  *                         List<ProcessId> peerIds,
- *                         MessageBus bus,
+ *                         Network network,
  *                         MessageCodec codec,
  *                         FileSystem fileSystem,
  *                         Clock clock,
  *                         int timeoutTicks) {
- *     return new MyReplica(id, peerIds, bus, codec, fileSystem, clock, timeoutTicks);
+ *     return new MyReplica(id, peerIds, network, codec, fileSystem, clock, timeoutTicks);
  *   }
  * }
  * // Run:
