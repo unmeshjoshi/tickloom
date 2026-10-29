@@ -16,43 +16,56 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 import static com.tickloom.ConsistencyChecker.*;
 
-
 public abstract class SimulationRunner {
-    private final ArrayList<com.tickloom.SingleRequestIssuer<ClusterClient>> clients;
-    private Cluster cluster;
-    private long driverTicksElapsed = 0;
+    private final List<SingleRequestIssuer<ClusterClient>> clients;
+    private final Cluster cluster;
+    protected final SimulationDecisions simulationDecisions;
+    private long currentTick = 0;
 
-    public SimulationRunner(long randomSeed, int clusterSize, int numClients, ProcessFactory processFactory, Cluster.ClientFactory<QuorumReplicaClient> clientFactory) throws IOException {
-        this.cluster = Cluster.createSimulated(clusterSize, processFactory, randomSeed);
-        Random clusterSeedRandom = cluster.getRandom();
-        this.clients = new ArrayList<>();
-        for (int i = 0; i < numClients; i++) {
-            ClusterClient clusterClient  = cluster.newClient(ProcessId.of("clientId-" + i), clientFactory);
-            clients.add(new SingleRequestIssuer<>(this, clusterClient, clusterSeedRandom));
+    protected HistoryRecorder<IPersistentVector> historyRecorder = new HistoryRecorder<>();
+    protected History<IPersistentVector> history = new History<>();
+
+    public SimulationRunner(long randomSeed, int clusterSize, int numClients,
+                            ProcessFactory processFactory,
+                            Cluster.ClientFactory<QuorumReplicaClient> clientFactory) throws IOException {
+        Random random = new Random(randomSeed);
+        this.simulationDecisions = new SimulationDecisions(random);
+        this.cluster = Cluster.createSimulated(clusterSize, processFactory, random);
+        this.clients = createClients(numClients, clientFactory);
+    }
+
+    private void runClusterFor(long runForTicks) {
+        for (int i = 0; i < runForTicks; i++) {
+            currentTick++;
+            injectRandomFaults();
+            cluster.tick();
+            maybeIssueClientRequest();
         }
     }
-    protected HistoryRecorder<IPersistentVector> historyRecorder = new HistoryRecorder();
 
-    public History runAndGetHistory(long tickDuration) {
-        runClusterFor(tickDuration);
-        waitForPendingRequests();
-        // optionally skip file write + knossos here for tests
-        return historyRecorder.getHistory();
+    private void maybeIssueClientRequest() {
+        if (simulationDecisions.shouldIssueClientRequest()) {
+            // A client is single-threaded and issues one request at a time.
+            // If a request is pending, the request is buffered and issued later.
+            SingleRequestIssuer<ClusterClient> client = simulationDecisions.pick(clients);
+            client.issueRequest();
+        }
     }
 
-    public static void main(String[] args) throws IOException {
-        int randomSeed = 111111;
-        int runForTicks = 10000;
-        SimulationRunner simulationRunner = new QuorumKVScenarioRunner(randomSeed);
-        simulationRunner.runForTicks(runForTicks);
+    private List<SingleRequestIssuer<ClusterClient>> createClients(int numClients,
+                                                                   Cluster.ClientFactory<QuorumReplicaClient> clientFactory) throws IOException {
+        List<SingleRequestIssuer<ClusterClient>> clients = new ArrayList<>();
+        for (int i = 0; i < numClients; i++) {
+            ClusterClient clusterClient = cluster.newClient(ProcessId.of("clientId-" + i), clientFactory);
+            clients.add(new SingleRequestIssuer<>(this, clusterClient, simulationDecisions.rawRandom()));
+        }
+        return clients;
     }
-
-    //KV histories use tuple for values in jepsen history. e.g. [key value]
-    protected History<IPersistentVector> history = new History<>();
 
     public void runForTicks(long runForTicks) {
         history = runAndGetHistory(runForTicks);
@@ -68,53 +81,42 @@ public abstract class SimulationRunner {
         shutdownAgents();
     }
 
-    private void runClusterFor(long tickDuration) {
-        double issueProbabilityPerTick = 0.4; //40% ticks will issue a clientId request.
-        long tick = 0;
-        Random clusterSeededRandom = cluster.getRandom();
-        while (tickDuration > tick) {
-            tick++;
-            injectRandomFaults();
-            tickDriver();
-
-            // Decide whether to issue clientId request this tick.
-            if (clusterSeededRandom.nextDouble() > issueProbabilityPerTick) continue;
-
-            SingleRequestIssuer<ClusterClient> client = clients.get(clusterSeededRandom.nextInt(clients.size()));
-            client.issueRequest();
-        }
+    public History runAndGetHistory(long tickDuration) {
+        runClusterFor(tickDuration);
+        waitForPendingRequests();
+        return historyRecorder.getHistory();
     }
 
-    //Hook method for subclasses to override and inject faults.
-    protected void injectRandomFaults() {
+    protected Random random() {
+        return simulationDecisions.rawRandom();
+    }
 
+    protected void injectRandomFaults() {
     }
 
     protected Cluster cluster() {
         return cluster;
     }
 
+    public long currentTick() {
+        return currentTick;
+    }
+
     public long driverTicksElapsed() {
-        return driverTicksElapsed;
+        return currentTick;
     }
 
     private void waitForPendingRequests() {
-        //wait for all requests to finish
         while (clients.stream().anyMatch(SingleRequestIssuer::hasPendingRequests)) {
-            tickDriver();
+            currentTick++;
+            cluster.tick();
         }
-    }
-
-    private void tickDriver() {
-        cluster.tick();
-        driverTicksElapsed++;
     }
 
     private void checkLinearizability() {
         boolean isLinearizable = check(history, ConsistencyProperty.LINEARIZABILITY, DataModel.REGISTER);
         System.out.println("The history is " + (isLinearizable ? "linearizable" : "not linearizable") + " = " + isLinearizable);
     }
-
 
     protected void recordReadInvocation(ProcessId processId, Op op, String key) {
         history.invoke(processId, op, JepsenHistory.tuple(key, null));
@@ -124,7 +126,7 @@ public abstract class SimulationRunner {
         history.invoke(processId, op, JepsenHistory.tuple(key, value));
     }
 
-    protected abstract TickCompletableFuture issueRequest(ClusterClient client, Random clusterSeededRandom);
+    protected abstract TickCompletableFuture<?> issueRequest(ClusterClient client, Random clusterSeededRandom);
 
     private void writeHistory(History history) {
         String buildDir = "build";
@@ -140,10 +142,17 @@ public abstract class SimulationRunner {
     }
 
     protected String randomValue() {
-        return "Value-" + cluster.getRandom().nextInt();
+        return "Value-" + simulationDecisions.rawRandom().nextInt();
     }
 
     protected String randomKey() {
-        return "Key-" + cluster.getRandom().nextInt();
+        return "Key-" + simulationDecisions.rawRandom().nextInt();
+    }
+
+    public static void main(String[] args) throws IOException {
+        int randomSeed = 111111;
+        int runForTicks = 10000;
+        SimulationRunner simulationRunner = new QuorumKVScenarioRunner(randomSeed);
+        simulationRunner.runForTicks(runForTicks);
     }
 }

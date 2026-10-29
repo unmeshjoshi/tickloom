@@ -112,10 +112,14 @@ public class Cluster implements Tickable, AutoCloseable {
     }
 
     public static Cluster createSimulated(int numServers, ProcessFactory factory, long seed) throws IOException {
+        return createSimulated(numServers, factory, new Random(seed));
+    }
+
+    public static Cluster createSimulated(int numServers, ProcessFactory factory, Random random) throws IOException {
         return new Cluster()
                 .withProcessIds(generateDefaultIds(numServers))
                 .useSimulatedNetwork()
-                .withSeed(seed)
+                .withRandom(random)
                 .build(factory)
                 .start();
     }
@@ -148,6 +152,12 @@ public class Cluster implements Tickable, AutoCloseable {
     //Following methods are the builder API for creating the cluster.
     public Cluster withSeed(long seed) {
         this.seed = seed;
+        this.random = new Random(seed);
+        return this;
+    }
+
+    public Cluster withRandom(Random random) {
+        this.random = random;
         return this;
     }
 
@@ -716,7 +726,9 @@ public class Cluster implements Tickable, AutoCloseable {
 
     public <T extends com.tickloom.Process> Cluster build(ProcessFactory factory, boolean withSimulatedNetwork) throws IOException {
         //Seed the random number generator
-        random = new Random(seed);
+        if (random == null) {
+            random = new Random(seed);
+        }
 
         List<ProcessId> processIds = customProcessIds;
 

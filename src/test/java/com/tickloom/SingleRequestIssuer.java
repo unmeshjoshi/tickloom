@@ -6,6 +6,17 @@ import com.tickloom.future.TickCompletableFuture;
 import java.util.ArrayDeque;
 import java.util.Random;
 
+/**
+ * Enforces at most one in-flight request per client.
+ * <p>
+ * In consistency and linearizability testing (such as Jepsen), each client process
+ * represents a single sequential thread of control: an operation must complete (or timeout)
+ * before the client can issue its next operation.
+ * <p>
+ * If the simulation driver picks this client to issue a request while a previous request
+ * is still pending, the new request is buffered and drained sequentially once the active
+ * request completes.
+ */
 public class SingleRequestIssuer<C extends ClusterClient> {
     private final SimulationRunner simulationRunner;
     private final C client;
@@ -21,7 +32,7 @@ public class SingleRequestIssuer<C extends ClusterClient> {
     }
 
     public void issueRequest() {
-        sendRequest(() -> sendClientRequest());
+        sendRequest(this::sendClientRequest);
     }
 
     public void sendRequest(Runnable r) {
@@ -30,7 +41,7 @@ public class SingleRequestIssuer<C extends ClusterClient> {
             return;
         }
         inFlight = true;
-        r.run(); // assumes single-threaded / no throw
+        r.run();
     }
 
     private void sendClientRequest() {
@@ -42,14 +53,17 @@ public class SingleRequestIssuer<C extends ClusterClient> {
     }
 
     private void drainNext() {
-        if (inFlight) return;     // someone else already started one
+        if (inFlight) return;
 
         Runnable next = buffered.pollFirst();
         if (next != null) next.run();
     }
 
-    public boolean isInFlight() { return inFlight; }
+    public boolean isInFlight() {
+        return inFlight;
+    }
 
-    /** True if there’s an op in flight OR anything queued. */
-    public boolean hasPendingRequests() { return inFlight || !buffered.isEmpty(); }
+    public boolean hasPendingRequests() {
+        return inFlight || !buffered.isEmpty();
+    }
 }
